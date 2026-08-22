@@ -1,0 +1,8 @@
+dist
+node_modules
+playwright-report
+test-results
+.codebox
+bottlebound_rules_final.md
+README.md
+public/icon.svg

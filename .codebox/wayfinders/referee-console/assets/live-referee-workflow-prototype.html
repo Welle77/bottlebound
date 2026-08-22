@@ -1,0 +1,439 @@
+<!doctype html>
+<!-- PROTOTYPE: Three live referee workflow variants, switchable via ?variant=A|B|C. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>BOTTLEBOUND Referee Console — Throwaway Prototype</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #171815;
+      --paper: #f4f0e4;
+      --panel: #fffdf7;
+      --muted: #64645e;
+      --line: #c9c4b6;
+      --drow: #7b2cbf;
+      --drow-soft: #eee1f8;
+      --duergar: #b23a22;
+      --duergar-soft: #f8e2dc;
+      --signal: #f6c945;
+      --good: #197044;
+      --danger: #a32121;
+      --shadow: 0 8px 30px rgb(34 30 20 / 16%);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--paper); color: var(--ink); }
+    button { font: inherit; }
+    button:focus-visible { outline: 4px solid #2176ff; outline-offset: 2px; }
+    .prototype-ribbon {
+      padding: 6px 12px; background: var(--ink); color: white; font-size: 12px;
+      font-weight: 800; letter-spacing: .08em; text-align: center; text-transform: uppercase;
+    }
+    .app { min-height: calc(100vh - 28px); padding-bottom: 92px; }
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      min-height: 58px; padding: 10px 16px; border-bottom: 2px solid var(--ink); background: var(--panel);
+    }
+    .brand { font-size: 18px; font-weight: 950; letter-spacing: .04em; }
+    .phase { display: flex; gap: 8px; align-items: center; color: var(--muted); font-weight: 750; }
+    .phase strong { color: var(--ink); }
+    .live-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--good); }
+    .compact-button, .action-button, .finish-button, .target-button, .secondary-button, .danger-button {
+      border: 2px solid var(--ink); border-radius: 10px; min-height: 48px; padding: 10px 14px;
+      background: var(--panel); color: var(--ink); font-weight: 850; cursor: pointer;
+    }
+    .compact-button[disabled] { cursor: not-allowed; opacity: .42; }
+    .action-button { min-height: 64px; background: var(--signal); font-size: 17px; }
+    .action-button.alt { background: white; }
+    .finish-button { min-height: 64px; background: var(--ink); color: white; font-size: 17px; }
+    .secondary-button { background: white; }
+    .danger-button { background: #fff1ed; color: var(--danger); border-color: var(--danger); }
+    .eyebrow { color: var(--muted); font-size: 12px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+    .muted { color: var(--muted); }
+    .hp { display: flex; align-items: center; gap: 4px; font-weight: 900; }
+    .heart { color: var(--danger); }
+    .effect { display: inline-flex; margin-top: 5px; padding: 3px 7px; border-radius: 999px; background: #d8ebff; font-size: 11px; font-weight: 800; }
+    .downed { opacity: .58; filter: grayscale(.7); }
+    .downed .hp { color: var(--danger); }
+    .team-drow { border-color: var(--drow) !important; }
+    .team-duergar { border-color: var(--duergar) !important; }
+    .active-mark { color: var(--good); font-size: 12px; font-weight: 950; text-transform: uppercase; }
+
+    /* Variant A: one active-turn command surface. */
+    .command-shell { max-width: 980px; margin: 0 auto; padding: 16px; }
+    .turn-hero {
+      display: grid; grid-template-columns: 1fr auto; gap: 16px; padding: 20px;
+      border: 3px solid var(--drow); border-radius: 18px; background: var(--panel); box-shadow: var(--shadow);
+    }
+    .turn-hero h1 { margin: 4px 0; font-size: clamp(28px, 6vw, 48px); line-height: 1; }
+    .turn-meta { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 10px; font-size: 15px; }
+    .initiative-token {
+      display: grid; place-items: center; align-self: stretch; min-width: 86px; border-radius: 12px;
+      background: var(--drow); color: white; text-align: center;
+    }
+    .initiative-token b { display: block; font-size: 32px; line-height: 1; }
+    .command-actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 14px 0; }
+    .next-up { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 2px 16px; }
+    .team-strips { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .team-strip { padding: 12px; border: 2px solid; border-radius: 14px; background: rgb(255 255 255 / 72%); }
+    .team-strip h2 { margin: 0 0 8px; font-size: 15px; }
+    .mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+    .mini-character { min-height: 76px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+    .mini-character strong { display: block; font-size: 13px; }
+
+    /* Variant B: roster board with a fixed action rail. */
+    .board-shell { display: grid; grid-template-columns: minmax(0, 1fr) 280px; min-height: calc(100vh - 86px); }
+    .roster-board { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
+    .team-column { min-width: 0; }
+    .team-heading { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; border-bottom: 4px solid; }
+    .team-heading h2 { margin: 0 0 6px; }
+    .character-row {
+      display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 9px; align-items: center;
+      min-height: 62px; margin-bottom: 8px; padding: 8px; border: 2px solid transparent;
+      border-radius: 10px; background: var(--panel);
+    }
+    .character-row.is-active { border-color: var(--good) !important; box-shadow: 0 0 0 2px #b8e0c8; }
+    .slot { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--ink); color: white; font-weight: 900; }
+    .character-row small { display: block; color: var(--muted); }
+    .action-rail { padding: 18px; border-left: 3px solid var(--ink); background: #e9e3d2; }
+    .action-rail h1 { margin: 3px 0 4px; font-size: 32px; }
+    .action-stack { display: grid; gap: 9px; margin-top: 16px; }
+    .event-card { margin-top: 18px; padding-top: 14px; border-top: 2px solid var(--line); }
+    .event-card p { margin: 6px 0; }
+
+    /* Variant C: event-first timeline with a compact status rail. */
+    .timeline-shell { max-width: 1120px; margin: 0 auto; padding: 16px; }
+    .timeline-layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 14px; }
+    .status-rail { padding: 12px; border-radius: 14px; background: #20211e; color: white; }
+    .status-rail h2 { margin: 0 0 12px; font-size: 15px; }
+    .rail-person { display: grid; grid-template-columns: 1fr auto; gap: 6px; padding: 8px 0; border-bottom: 1px solid #4a4b46; font-size: 12px; }
+    .rail-person.is-active { color: #ffdc67; font-weight: 900; }
+    .timeline-main { min-width: 0; }
+    .turn-banner { display: flex; justify-content: space-between; gap: 12px; padding: 14px; border: 3px solid var(--good); border-radius: 14px; background: var(--panel); }
+    .turn-banner h1 { margin: 2px 0; font-size: 28px; }
+    .composer { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 10px 0 18px; }
+    .timeline { position: relative; padding-left: 24px; }
+    .timeline::before { content: ""; position: absolute; left: 7px; top: 7px; bottom: 12px; width: 3px; background: var(--line); }
+    .timeline-event { position: relative; margin-bottom: 10px; padding: 12px; border: 2px solid var(--line); border-radius: 10px; background: var(--panel); }
+    .timeline-event::before { content: ""; position: absolute; left: -23px; top: 17px; width: 12px; height: 12px; border-radius: 50%; background: var(--ink); }
+    .timeline-event.undone { opacity: .58; text-decoration: line-through; }
+    .timeline-event strong { display: block; }
+
+    .prototype-switcher {
+      position: fixed; z-index: 30; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+      display: grid; grid-template-columns: 48px minmax(150px, auto) 48px; align-items: center;
+      overflow: hidden; border: 3px solid white; border-radius: 999px; background: #111; color: white; box-shadow: 0 8px 24px rgb(0 0 0 / 38%);
+    }
+    .prototype-switcher button { width: 48px; height: 48px; border: 0; background: #111; color: white; cursor: pointer; font-size: 22px; }
+    .variant-label { padding: 0 12px; text-align: center; font-size: 13px; font-weight: 900; white-space: nowrap; }
+    .variant-label small { display: block; color: #bebebe; font-size: 9px; letter-spacing: .09em; text-transform: uppercase; }
+
+    .overlay { position: fixed; z-index: 40; inset: 0; display: grid; place-items: end center; padding: 18px; background: rgb(0 0 0 / 55%); }
+    .overlay[hidden] { display: none; }
+    .sheet { width: min(620px, 100%); max-height: 88vh; overflow: auto; padding: 20px; border: 3px solid var(--ink); border-radius: 18px; background: var(--panel); box-shadow: var(--shadow); }
+    .sheet h2 { margin: 2px 0 8px; }
+    .target-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 14px 0; }
+    .target-button { text-align: left; }
+    .target-button.selected { background: var(--signal); box-shadow: inset 0 0 0 2px var(--ink); }
+    .sheet-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 14px; }
+    .delta { margin: 12px 0; padding: 12px; border-left: 5px solid var(--danger); background: #fff0ec; font-weight: 750; }
+
+    @media (max-width: 760px) {
+      .topbar { align-items: flex-start; }
+      .brand { font-size: 15px; }
+      .phase { font-size: 12px; }
+      .command-shell, .timeline-shell { padding: 10px; }
+      .turn-hero { padding: 14px; }
+      .command-actions, .composer { grid-template-columns: 1fr 1fr; }
+      .finish-button { grid-column: 1 / -1; }
+      .team-strips { grid-template-columns: 1fr; }
+      .mini-grid { grid-template-columns: repeat(3, 1fr); }
+      .board-shell { display: block; }
+      .roster-board { grid-template-columns: 1fr; padding: 10px; }
+      .action-rail { position: sticky; bottom: 0; z-index: 5; border: 3px solid var(--ink); }
+      .action-rail h1, .action-rail .event-card { display: none; }
+      .action-stack { grid-template-columns: 1fr 1fr 1fr; margin: 0; }
+      .action-stack button { min-height: 58px; padding: 7px; font-size: 13px; }
+      .timeline-layout { grid-template-columns: 1fr; }
+      .status-rail { display: flex; gap: 12px; overflow-x: auto; border-radius: 10px; }
+      .status-rail h2 { min-width: 85px; }
+      .rail-person { min-width: 100px; border: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="prototype-ribbon">Throwaway workflow prototype · simulated data only</div>
+  <div id="app" class="app"></div>
+
+  <nav class="prototype-switcher" aria-label="Prototype variants">
+    <button id="prevVariant" aria-label="Previous variant">←</button>
+    <div class="variant-label" id="variantLabel"></div>
+    <button id="nextVariant" aria-label="Next variant">→</button>
+  </nav>
+
+  <div class="overlay" id="draftOverlay" hidden></div>
+  <div class="overlay" id="undoOverlay" hidden></div>
+
+  <script>
+    const variants = {
+      A: "Turn Command",
+      B: "Roster Board",
+      C: "Event Timeline"
+    };
+
+    const initialCharacters = [
+      ["Rogue", "DROW", 3, 3], ["Ranger", "DUERGAR", 2, 3],
+      ["Druid", "DROW", 3, 3], ["Monk", "DUERGAR", 4, 4],
+      ["Paladin", "DROW", 5, 5], ["Fighter", "DUERGAR", 4, 4],
+      ["Wizard", "DROW", 3, 3], ["Barbarian", "DUERGAR", 5, 5],
+      ["Sorcerer", "DROW", 2, 3], ["Warlock", "DUERGAR", 3, 3],
+      ["Bard", "DROW", 3, 3], ["Cleric", "DUERGAR", 3, 3]
+    ].map(([name, team, hp, max], index) => ({
+      id: name.toLowerCase(), name, team, hp, max, slot: index + 1,
+      effect: name === "Sorcerer" ? "Frostbind · next turn" : ""
+    }));
+
+    let state = {
+      round: 3,
+      activeIndex: 6,
+      characters: structuredClone(initialCharacters),
+      events: [
+        { id: 1, label: "Rogue used Backstab", detail: "Ranger: 3 → 2 HP", undone: false, reversible: false },
+        { id: 2, label: "Ranger used Hunter's Mark", detail: "Rogue received Hunter's Mark", undone: false, reversible: false },
+        { id: 3, label: "Fighter used Second Wind", detail: "Fighter: 3 → 4 HP", undone: false, reversible: false },
+        { id: 4, label: "Finished Fighter's turn", detail: "Wizard became active", undone: false, reversible: true }
+      ],
+      snapshots: [{
+        activeIndex: 5,
+        round: 3,
+        characters: structuredClone(initialCharacters),
+        targetEventId: 4
+      }]
+    };
+    let draftType = "Basic Attack";
+    let selectedTargetId = null;
+
+    function currentVariant() {
+      const key = new URLSearchParams(location.search).get("variant")?.toUpperCase();
+      return variants[key] ? key : "A";
+    }
+
+    function activeCharacter() { return state.characters[state.activeIndex]; }
+    function nextActiveCharacter() { return state.characters[(state.activeIndex + 1) % state.characters.length]; }
+    function teamClass(team) { return team === "DROW" ? "team-drow" : "team-duergar"; }
+    function hpText(character) { return character.hp === 0 ? "DOWNED" : `${character.hp}/${character.max}`; }
+    function effectiveEvents() { return state.events.filter(event => event.reversible && !event.undone); }
+
+    function characterMini(character) {
+      const active = character.id === activeCharacter().id;
+      return `<article class="mini-character ${character.hp === 0 ? "downed" : ""}">
+        ${active ? '<span class="active-mark">Active</span>' : ""}
+        <strong>${character.name}</strong>
+        <span class="hp"><span class="heart">♥</span> ${hpText(character)}</span>
+        ${character.effect ? `<span class="effect">${character.effect}</span>` : ""}
+      </article>`;
+    }
+
+    function commonTopbar() {
+      return `<header class="topbar">
+        <div><div class="brand">BOTTLEBOUND</div><div class="eyebrow">Referee Console</div></div>
+        <div class="phase"><span class="live-dot"></span><span><strong>Round ${state.round}</strong> · Active Match</span></div>
+        <button class="compact-button" data-command="undo" ${effectiveEvents().length ? "" : "disabled"}>↶ Undo</button>
+      </header>`;
+    }
+
+    function actionButtons(containerClass = "command-actions") {
+      return `<div class="${containerClass}">
+        <button class="action-button" data-command="draft" data-type="Basic Attack">Basic Attack</button>
+        <button class="action-button alt" data-command="draft" data-type="Ability">Use Ability</button>
+        <button class="finish-button" data-command="finish">Finish Turn</button>
+      </div>`;
+    }
+
+    function renderVariantA() {
+      const active = activeCharacter();
+      const teams = ["DROW", "DUERGAR"];
+      return `${commonTopbar()}<main class="command-shell">
+        <section class="turn-hero ${teamClass(active.team)}">
+          <div>
+            <div class="eyebrow">Active turn · ${active.team}</div>
+            <h1>${active.name}</h1>
+            <div class="turn-meta"><span class="hp"><span class="heart">♥</span> ${active.hp}/${active.max} HP</span><span>Ranged · 6 paces</span><span>2 abilities ready</span></div>
+          </div>
+          <div class="initiative-token"><span>Slot</span><b>${active.slot}</b></div>
+        </section>
+        ${actionButtons()}
+        <div class="next-up"><span><span class="eyebrow">Next</span><br><strong>${nextActiveCharacter().name}</strong></span><span class="muted">Finish Turn is the only action that advances initiative.</span></div>
+        <section class="team-strips">
+          ${teams.map(team => `<div class="team-strip ${teamClass(team)}"><h2>${team}</h2><div class="mini-grid">${state.characters.filter(c => c.team === team).map(characterMini).join("")}</div></div>`).join("")}
+        </section>
+      </main>`;
+    }
+
+    function characterRow(character) {
+      const active = character.id === activeCharacter().id;
+      return `<article class="character-row ${teamClass(character.team)} ${active ? "is-active" : ""} ${character.hp === 0 ? "downed" : ""}">
+        <span class="slot">${character.slot}</span>
+        <div><strong>${character.name}</strong><small>${active ? "ACTIVE TURN" : character.effect || "No active effects"}</small></div>
+        <span class="hp"><span class="heart">♥</span> ${hpText(character)}</span>
+      </article>`;
+    }
+
+    function renderVariantB() {
+      const active = activeCharacter();
+      const lastEvent = state.events.at(-1);
+      return `${commonTopbar()}<main class="board-shell">
+        <section class="roster-board">
+          ${["DROW", "DUERGAR"].map(team => `<div class="team-column">
+            <div class="team-heading ${teamClass(team)}"><h2>${team}</h2><span>${state.characters.filter(c => c.team === team && c.hp > 0).length} active</span></div>
+            ${state.characters.filter(c => c.team === team).map(characterRow).join("")}
+          </div>`).join("")}
+        </section>
+        <aside class="action-rail">
+          <div class="eyebrow">Slot ${active.slot} · ${active.team}</div><h1>${active.name}</h1><div class="hp"><span class="heart">♥</span> ${active.hp}/${active.max} HP</div>
+          ${actionButtons("action-stack")}
+          <div class="event-card"><div class="eyebrow">Last event</div><p><strong>${lastEvent.label}</strong></p><p class="muted">${lastEvent.detail}</p></div>
+        </aside>
+      </main>`;
+    }
+
+    function renderVariantC() {
+      const active = activeCharacter();
+      return `${commonTopbar()}<main class="timeline-shell">
+        <div class="timeline-layout">
+          <aside class="status-rail"><h2>Initiative<br><span class="muted">Round ${state.round}</span></h2>${state.characters.map(character => `<div class="rail-person ${character.id === active.id ? "is-active" : ""} ${character.hp === 0 ? "downed" : ""}"><span>${character.slot}. ${character.name}</span><span>${hpText(character)}</span></div>`).join("")}</aside>
+          <section class="timeline-main">
+            <div class="turn-banner"><div><div class="eyebrow">Now resolving · ${active.team}</div><h1>${active.name}</h1></div><div class="hp"><span class="heart">♥</span> ${active.hp}/${active.max}</div></div>
+            ${actionButtons("composer")}
+            <div class="eyebrow">Match Events · newest first</div>
+            <div class="timeline">${[...state.events].reverse().map(event => `<article class="timeline-event ${event.undone ? "undone" : ""}"><strong>${event.label}</strong><span class="muted">${event.detail}</span>${event.isUndo ? '<span class="effect">Undo Event</span>' : ""}</article>`).join("")}</div>
+          </section>
+        </div>
+      </main>`;
+    }
+
+    function render() {
+      const key = currentVariant();
+      document.getElementById("app").innerHTML = key === "A" ? renderVariantA() : key === "B" ? renderVariantB() : renderVariantC();
+      document.getElementById("variantLabel").innerHTML = `<small>Prototype variant</small>${key} · ${variants[key]}`;
+    }
+
+    function saveSnapshot(label, detail) {
+      state.snapshots.push({
+        activeIndex: state.activeIndex,
+        round: state.round,
+        characters: structuredClone(state.characters),
+        targetEventId: state.events.at(-1)?.id ?? null
+      });
+      state.events.push({ id: Date.now(), label, detail, undone: false, reversible: true });
+    }
+
+    function openDraft(type) {
+      draftType = type;
+      selectedTargetId = null;
+      const active = activeCharacter();
+      const targets = state.characters.filter(character => character.id !== active.id && character.hp > 0);
+      const overlay = document.getElementById("draftOverlay");
+      overlay.innerHTML = `<section class="sheet" role="dialog" aria-modal="true" aria-labelledby="draftTitle">
+        <div class="eyebrow">Action Draft · no state changed</div><h2 id="draftTitle">${active.name}: ${type}</h2>
+        <p>Select every character that the referee confirmed as affected. This demo applies 1 damage to one target.</p>
+        <div class="target-grid">${targets.map(target => `<button class="target-button ${teamClass(target.team)}" data-target="${target.id}"><strong>${target.name}</strong><br><span class="muted">${target.team} · ${target.hp}/${target.max} HP</span></button>`).join("")}</div>
+        <div class="sheet-actions"><button class="secondary-button" data-command="cancel-draft">Cancel</button><button class="action-button" id="confirmDraft" data-command="confirm-draft" disabled>Confirm result</button></div>
+      </section>`;
+      overlay.hidden = false;
+    }
+
+    function confirmDraft() {
+      const target = state.characters.find(character => character.id === selectedTargetId);
+      if (!target) return;
+      const before = target.hp;
+      saveSnapshot(`${activeCharacter().name} used ${draftType}`, `${target.name}: ${before} → ${Math.max(0, before - 1)} HP`);
+      target.hp = Math.max(0, target.hp - 1);
+      document.getElementById("draftOverlay").hidden = true;
+      render();
+    }
+
+    function finishTurn() {
+      const current = activeCharacter();
+      const priorIndex = state.activeIndex;
+      saveSnapshot(`Finished ${current.name}'s turn`, "Initiative advanced to the next active character");
+      do {
+        state.activeIndex = (state.activeIndex + 1) % state.characters.length;
+        if (state.activeIndex === 0) state.round += 1;
+      } while (state.characters[state.activeIndex].hp === 0 && state.activeIndex !== priorIndex);
+      state.events.at(-1).detail = `${activeCharacter().name} became active`;
+      render();
+    }
+
+    function openUndo() {
+      const event = [...state.events].reverse().find(item => item.reversible && !item.undone);
+      if (!event) return;
+      const snapshot = state.snapshots.at(-1);
+      const delta = snapshot ? event.detail : "Restore the simulated state from before this event.";
+      const overlay = document.getElementById("undoOverlay");
+      overlay.innerHTML = `<section class="sheet" role="dialog" aria-modal="true" aria-labelledby="undoTitle">
+        <div class="eyebrow">Undo latest event</div><h2 id="undoTitle">${event.label}</h2>
+        <div class="delta">Reverse: ${delta}</div>
+        <p>The event remains visible in the Match Event history.</p>
+        <div class="sheet-actions"><button class="secondary-button" data-command="cancel-undo">Keep event</button><button class="danger-button" data-command="confirm-undo">Confirm Undo</button></div>
+      </section>`;
+      overlay.hidden = false;
+    }
+
+    function confirmUndo() {
+      const target = [...state.events].reverse().find(item => item.reversible && !item.undone);
+      if (!target) return;
+      const snapshot = state.snapshots.pop();
+      target.undone = true;
+      if (snapshot) {
+        state.activeIndex = snapshot.activeIndex;
+        state.round = snapshot.round;
+        state.characters = structuredClone(snapshot.characters);
+      }
+      state.events.push({ id: Date.now(), label: `Undid: ${target.label}`, detail: "Exact pre-event Match State restored", undone: false, reversible: false, isUndo: true });
+      document.getElementById("undoOverlay").hidden = true;
+      render();
+    }
+
+    function cycleVariant(direction) {
+      const keys = Object.keys(variants);
+      const index = keys.indexOf(currentVariant());
+      const next = keys[(index + direction + keys.length) % keys.length];
+      const url = new URL(location.href);
+      url.searchParams.set("variant", next);
+      history.replaceState({}, "", url);
+      render();
+    }
+
+    document.addEventListener("click", event => {
+      const target = event.target.closest("[data-command], [data-target]");
+      if (!target) return;
+      if (target.dataset.target) {
+        selectedTargetId = target.dataset.target;
+        document.querySelectorAll("[data-target]").forEach(button => button.classList.toggle("selected", button.dataset.target === selectedTargetId));
+        document.getElementById("confirmDraft").disabled = false;
+        return;
+      }
+      const command = target.dataset.command;
+      if (command === "draft") openDraft(target.dataset.type);
+      if (command === "finish") finishTurn();
+      if (command === "undo") openUndo();
+      if (command === "cancel-draft") document.getElementById("draftOverlay").hidden = true;
+      if (command === "confirm-draft") confirmDraft();
+      if (command === "cancel-undo") document.getElementById("undoOverlay").hidden = true;
+      if (command === "confirm-undo") confirmUndo();
+    });
+    document.getElementById("prevVariant").addEventListener("click", () => cycleVariant(-1));
+    document.getElementById("nextVariant").addEventListener("click", () => cycleVariant(1));
+    document.addEventListener("keydown", event => {
+      if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName) || document.activeElement.isContentEditable) return;
+      if (event.key === "ArrowLeft") cycleVariant(-1);
+      if (event.key === "ArrowRight") cycleVariant(1);
+      if (event.key === "Escape") document.querySelectorAll(".overlay").forEach(overlay => overlay.hidden = true);
+    });
+    render();
+  </script>
+</body>
+</html>

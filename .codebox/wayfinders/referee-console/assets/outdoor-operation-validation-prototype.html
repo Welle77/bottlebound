@@ -1,0 +1,313 @@
+<!doctype html>
+<!-- PROTOTYPE: Throwaway logic harness for W08 outdoor operation validation. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BOTTLEBOUND Outdoor Operation Validation</title>
+  <style>
+    :root {
+      --ink: #161713;
+      --paper: #f5f1e5;
+      --panel: #fffdf7;
+      --line: #bbb5a5;
+      --signal: #f5cb4c;
+      --good: #176b42;
+      --bad: #a72a20;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); }
+    button { min-height: 48px; border: 2px solid var(--ink); border-radius: 9px; padding: 9px 13px; background: white; color: var(--ink); font: inherit; font-weight: 800; cursor: pointer; }
+    button:hover { background: #fff4c5; }
+    button:focus-visible { outline: 4px solid #2176ff; outline-offset: 2px; }
+    button[disabled] { cursor: not-allowed; opacity: .4; }
+    header { padding: 22px max(16px, calc((100vw - 1100px) / 2)); background: var(--ink); color: white; }
+    header h1 { margin: 0 0 6px; font-size: clamp(25px, 5vw, 42px); }
+    header p { max-width: 850px; margin: 0; color: #e4e1d7; line-height: 1.45; }
+    .prototype { display: inline-block; margin-bottom: 10px; color: var(--signal); font-size: 12px; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+    main { max-width: 1100px; margin: auto; padding: 16px 16px 70px; }
+    .notice { margin-bottom: 14px; padding: 12px; border: 2px solid var(--bad); border-radius: 10px; background: #fff0ed; }
+    .state-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .panel { min-width: 0; padding: 14px; border: 2px solid var(--line); border-radius: 12px; background: var(--panel); }
+    .panel h2 { margin: 0 0 10px; font-size: 17px; }
+    .panel h3 { margin: 14px 0 7px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; }
+    .facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; }
+    .facts dt { color: #64645e; font-weight: 700; }
+    .facts dd { margin: 0; font-weight: 850; }
+    .hp-row { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid #ddd7c9; }
+    .event { margin: 7px 0; padding: 8px; border-left: 4px solid var(--good); background: #edf7f1; font-size: 13px; }
+    .event.undo { border-color: var(--signal); background: #fff7d9; }
+    .empty { color: #6c6c65; font-style: italic; }
+    .status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 999px; background: #d9f0e2; color: var(--good); font-size: 12px; font-weight: 900; }
+    .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    .status.bad { background: #fae0dc; color: var(--bad); }
+    .free-play { margin: 14px 0; }
+    .button-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .primary { background: var(--signal); }
+    .dark { background: var(--ink); color: white; }
+    .danger { border-color: var(--bad); color: var(--bad); }
+    .walkthroughs { margin-top: 18px; }
+    .tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 7px; }
+    .tab[aria-selected="true"] { background: var(--ink); color: white; }
+    .scenario { padding: 16px; border: 2px solid var(--ink); border-radius: 12px; background: var(--panel); }
+    .scenario h2 { margin: 0 0 5px; }
+    .scenario p { margin: 0 0 13px; line-height: 1.45; }
+    .steps { display: grid; gap: 8px; }
+    .step { display: grid; grid-template-columns: 34px 1fr; gap: 8px; align-items: center; text-align: left; }
+    .step-number { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--ink); color: white; }
+    .step.done { border-color: var(--good); background: #edf7f1; }
+    .verdict { margin-top: 12px; padding: 11px; border-left: 5px solid var(--signal); background: #fff7d9; font-weight: 750; }
+    @media (max-width: 800px) {
+      .state-grid { grid-template-columns: 1fr; }
+      .button-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="prototype">Throwaway validation prototype</span>
+    <h1>Can the referee recover without guessing?</h1>
+    <p>This demo checks the selected live workflow's tap path, interrupted Action Draft recovery, confirmed-event recovery, and atomic Undo.</p>
+  </header>
+  <main>
+    <div class="notice"><strong>Scope limit:</strong> Browser checks can assess layout, touch targets, and state behavior. Only a field test can assess glare, wet hands, device heat, and referee attention during play.</div>
+    <section class="state-grid" id="statePanels"></section>
+
+    <section class="panel free-play">
+      <h2>Free play</h2>
+      <div class="button-grid">
+        <button class="primary" data-action="OPEN_ATTACK">Start Basic Attack</button>
+        <button data-action="SELECT_RANGER">Select Ranger</button>
+        <button class="primary" data-action="CONFIRM_ACTION">Confirm result</button>
+        <button class="dark" data-action="FINISH_TURN">Finish Turn</button>
+        <button data-action="REQUEST_UNDO">Open Undo</button>
+        <button class="danger" data-action="CONFIRM_UNDO">Confirm Undo</button>
+        <button data-action="SIMULATE_RESTART">Simulate restart</button>
+        <button data-action="RESET">Reset demo</button>
+      </div>
+    </section>
+
+    <section class="walkthroughs">
+      <div class="tabs" id="tabs" role="tablist"></div>
+      <div class="scenario" id="scenario"></div>
+    </section>
+  </main>
+
+  <script>
+    // Portable prototype module: no DOM access and no browser persistence.
+    const MatchRecoveryModel = (() => {
+      const copy = value => JSON.parse(JSON.stringify(value));
+      const initialCanonical = () => ({
+        phase: "Active",
+        round: 3,
+        active: "Wizard",
+        next: "Barbarian",
+        hp: { Wizard: 3, Ranger: 2, Barbarian: 5 },
+        eventSequence: 18
+      });
+      const initial = () => {
+        const canonical = initialCanonical();
+        return {
+          canonical,
+          persisted: copy(canonical),
+          draft: null,
+          pendingUndo: null,
+          reversible: [],
+          events: [{ sequence: 18, label: "Finished Fighter's turn", detail: "Wizard became active" }],
+          taps: 0,
+          storage: "ready",
+          lastChange: "Demo reset to a saved Active Match."
+        };
+      };
+      const commit = (state, label, detail, change) => {
+        const next = copy(state);
+        const before = copy(next.canonical);
+        change(next.canonical);
+        next.canonical.eventSequence += 1;
+        next.persisted = copy(next.canonical);
+        next.reversible.push({ label, before });
+        next.events.push({ sequence: next.canonical.eventSequence, label, detail });
+        next.draft = null;
+        next.pendingUndo = null;
+        next.lastChange = `${label} committed with its complete snapshot.`;
+        return next;
+      };
+      const reduce = (state, action) => {
+        if (action.type === "RESET") return initial();
+        const next = copy(state);
+        if (action.countTap !== false) next.taps += 1;
+        if (action.type === "OPEN_ATTACK") {
+          next.draft = { source: next.canonical.active, action: "Basic Attack", target: null };
+          next.lastChange = "The Action Draft opened. Match State did not change.";
+          return next;
+        }
+        if (action.type === "SELECT_RANGER") {
+          if (!next.draft) {
+            next.lastChange = "No target changed because no Action Draft is open.";
+            return next;
+          }
+          next.draft.target = "Ranger";
+          next.lastChange = "Ranger entered the Action Draft. Match State did not change.";
+          return next;
+        }
+        if (action.type === "CONFIRM_ACTION") {
+          if (!next.draft?.target) {
+            next.lastChange = "No result committed because the Action Draft has no target.";
+            return next;
+          }
+          return commit(next, "Wizard used Basic Attack", "Ranger: 2 → 1 HP", canonical => { canonical.hp.Ranger = 1; });
+        }
+        if (action.type === "FINISH_TURN") {
+          return commit(next, "Finished Wizard's turn", "Barbarian became active", canonical => {
+            canonical.active = "Barbarian";
+            canonical.next = "Sorcerer";
+          });
+        }
+        if (action.type === "REQUEST_UNDO") {
+          const target = next.reversible.at(-1);
+          next.pendingUndo = target ? { label: target.label, preview: "Restore the complete pre-event Match State" } : null;
+          next.lastChange = target ? "Undo opened with an exact state preview." : "No reversible Match Event exists.";
+          return next;
+        }
+        if (action.type === "CONFIRM_UNDO") {
+          const target = next.reversible.pop();
+          if (!target || !next.pendingUndo) {
+            next.lastChange = "Undo did not run because no confirmed target exists.";
+            return next;
+          }
+          next.canonical = copy(target.before);
+          next.canonical.eventSequence = next.persisted.eventSequence + 1;
+          next.persisted = copy(next.canonical);
+          next.events.push({ sequence: next.canonical.eventSequence, label: `Undid: ${target.label}`, detail: "Exact pre-event Match State restored", undo: true });
+          next.pendingUndo = null;
+          next.lastChange = "Undo restored and saved the complete pre-event Match State.";
+          return next;
+        }
+        if (action.type === "SIMULATE_RESTART") {
+          next.canonical = copy(next.persisted);
+          next.draft = null;
+          next.pendingUndo = null;
+          next.lastChange = "Restart restored the last committed snapshot and discarded temporary controls.";
+          return next;
+        }
+        if (action.type === "STORAGE_FAIL") {
+          next.storage = "blocked";
+          next.lastChange = "The Referee Console blocked Match start because canonical storage failed.";
+          return next;
+        }
+        return next;
+      };
+      return { initial, reduce };
+    })();
+
+    const scenarios = [
+      {
+        id: "quick",
+        title: "Fast confirmed action",
+        description: "Complete one simple hit in three live controls. Watch the draft stay separate until confirmation.",
+        steps: [
+          ["OPEN_ATTACK", "Start Basic Attack"],
+          ["SELECT_RANGER", "Select Ranger"],
+          ["CONFIRM_ACTION", "Confirm result"]
+        ],
+        verdict: "Expected: Ranger changes from 2 HP to 1 HP after the third tap. One Match Event and snapshot commit together."
+      },
+      {
+        id: "draft-restart",
+        title: "Restart during a draft",
+        description: "Close the app before confirmation. The temporary Action Draft must disappear without damage.",
+        steps: [
+          ["OPEN_ATTACK", "Start Basic Attack"],
+          ["SELECT_RANGER", "Select Ranger"],
+          ["SIMULATE_RESTART", "Simulate browser restart"]
+        ],
+        verdict: "Expected: Ranger stays at 2 HP. The restored Match has no Action Draft."
+      },
+      {
+        id: "commit-restart",
+        title: "Restart after confirmation",
+        description: "Confirm damage, then restart. The last complete Match Event must remain.",
+        steps: [
+          ["OPEN_ATTACK", "Start Basic Attack"],
+          ["SELECT_RANGER", "Select Ranger"],
+          ["CONFIRM_ACTION", "Confirm result"],
+          ["SIMULATE_RESTART", "Simulate browser restart"]
+        ],
+        verdict: "Expected: Ranger remains at 1 HP and the confirmed Match Event remains visible."
+      },
+      {
+        id: "undo",
+        title: "Safe Undo",
+        description: "Advance initiative, preview Undo, then restore the full pre-event state.",
+        steps: [
+          ["FINISH_TURN", "Finish Wizard's turn"],
+          ["REQUEST_UNDO", "Open Undo preview"],
+          ["CONFIRM_UNDO", "Confirm Undo"]
+        ],
+        verdict: "Expected: Wizard becomes active again only after confirmation. The Undo Event remains in history."
+      },
+      {
+        id: "storage",
+        title: "Storage unavailable",
+        description: "Test the pre-Match failure path when the browser cannot save canonical Match data.",
+        steps: [["STORAGE_FAIL", "Simulate storage failure"]],
+        verdict: "Expected: Match start is blocked. The screen must not pretend that it can restore state."
+      }
+    ];
+
+    let state = MatchRecoveryModel.initial();
+    let activeScenario = scenarios[0].id;
+    let scenarioStep = 0;
+
+    function renderState() {
+      const current = state.canonical;
+      const saved = state.persisted;
+      const draft = state.draft;
+      const undo = state.pendingUndo;
+      document.getElementById("statePanels").innerHTML = `
+        <section class="panel"><h2>Current Match State</h2><dl class="facts">
+          <dt>Phase</dt><dd>${current.phase}</dd><dt>Round</dt><dd>${current.round}</dd>
+          <dt>Active</dt><dd>${current.active}</dd><dt>Next</dt><dd>${current.next}</dd>
+          <dt>Live taps</dt><dd>${state.taps}</dd><dt>Storage</dt><dd><span class="status ${state.storage === "ready" ? "" : "bad"}">${state.storage}</span></dd>
+        </dl>${Object.entries(current.hp).map(([name, hp]) => `<div class="hp-row"><span>${name}</span><strong>♥ ${hp}</strong></div>`).join("")}
+        <h3>Last change</h3><div class="event">${state.lastChange}</div></section>
+        <section class="panel"><h2>Temporary controls</h2>
+          <h3>Action Draft</h3>${draft ? `<dl class="facts"><dt>Source</dt><dd>${draft.source}</dd><dt>Action</dt><dd>${draft.action}</dd><dt>Target</dt><dd>${draft.target || "Not selected"}</dd></dl>` : '<p class="empty">No Action Draft</p>'}
+          <h3>Undo preview</h3>${undo ? `<dl class="facts"><dt>Target</dt><dd>${undo.label}</dd><dt>Result</dt><dd>${undo.preview}</dd></dl>` : '<p class="empty">Undo is not open</p>'}
+          <h3>Saved snapshot</h3><dl class="facts"><dt>Sequence</dt><dd>${saved.eventSequence}</dd><dt>Active</dt><dd>${saved.active}</dd><dt>Ranger HP</dt><dd>${saved.hp.Ranger}</dd></dl>
+        </section>
+        <section class="panel"><h2>Match Events</h2>${state.events.slice().reverse().map(event => `<div class="event ${event.undo ? "undo" : ""}"><strong>${event.sequence}. ${event.label}</strong><br>${event.detail}</div>`).join("")}</section>`;
+    }
+
+    function renderScenario() {
+      const selected = scenarios.find(scenario => scenario.id === activeScenario);
+      document.getElementById("tabs").innerHTML = scenarios.map(scenario => `<button class="tab" role="tab" aria-selected="${scenario.id === activeScenario}" data-scenario="${scenario.id}">${scenario.title}</button>`).join("");
+      document.getElementById("scenario").innerHTML = `<h2>${selected.title}</h2><p>${selected.description}</p><div class="steps">${selected.steps.map(([action, label], index) => `<button class="step ${index < scenarioStep ? "done" : ""}" data-step="${index}" data-action="${action}" ${index === scenarioStep ? "" : "disabled"}><span class="step-number">${index + 1}</span><span>${label}</span></button>`).join("")}</div><div class="verdict">${selected.verdict}</div>`;
+    }
+
+    function resetScenario(id) {
+      activeScenario = id;
+      scenarioStep = 0;
+      state = MatchRecoveryModel.initial();
+      render();
+    }
+
+    function dispatch(action, fromStep = false) {
+      state = MatchRecoveryModel.reduce(state, { type: action, countTap: !["RESET", "SIMULATE_RESTART", "STORAGE_FAIL"].includes(action) });
+      if (fromStep) scenarioStep += 1;
+      if (action === "RESET") scenarioStep = 0;
+      render();
+    }
+
+    function render() { renderState(); renderScenario(); }
+    document.addEventListener("click", event => {
+      const scenario = event.target.closest("[data-scenario]");
+      if (scenario) return resetScenario(scenario.dataset.scenario);
+      const button = event.target.closest("[data-action]");
+      if (button) dispatch(button.dataset.action, button.hasAttribute("data-step"));
+    });
+    render();
+  </script>
+</body>
+</html>
