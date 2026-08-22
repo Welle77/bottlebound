@@ -1,6 +1,5 @@
-const CACHE_VERSION = "bottlebound-shell-v3";
+const CACHE_VERSION = "bottlebound-shell-v4";
 const APP_SHELL = [
-  "/",
   "/index.html",
   "/assets/app.js",
   "/assets/style.css",
@@ -44,13 +43,18 @@ self.addEventListener("fetch", (event) => {
         event.request.mode === "navigate" ? "/index.html" : requestUrl.pathname,
       )
       .then((cached) => {
-        if (cached) {
+        if (cached && !cached.redirected) {
           return cached;
         }
 
         return fetch(event.request).catch(() => {
           if (event.request.mode === "navigate") {
-            return caches.match("/index.html");
+            return caches.match("/index.html").then((fallback) => {
+              if (fallback && !fallback.redirected) {
+                return fallback;
+              }
+              throw new Error("The app shell is not available offline.");
+            });
           }
           throw new Error("The requested resource is not available offline.");
         });
