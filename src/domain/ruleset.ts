@@ -75,7 +75,13 @@ export interface StructuredAbility {
   readonly ownerCharacterId: string;
   readonly actionType: "standard" | "powerful" | "reaction";
   readonly attackType: string;
-  readonly interaction: "physical-attack" | "targeted-attack" | "self" | "ally" | "enemy" | "utility";
+  readonly interaction:
+    | "physical-attack"
+    | "targeted-attack"
+    | "self"
+    | "ally"
+    | "enemy"
+    | "utility";
   readonly targetPolicy: {
     readonly relation: "self" | "ally" | "enemy" | "any";
     readonly cardinality: "one" | "all-in-range" | "self";
@@ -314,24 +320,49 @@ function inferAbilityStructure(
   const lifeState: StructuredAbility["targetPolicy"]["lifeState"] =
     ability.effect.toLowerCase().includes("downed") ? "either" : "active";
   const manualChecks: string[] = [];
-  if (ability.range !== "Self" && ability.range !== "N/A") manualChecks.push("range");
+  if (ability.range !== "Self" && ability.range !== "N/A")
+    manualChecks.push("range");
   if (ability.lineOfSight === "Yes") manualChecks.push("lineOfSight");
-  if (ability.ballRequired === "Yes") manualChecks.push("legalBottleContact", "terrainContact");
+  if (ability.ballRequired === "Yes")
+    manualChecks.push("legalBottleContact", "terrainContact");
   const operations: string[] = [];
   const effectLower = ability.effect.toLowerCase();
-  if (effectLower.includes("takes 1 damage") || effectLower.includes("takes 1 damage")) operations.push("deal-damage");
-  if (effectLower.includes("+1 damage") || effectLower.includes("add-damage") || ability.name === "Hunter's Mark" || ability.name === "Hex") operations.push("add-damage");
-  if (effectLower.includes("prevent all damage")) operations.push("prevent-damage-and-effects");
-  if (effectLower.includes("reduce")) operations.push("reduce-remaining-damage");
-  if (effectLower.includes("restores 1 hp") || effectLower.includes("heal")) operations.push("heal");
-  if (effectLower.includes("revive") || effectLower.includes("restore a downed")) operations.push("revive");
+  if (
+    effectLower.includes("takes 1 damage") ||
+    effectLower.includes("takes 1 damage")
+  )
+    operations.push("deal-damage");
+  if (
+    effectLower.includes("+1 damage") ||
+    effectLower.includes("add-damage") ||
+    ability.name === "Hunter's Mark" ||
+    ability.name === "Hex"
+  )
+    operations.push("add-damage");
+  if (effectLower.includes("prevent all damage"))
+    operations.push("prevent-damage-and-effects");
+  if (effectLower.includes("reduce"))
+    operations.push("reduce-remaining-damage");
+  if (effectLower.includes("restores 1 hp") || effectLower.includes("heal"))
+    operations.push("heal");
+  if (
+    effectLower.includes("revive") ||
+    effectLower.includes("restore a downed")
+  )
+    operations.push("revive");
   if (effectLower.includes("maximum hp")) operations.push("change-max-hp");
-  if (effectLower.includes("movement") && effectLower.includes("maximum of 1")) operations.push("set-movement-cap");
-  if (effectLower.includes("movement") && effectLower.includes("3 paces")) operations.push("set-movement-cap");
-  if (effectLower.includes("cannot use a powerful ability")) operations.push("prohibit-action-type");
-  if (effectLower.includes("cannot be affected by physically")) operations.push("ignore-physical-attack");
-  if (effectLower.includes("redirect")) operations.push("redirect-physical-attack");
-  if (effectLower.includes("move") && effectLower.includes("paces")) operations.push("manual-movement-instruction");
+  if (effectLower.includes("movement") && effectLower.includes("maximum of 1"))
+    operations.push("set-movement-cap");
+  if (effectLower.includes("movement") && effectLower.includes("3 paces"))
+    operations.push("set-movement-cap");
+  if (effectLower.includes("cannot use a powerful ability"))
+    operations.push("prohibit-action-type");
+  if (effectLower.includes("cannot be affected by physically"))
+    operations.push("ignore-physical-attack");
+  if (effectLower.includes("redirect"))
+    operations.push("redirect-physical-attack");
+  if (effectLower.includes("move") && effectLower.includes("paces"))
+    operations.push("manual-movement-instruction");
   if (operations.length === 0) operations.push("apply-effect");
   return Object.freeze({
     id: `${characterId}-${slugAbility(ability.name)}`,
@@ -354,12 +385,16 @@ function inferAbilityStructure(
 
 const abilities = Object.freeze(
   referenceCharacters.flatMap((character) =>
-    character.abilities.map((ability) => inferAbilityStructure(character.id, ability)),
+    character.abilities.map((ability) =>
+      inferAbilityStructure(character.id, ability),
+    ),
   ),
 );
 
 if (abilities.length !== 24) {
-  throw new Error(`Expected 24 structured abilities; found ${abilities.length}.`);
+  throw new Error(
+    `Expected 24 structured abilities; found ${abilities.length}.`,
+  );
 }
 
 export const RULESET: Ruleset = Object.freeze({

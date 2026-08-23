@@ -62,7 +62,7 @@ test("invalid saved data stops recovery without creating replacement data", asyn
   await page.getByRole("button", { name: "Create Match" }).click();
   await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open("bottlebound-match", 1);
+      const request = indexedDB.open("bottlebound-match", 2);
       request.addEventListener("success", () => resolve(request.result));
       request.addEventListener("error", () => reject(request.error));
     });
@@ -97,7 +97,7 @@ test("invalid saved data stops recovery without creating replacement data", asyn
   await expect(
     page.evaluate(async () => {
       const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open("bottlebound-match", 1);
+        const request = indexedDB.open("bottlebound-match", 2);
         request.addEventListener("success", () => resolve(request.result));
         request.addEventListener("error", () => reject(request.error));
       });

@@ -254,10 +254,13 @@ function parseQuickReference(source: string): RulesQuickReference[] {
 
 function anchorSource(
   source: string,
-  sections: readonly RulesSectionReference[],
-  characters: readonly RulesCharacterReference[],
-  quickReference: readonly RulesQuickReference[],
+  references: {
+    sections: readonly RulesSectionReference[];
+    characters: readonly RulesCharacterReference[];
+    quickReference: readonly RulesQuickReference[];
+  },
 ): string {
+  const { sections, characters, quickReference } = references;
   let result = source;
   const anchors = new Map<string, string>();
   const add = (needle: string, anchor: string) => {
@@ -435,7 +438,7 @@ export function buildRulesReference(
     uniqueAnchors.add(anchor);
   }
   const html = renderSanitized(
-    anchorSource(source, sections, characters, quickReference),
+    anchorSource(source, { sections, characters, quickReference }),
   );
   return deepFreeze({
     version,

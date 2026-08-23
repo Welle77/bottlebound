@@ -42,8 +42,7 @@ describe("Match command persistence contract", () => {
         ...Array.from({ length: 12 }, () => 19),
         ...Array.from({ length: 20 }, () => 0),
       ]),
-      "2026-08-22T14:02:00.000Z",
-      true,
+      { occurredAt: "2026-08-22T14:02:00.000Z", confirmed: true },
     );
     const started = startMatch(rerolled.state, "2026-08-22T14:03:00.000Z");
     const finished = finishTurn(started.state, "2026-08-22T14:04:00.000Z");
@@ -62,8 +61,7 @@ describe("Match command persistence contract", () => {
     const undone = undoLastEvent(
       finished.state,
       committed.map(({ event }) => event),
-      "2026-08-22T14:05:00.000Z",
-      true,
+      { occurredAt: "2026-08-22T14:05:00.000Z", confirmed: true },
     );
     await store.commit(undone.event, undone.state);
 
@@ -174,8 +172,7 @@ describe("Match command persistence contract", () => {
         ...Array.from({ length: 12 }, () => 19),
         ...Array.from({ length: 20 }, () => 0),
       ]),
-      "2026-08-22T14:02:00.000Z",
-      true,
+      { occurredAt: "2026-08-22T14:02:00.000Z", confirmed: true },
     );
     const generatedTwiceStore = new IndexedDbMatchStore(
       factory,

@@ -177,12 +177,11 @@ describe("Manual End Game Decision Basis contract", () => {
     current = a2.state;
     const preview = getEndGamePreview(current, queuedRandom(0));
     expect(preview.decisionBasis).toBe("coinFlip");
-    const ended = endMatch(
-      current,
-      "2026-08-23T11:06:00.000Z",
-      true,
-      queuedRandom(0),
-    );
+    const ended = endMatch(current, {
+      occurredAt: "2026-08-23T11:06:00.000Z",
+      confirmed: true,
+      random: queuedRandom(0),
+    });
     expect(ended.event.decisionBasis).toBe("coinFlip");
     expect(ended.event.coinFlipResult).toBe("Drow");
     expect(ended.state.coinFlipResult).toBe("Drow");
@@ -223,12 +222,11 @@ describe("Manual End Game Decision Basis contract", () => {
       },
       "2026-08-23T11:05:00.000Z",
     );
-    const sEnded = endMatch(
-      sA2.state,
-      "2026-08-23T11:06:00.000Z",
-      true,
-      queuedRandom(1),
-    );
+    const sEnded = endMatch(sA2.state, {
+      occurredAt: "2026-08-23T11:06:00.000Z",
+      confirmed: true,
+      random: queuedRandom(1),
+    });
     for (const r of [sSetup, sGen, sStarted, sA1, sT1, sA2, sEnded]) {
       await store.commit(r.event, r.state);
     }
@@ -243,7 +241,10 @@ describe("Manual End Game Decision Basis contract", () => {
       "2026-08-23T12:01:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-23T12:02:00.000Z");
-    const ended = endMatch(started.state, "2026-08-23T12:03:00.000Z", true);
+    const ended = endMatch(started.state, {
+      occurredAt: "2026-08-23T12:03:00.000Z",
+      confirmed: true,
+    });
     expect(ended.state.outcome).not.toBeNull();
     const reopened = reopenMatch(ended.state, "2026-08-23T12:04:00.000Z");
     expect(reopened.state.outcome).toBeNull();
@@ -274,7 +275,10 @@ describe("Manual End Game Decision Basis contract", () => {
       "2026-08-23T13:01:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-23T13:02:00.000Z");
-    const ended = endMatch(started.state, "2026-08-23T13:03:00.000Z", true);
+    const ended = endMatch(started.state, {
+      occurredAt: "2026-08-23T13:03:00.000Z",
+      confirmed: true,
+    });
 
     expect(() =>
       finishTurn(ended.state as ActiveMatchState, "2026-08-23T13:04:00.000Z"),
@@ -314,7 +318,10 @@ describe("Manual End Game Decision Basis contract", () => {
       "2026-08-23T14:01:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-23T14:02:00.000Z");
-    const ended = endMatch(started.state, "2026-08-23T14:03:00.000Z", true);
+    const ended = endMatch(started.state, {
+      occurredAt: "2026-08-23T14:03:00.000Z",
+      confirmed: true,
+    });
     const eventsEnded = [
       setup.event,
       generated.event,
@@ -324,19 +331,20 @@ describe("Manual End Game Decision Basis contract", () => {
 
     expect(getUndoPreview(ended.state, eventsEnded)).toBeNull();
     expect(() =>
-      undoLastEvent(ended.state, eventsEnded, "2026-08-23T14:04:00.000Z", true),
+      undoLastEvent(ended.state, eventsEnded, {
+        occurredAt: "2026-08-23T14:04:00.000Z",
+        confirmed: true,
+      }),
     ).toThrow();
 
     const reopened = reopenMatch(ended.state, "2026-08-23T14:05:00.000Z");
     const eventsReopened = [...eventsEnded, reopened.event];
     const preview = getUndoPreview(reopened.state, eventsReopened);
     expect(preview?.target.type).toBe("MatchReopened");
-    const undone = undoLastEvent(
-      reopened.state,
-      eventsReopened,
-      "2026-08-23T14:06:00.000Z",
-      true,
-    );
+    const undone = undoLastEvent(reopened.state, eventsReopened, {
+      occurredAt: "2026-08-23T14:06:00.000Z",
+      confirmed: true,
+    });
     expect(undone.state).toEqual({
       ...ended.state,
       sequence: reopened.state.sequence + 1,
@@ -418,12 +426,11 @@ describe("Match Summary lifecycle contract", () => {
     for (const r of [setup, generated, started])
       await store.commit(r.event, r.state);
 
-    const ended = endMatch(
-      started.state,
-      "2026-08-23T16:03:00.000Z",
-      true,
-      queuedRandom(0),
-    );
+    const ended = endMatch(started.state, {
+      occurredAt: "2026-08-23T16:03:00.000Z",
+      confirmed: true,
+      random: queuedRandom(0),
+    });
     await store.commit(ended.event, ended.state);
     const summary1 = await store.getSummary();
     expect(summary1).toEqual({
@@ -445,12 +452,11 @@ describe("Match Summary lifecycle contract", () => {
     // summary persists after reopen
     expect(await store.getSummary()).toEqual(summary1);
 
-    const endedAgain = endMatch(
-      reopened.state,
-      "2026-08-23T16:05:00.000Z",
-      true,
-      queuedRandom(1),
-    );
+    const endedAgain = endMatch(reopened.state, {
+      occurredAt: "2026-08-23T16:05:00.000Z",
+      confirmed: true,
+      random: queuedRandom(1),
+    });
     await store.commit(endedAgain.event, endedAgain.state);
     const summary2 = await store.getSummary();
     expect(summary2).not.toEqual(summary1);
@@ -469,7 +475,10 @@ describe("Match Summary lifecycle contract", () => {
     const started = startMatch(generated.state, "2026-08-23T17:02:00.000Z");
     for (const r of [setup, generated, started])
       await store.commit(r.event, r.state);
-    const ended = endMatch(started.state, "2026-08-23T17:03:00.000Z", true);
+    const ended = endMatch(started.state, {
+      occurredAt: "2026-08-23T17:03:00.000Z",
+      confirmed: true,
+    });
     await store.commit(ended.event, ended.state);
     const prior = await store.getSummary();
     expect(prior).not.toBeNull();
@@ -497,11 +506,10 @@ describe("Match Summary lifecycle contract", () => {
       "2026-08-23T17:06:00.000Z",
     );
     await store.commit(newStarted.event, newStarted.state);
-    const failingEnded = endMatch(
-      newStarted.state,
-      "2026-08-23T17:07:00.000Z",
-      true,
-    );
+    const failingEnded = endMatch(newStarted.state, {
+      occurredAt: "2026-08-23T17:07:00.000Z",
+      confirmed: true,
+    });
     const badState = {
       ...failingEnded.state,
       bad: () => {},
@@ -524,7 +532,10 @@ describe("Match Summary lifecycle contract", () => {
     const started = startMatch(generated.state, "2026-08-23T18:02:00.000Z");
     for (const r of [setup, generated, started])
       await store.commit(r.event, r.state);
-    const ended = endMatch(started.state, "2026-08-23T18:03:00.000Z", true);
+    const ended = endMatch(started.state, {
+      occurredAt: "2026-08-23T18:03:00.000Z",
+      confirmed: true,
+    });
     await store.commit(ended.event, ended.state);
     expect(await store.getSummary()).not.toBeNull();
 
@@ -554,7 +565,10 @@ describe("Match Summary lifecycle contract", () => {
     await store.commit(g2.event, g2.state);
     const st2 = startMatch(g2.state, "2026-08-23T18:06:00.000Z");
     await store.commit(st2.event, st2.state);
-    const e2 = endMatch(st2.state, "2026-08-23T18:07:00.000Z", true);
+    const e2 = endMatch(st2.state, {
+      occurredAt: "2026-08-23T18:07:00.000Z",
+      confirmed: true,
+    });
     await store.commit(e2.event, e2.state);
     const s3 = createSetup("removal-active-2", "2026-08-23T18:08:00.000Z");
     await store.commit(s3.event, s3.state);
@@ -590,7 +604,10 @@ describe("Match Summary lifecycle contract", () => {
     const aStart = startMatch(aGen.state, "2026-08-23T19:02:00.000Z");
     for (const r of [aSetup, aGen, aStart])
       await store2.commit(r.event, r.state);
-    const aEnded = endMatch(aStart.state, "2026-08-23T19:03:00.000Z", true);
+    const aEnded = endMatch(aStart.state, {
+      occurredAt: "2026-08-23T19:03:00.000Z",
+      confirmed: true,
+    });
     await store2.commit(aEnded.event, aEnded.state);
     const bSetup = createSetup("active-preserve-2", "2026-08-23T19:04:00.000Z");
     await store2.commit(bSetup.event, bSetup.state);

@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 async function persistedMatchData(page: import("@playwright/test").Page) {
   return page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open("bottlebound-match", 1);
+      const request = indexedDB.open("bottlebound-match", 2);
       request.addEventListener("success", () => resolve(request.result));
       request.addEventListener("error", () => reject(request.error));
     });
@@ -33,7 +33,7 @@ async function rewritePersistedRulesVersion(
 ) {
   await page.evaluate(async (version) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open("bottlebound-match", 1);
+      const request = indexedDB.open("bottlebound-match", 2);
       request.addEventListener("success", () => resolve(request.result));
       request.addEventListener("error", () => reject(request.error));
     });
@@ -73,7 +73,7 @@ async function rewritePersistedMatchAsSchema2(
 ) {
   await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open("bottlebound-match", 1);
+      const request = indexedDB.open("bottlebound-match", 2);
       request.addEventListener("success", () => resolve(request.result));
       request.addEventListener("error", () => reject(request.error));
     });
