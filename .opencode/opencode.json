@@ -1,6 +1,4 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": [
-    "github:trifork/codebox#feature/opencode-harness-compatibility"
-  ]
+  "plugin": ["github:trifork/codebox#feature/opencode-harness-compatibility"]
 }

@@ -55,6 +55,7 @@ describe("Match command persistence contract", () => {
       await expect(store.restore()).resolves.toEqual({
         state: result.state,
         events: committed.map(({ event }) => event),
+        summary: null,
       });
     }
 
@@ -73,6 +74,7 @@ describe("Match command persistence contract", () => {
     await expect(restarted.restore()).resolves.toEqual({
       state: undone.state,
       events: [...committed.map(({ event }) => event), undone.event],
+      summary: null,
     });
     expect(undone.state.schemaVersion).toBe(MATCH_SCHEMA_VERSION);
     expect(MATCH_SCHEMA_VERSION).toBe(3);
@@ -129,6 +131,7 @@ describe("Match command persistence contract", () => {
     await expect(restarted.restore()).resolves.toEqual({
       state: generated.state,
       events: [setup.event, generated.event],
+      summary: null,
     });
   });
 

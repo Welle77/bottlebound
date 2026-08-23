@@ -6,6 +6,7 @@ import {
   cryptoRandomSource,
   endMatch,
   finishTurn,
+  getEndGamePreview,
   getUndoPreview,
   getProtectiveReactionChoices,
   generateInitiative,
@@ -16,9 +17,12 @@ import {
   startMatch,
   undoLastEvent,
   type CommandResult,
+  type EndGamePreview,
   type MatchEvent,
   type MatchState,
+  type MatchSummary,
   type ProtectiveReactionInput,
+  type RandomSource,
   type SetupMatchState,
 } from "./domain/match";
 import { RULESET, type PhysicalAttackCheck } from "./domain/ruleset";
@@ -46,7 +50,15 @@ import {
   retainRulesVersion,
 } from "./rules-reference/rules-ui-state";
 
-type Confirmation = "reroll" | "discard" | "undo" | "end" | "remove" | null;
+type Confirmation =
+  | "reroll"
+  | "discard"
+  | "undo"
+  | "end"
+  | "remove"
+  | "remove-summary"
+  | "start-new"
+  | null;
 interface ActionDraft {
   readonly sourceCharacterId: string;
   readonly rulesVersion: string;
@@ -73,8 +85,10 @@ interface ShellState {
   matchLoaded: boolean;
   matchError: string | null;
   confirmation: Confirmation;
+  endGamePreview: EndGamePreview | null;
   actionDraft: ActionDraft | null;
   saving: boolean;
+  summary: MatchSummary | null;
 }
 
 const state: ShellState = {
@@ -88,8 +102,10 @@ const state: ShellState = {
   matchLoaded: false,
   matchError: null,
   confirmation: null,
+  endGamePreview: null,
   actionDraft: null,
   saving: false,
+  summary: null,
 };
 let rulesUi = createRulesUiState(RULESET.version);
 const matchStore = new IndexedDbMatchStore();
@@ -295,7 +311,32 @@ function activeMatchPanel(
     eliminationPrompt && !eliminationAcknowledged
       ? ""
       : `<div class="match-actions"><button id="basic-attack" class="secondary-action" type="button" ${state.saving || !combatAvailable || activeDowned || match.eliminatedTeams.length === 2 ? "disabled" : ""} ${combatAvailable ? "" : 'aria-describedby="combat-version-status"'}>Basic Attack</button><button id="finish-turn" class="primary-action" type="button" ${state.saving || match.eliminatedTeams.length === 2 ? "disabled" : ""}>${state.saving ? "Saving…" : "Finish Turn"}</button>${canUndo ? '<button id="request-undo" class="secondary-action" type="button">Undo</button>' : ""}</div>`;
-  return `<section class="match-panel active-match" aria-labelledby="active-heading"><div class="section-heading"><div><p class="eyebrow">Active · Sequence ${match.sequence}</p><h2 id="active-heading">Active Match</h2><p class="turn-position">Round ${match.round} · Slot ${match.activeSlot} of ${match.initiative.length}</p><div class="rules-context-links">${contextualRulesControl("rules-round", "Round rules", "section-5-core-terms")}${contextualRulesControl("rules-turn", "Turn rules", "section-7-turn-structure-movement")}</div></div><span class="readiness-badge" data-state="ready">Saved</span></div>${state.matchError ? `<p class="blocking-error" role="alert">${escapeHtml(state.matchError)} The last committed Active Match remains visible.</p>` : ""}<div class="turn-cards"><article class="turn-card active-character" data-active-character><p class="eyebrow">Active${activeDowned ? " · Downed" : ""}</p><h3>${escapeHtml(activeCharacter.name)}</h3><dl><div><dt>Team</dt><dd>${escapeHtml(activeCharacter.team)}</dd></div><div><dt>HP</dt><dd>${activeHp}/${activeCharacter.baseHp}</dd></div><div><dt>Slot</dt><dd>${activeEntry.slot}</dd></div></dl></article><article class="turn-card" data-next-character><p class="eyebrow">Next Active</p><h3>${escapeHtml(nextCharacter.name)}</h3><dl><div><dt>Team</dt><dd>${escapeHtml(nextCharacter.team)}</dd></div><div><dt>HP</dt><dd>${nextHp}/${nextCharacter.baseHp}</dd></div><div><dt>Slot</dt><dd>${nextEntry.slot}</dd></div></dl></article></div>${combatStatus}${eliminationPrompt}<div class="table-wrap"><table class="initiative-table active-order"><caption>Complete initiative order</caption><thead><tr><th>Slot</th><th>Character</th><th>Team</th><th>HP</th><th>Turn</th></tr></thead><tbody>${rows}</tbody></table></div>${commands}${confirmationPanel()}</section>`;
+  const needsSeparateEndGame =
+    !eliminationPrompt || eliminationAcknowledged || eliminationPrompt === "";
+  const endGameControl =
+    needsSeparateEndGame &&
+    !(match.eliminatedTeams.length === 2 && match.outcome === null)
+      ? `<section class="end-game-control" aria-labelledby="end-game-heading"><h3 id="end-game-heading">End Game</h3><p>Close the Match with the calculated winner and Decision Basis.</p><button id="request-end-game" class="secondary-action" type="button">End Game</button></section>`
+      : "";
+  const priorSummary = state.summary ? priorSummaryCard(state.summary) : "";
+  return `<section class="match-panel active-match" aria-labelledby="active-heading"><div class="section-heading"><div><p class="eyebrow">Active · Sequence ${match.sequence}</p><h2 id="active-heading">Active Match</h2><p class="turn-position">Round ${match.round} · Slot ${match.activeSlot} of ${match.initiative.length}</p><div class="rules-context-links">${contextualRulesControl("rules-round", "Round rules", "section-5-core-terms")}${contextualRulesControl("rules-turn", "Turn rules", "section-7-turn-structure-movement")}</div></div><span class="readiness-badge" data-state="ready">Saved</span></div>${state.matchError ? `<p class="blocking-error" role="alert">${escapeHtml(state.matchError)} The last committed Active Match remains visible.</p>` : ""}<div class="turn-cards"><article class="turn-card active-character" data-active-character><p class="eyebrow">Active${activeDowned ? " · Downed" : ""}</p><h3>${escapeHtml(activeCharacter.name)}</h3><dl><div><dt>Team</dt><dd>${escapeHtml(activeCharacter.team)}</dd></div><div><dt>HP</dt><dd>${activeHp}/${activeCharacter.baseHp}</dd></div><div><dt>Slot</dt><dd>${activeEntry.slot}</dd></div></dl></article><article class="turn-card" data-next-character><p class="eyebrow">Next Active</p><h3>${escapeHtml(nextCharacter.name)}</h3><dl><div><dt>Team</dt><dd>${escapeHtml(nextCharacter.team)}</dd></div><div><dt>HP</dt><dd>${nextHp}/${nextCharacter.baseHp}</dd></div><div><dt>Slot</dt><dd>${nextEntry.slot}</dd></div></dl></article></div>${combatStatus}${eliminationPrompt}<div class="table-wrap"><table class="initiative-table active-order"><caption>Complete initiative order</caption><thead><tr><th>Slot</th><th>Character</th><th>Team</th><th>HP</th><th>Turn</th></tr></thead><tbody>${rows}</tbody></table></div>${commands}${endGameControl}${priorSummary}${confirmationPanel()}</section>`;
+}
+
+function decisionBasisLabel(basis: string): string {
+  return (
+    {
+      elimination: "Team Elimination",
+      activeCount: "Active-character count",
+      activeHpTotal: "Active HP total",
+      coinFlip: "Coin Flip",
+    }[basis] ?? basis
+  );
+}
+
+function priorSummaryCard(summary: MatchSummary): string {
+  const result = outcomeLabel(summary.outcome);
+  const basis = `${decisionBasisLabel(summary.decisionBasis)}${summary.coinFlipResult ? ` · ${escapeHtml(summary.coinFlipResult)}` : ""}`;
+  return `<section class="prior-summary-card" aria-labelledby="prior-summary-heading" data-prior-summary><div class="section-heading"><div><p class="eyebrow">Prior summary · On this device</p><h3 id="prior-summary-heading">Prior Match Summary</h3><p>Compact latest result — no export, no expiry.</p></div></div><dl class="ended-result"><div><dt>Result</dt><dd>${escapeHtml(result)}</dd></div><div><dt>Decision Basis</dt><dd>${escapeHtml(basis)}</dd></div><div><dt>Active counts</dt><dd>Drow ${summary.finalCounts.Drow} · Duergar ${summary.finalCounts.Duergar}</dd></div><div><dt>Active HP totals</dt><dd>Drow ${summary.finalHpTotals.Drow} · Duergar ${summary.finalHpTotals.Duergar}</dd></div><div><dt>Ruleset</dt><dd>${escapeHtml(summary.rulesVersion)}</dd></div><div><dt>Ended</dt><dd>${escapeHtml(summary.endedAt)}</dd></div></dl><p class="device-note">On this device only. No export.</p><button id="request-remove-summary" class="danger-action" type="button">Remove prior summary</button></section>`;
 }
 
 function endedMatchPanel(
@@ -303,7 +344,24 @@ function endedMatchPanel(
 ): string {
   const eliminated = match.eliminatedTeams.join(" and ");
   const result = outcomeLabel(match.outcome);
-  return `<section class="match-panel ended-match" aria-labelledby="ended-heading"><div class="section-heading"><div><p class="eyebrow">Ended · Sequence ${match.sequence}</p><h2 id="ended-heading">Ended Match</h2><p>${escapeHtml(result)} · ${escapeHtml(eliminated)} eliminated</p></div><span class="readiness-badge" data-state="ready">Read-only</span></div>${state.matchError ? `<p class="blocking-error" role="alert">${escapeHtml(state.matchError)} The Ended Match remains saved.</p>` : ""}<dl class="ended-result"><div><dt>Result</dt><dd>${escapeHtml(result)}</dd></div><div><dt>Ended</dt><dd>${escapeHtml(match.endedAt)}</dd></div><div><dt>Final round</dt><dd>${match.round}</dd></div><div><dt>Ruleset</dt><dd>${escapeHtml(match.rulesVersion)}</dd></div></dl><p>This Match is read-only. Reopen it to make corrections, or remove its complete local history.</p><div class="match-actions"><button id="reopen-match" class="primary-action" type="button">Reopen Match</button><button id="request-remove-match" class="danger-action" type="button">Remove Match</button></div>${confirmationPanel()}</section>`;
+  const decisionBasis = (match as { decisionBasis?: string }).decisionBasis;
+  const finalCounts = (
+    match as { finalCounts?: { Drow: number; Duergar: number } }
+  ).finalCounts;
+  const finalHpTotals = (
+    match as { finalHpTotals?: { Drow: number; Duergar: number } }
+  ).finalHpTotals;
+  const coinFlipResult = (match as { coinFlipResult?: string }).coinFlipResult;
+  const basisLine = decisionBasis
+    ? `<div><dt>Decision Basis</dt><dd>${escapeHtml(decisionBasisLabel(decisionBasis))}${coinFlipResult ? ` · ${escapeHtml(coinFlipResult)}` : ""}</dd></div>`
+    : "";
+  const countsLine = finalCounts
+    ? `<div><dt>Active counts</dt><dd>Drow ${finalCounts.Drow} · Duergar ${finalCounts.Duergar}</dd></div>`
+    : "";
+  const hpLine = finalHpTotals
+    ? `<div><dt>Active HP totals</dt><dd>Drow ${finalHpTotals.Drow} · Duergar ${finalHpTotals.Duergar}</dd></div>`
+    : "";
+  return `<section class="match-panel ended-match" aria-labelledby="ended-heading"><div class="section-heading"><div><p class="eyebrow">Ended · Sequence ${match.sequence}</p><h2 id="ended-heading">Ended Match</h2><p>${escapeHtml(result)}${eliminated ? ` · ${escapeHtml(eliminated)} eliminated` : ""}</p></div><span class="readiness-badge" data-state="ready">Read-only</span></div>${state.matchError ? `<p class="blocking-error" role="alert">${escapeHtml(state.matchError)} The Ended Match remains saved.</p>` : ""}<dl class="ended-result"><div><dt>Result</dt><dd>${escapeHtml(result)}</dd></div>${basisLine}${countsLine}${hpLine}<div><dt>Ended</dt><dd>${escapeHtml(match.endedAt)}</dd></div><div><dt>Final round</dt><dd>${match.round}</dd></div><div><dt>Ruleset</dt><dd>${escapeHtml(match.rulesVersion)}</dd></div></dl><p>This Match is read-only. Reopen it to make corrections, or remove its complete local history.</p><div class="match-actions"><button id="reopen-match" class="primary-action" type="button">Reopen Match</button><button id="request-start-new-match" class="secondary-action" type="button">Start new Match</button><button id="request-remove-match" class="danger-action" type="button">Remove Match</button></div>${confirmationPanel()}</section>`;
 }
 
 function actionDraftPanel(
@@ -513,6 +571,24 @@ function confirmationPanel(): string {
         : "section-6-initiative-game-clock";
     return `<section class="confirmation-panel undo-confirmation" role="alertdialog" aria-labelledby="confirmation-heading" aria-describedby="confirmation-detail"><div><p class="eyebrow">Confirmation required</p><h3 id="confirmation-heading">Undo ${targetLabel}?</h3><p id="confirmation-detail">Check the complete committed state and the complete state that Undo will restore.</p>${contextualRulesControl("rules-undo", "Undo rules", sourceAnchor)}</div><div class="undo-comparison">${undoStatePanel(preview.currentState, "data-undo-current")}${undoStatePanel(preview.restoredState, "data-undo-restored")}</div><div class="button-row"><button id="confirm-action" class="danger-action" type="button">Confirm Undo</button><button id="cancel-action" class="secondary-action" type="button">Cancel</button></div></section>`;
   }
+  if (state.confirmation === "end" && state.match?.phase === "active") {
+    const storedPreview = state.endGamePreview;
+    if (storedPreview) {
+      const result =
+        storedPreview.outcome === "draw"
+          ? "Draw"
+          : `${storedPreview.outcome} wins`;
+      return `<section class="confirmation-panel end-game-preview" role="alertdialog" aria-labelledby="confirmation-heading" aria-describedby="confirmation-detail"><div><p class="eyebrow">End Game preview</p><h3 id="confirmation-heading">End this Match?</h3><p id="confirmation-detail">Review the calculated winner and Decision Basis before confirming. This becomes read-only until reopened.</p></div><dl class="ended-result"><div><dt>Winner</dt><dd>${escapeHtml(result)}</dd></div><div><dt>Decision Basis</dt><dd>${escapeHtml(decisionBasisLabel(storedPreview.decisionBasis))}${storedPreview.coinFlipResult ? ` · ${escapeHtml(storedPreview.coinFlipResult)}` : ""}</dd></div><div><dt>Active counts</dt><dd>Drow ${storedPreview.finalCounts.Drow} · Duergar ${storedPreview.finalCounts.Duergar}</dd></div><div><dt>Active HP totals</dt><dd>Drow ${storedPreview.finalHpTotals.Drow} · Duergar ${storedPreview.finalHpTotals.Duergar}</dd></div><div><dt>Ruleset</dt><dd>${escapeHtml(state.match.rulesVersion)}</dd></div></dl><div class="button-row"><button id="confirm-action" class="danger-action" type="button">Confirm End Game</button><button id="cancel-action" class="secondary-action" type="button">Cancel</button></div></section>`;
+    }
+    try {
+      const preview = getEndGamePreview(state.match, cryptoRandomSource);
+      const result =
+        preview.outcome === "draw" ? "Draw" : `${preview.outcome} wins`;
+      return `<section class="confirmation-panel end-game-preview" role="alertdialog" aria-labelledby="confirmation-heading" aria-describedby="confirmation-detail"><div><p class="eyebrow">End Game preview</p><h3 id="confirmation-heading">End this Match?</h3><p id="confirmation-detail">Review the calculated winner and Decision Basis before confirming. This becomes read-only until reopened.</p></div><dl class="ended-result"><div><dt>Winner</dt><dd>${escapeHtml(result)}</dd></div><div><dt>Decision Basis</dt><dd>${escapeHtml(decisionBasisLabel(preview.decisionBasis))}${preview.coinFlipResult ? ` · ${escapeHtml(preview.coinFlipResult)}` : ""}</dd></div><div><dt>Active counts</dt><dd>Drow ${preview.finalCounts.Drow} · Duergar ${preview.finalCounts.Duergar}</dd></div><div><dt>Active HP totals</dt><dd>Drow ${preview.finalHpTotals.Drow} · Duergar ${preview.finalHpTotals.Duergar}</dd></div><div><dt>Ruleset</dt><dd>${escapeHtml(state.match.rulesVersion)}</dd></div></dl><div class="button-row"><button id="confirm-action" class="danger-action" type="button">Confirm End Game</button><button id="cancel-action" class="secondary-action" type="button">Cancel</button></div></section>`;
+    } catch {
+      // fall back to generic panel if preview cannot be computed (e.g., simultaneous unruled)
+    }
+  }
   const content = {
     reroll: [
       "Replace every initiative result?",
@@ -533,6 +609,16 @@ function confirmationPanel(): string {
       "Remove this Ended Match and its history?",
       "This final deletion cannot be undone.",
       "Confirm removal",
+    ],
+    "remove-summary": [
+      "Remove prior summary?",
+      "This only removes the compact latest result. The Active Match stays.",
+      "Confirm removal",
+    ],
+    "start-new": [
+      "Start a new Match?",
+      "This clears the Ended Match history but keeps its summary as prior result.",
+      "Confirm start",
     ],
   }[state.confirmation];
   if (!content) return "";
@@ -572,7 +658,8 @@ function matchPanel(): string {
         "Initiative rules",
         "section-6-initiative-game-clock",
       );
-  return `<section class="match-panel" aria-labelledby="setup-heading"><div class="section-heading"><div><p class="eyebrow">Setup · Sequence ${state.match.sequence}</p><h2 id="setup-heading">Initiative Setup</h2><p>${hasInitiative ? "The complete committed order is ready. Exact ties use recorded digital coin flips." : "All characters start at full HP. Generate the complete order when ready."}</p><div class="rules-context-links">${contextLink}</div></div><span class="readiness-badge" data-state="ready">Saved</span></div>${state.matchError ? `<p class="blocking-error" role="alert">${state.matchError} The last committed Setup remains visible.</p>` : ""}<div class="table-wrap"><table class="initiative-table"><thead><tr><th>Slot</th><th>Character</th><th>Team</th><th>${hasInitiative ? "Roll" : "HP"}</th><th>Modifier</th><th>Total</th><th>Tie break</th></tr></thead><tbody>${rosterRows(state.match)}</tbody></table></div><div class="match-actions">${hasInitiative ? '<button id="start-match" class="primary-action" type="button">Start Match</button><button id="request-reroll" class="secondary-action" type="button">Reroll initiative</button>' : '<button id="generate-initiative" class="primary-action" type="button">Generate initiative</button>'}${canUndo ? '<button id="request-undo" class="secondary-action" type="button">Undo</button>' : ""}<button id="request-discard" class="danger-action" type="button">Discard Match</button></div>${confirmationPanel()}</section>`;
+  const priorSummary = state.summary ? priorSummaryCard(state.summary) : "";
+  return `<section class="match-panel" aria-labelledby="setup-heading"><div class="section-heading"><div><p class="eyebrow">Setup · Sequence ${state.match.sequence}</p><h2 id="setup-heading">Initiative Setup</h2><p>${hasInitiative ? "The complete committed order is ready. Exact ties use recorded digital coin flips." : "All characters start at full HP. Generate the complete order when ready."}</p><div class="rules-context-links">${contextLink}</div></div><span class="readiness-badge" data-state="ready">Saved</span></div>${state.matchError ? `<p class="blocking-error" role="alert">${state.matchError} The last committed Setup remains visible.</p>` : ""}<div class="table-wrap"><table class="initiative-table"><thead><tr><th>Slot</th><th>Character</th><th>Team</th><th>${hasInitiative ? "Roll" : "HP"}</th><th>Modifier</th><th>Total</th><th>Tie break</th></tr></thead><tbody>${rosterRows(state.match)}</tbody></table></div><div class="match-actions">${hasInitiative ? '<button id="start-match" class="primary-action" type="button">Start Match</button><button id="request-reroll" class="secondary-action" type="button">Reroll initiative</button>' : '<button id="generate-initiative" class="primary-action" type="button">Generate initiative</button>'}${canUndo ? '<button id="request-undo" class="secondary-action" type="button">Undo</button>' : ""}<button id="request-discard" class="danger-action" type="button">Discard Match</button></div>${priorSummary}${confirmationPanel()}</section>`;
 }
 
 function rulesModal(): string {
@@ -862,6 +949,13 @@ function render(): void {
       void recordSimultaneousRuling(outcome);
     });
   appRoot.querySelector("#request-end-game")?.addEventListener("click", () => {
+    if (state.actionDraft) return;
+    if (state.match?.phase !== "active") return;
+    try {
+      state.endGamePreview = getEndGamePreview(state.match, cryptoRandomSource);
+    } catch {
+      state.endGamePreview = null;
+    }
     state.confirmation = "end";
     render();
   });
@@ -872,6 +966,18 @@ function render(): void {
     .querySelector("#request-remove-match")
     ?.addEventListener("click", () => {
       state.confirmation = "remove";
+      render();
+    });
+  appRoot
+    .querySelector("#request-start-new-match")
+    ?.addEventListener("click", () => {
+      state.confirmation = "start-new";
+      render();
+    });
+  appRoot
+    .querySelector("#request-remove-summary")
+    ?.addEventListener("click", () => {
+      state.confirmation = "remove-summary";
       render();
     });
   appRoot.querySelector("#request-reroll")?.addEventListener("click", () => {
@@ -887,6 +993,9 @@ function render(): void {
     render();
   });
   appRoot.querySelector("#cancel-action")?.addEventListener("click", () => {
+    if (state.confirmation === "end") {
+      state.endGamePreview = null;
+    }
     state.confirmation = null;
     render();
   });
@@ -903,6 +1012,36 @@ async function commitResult(result: CommandResult): Promise<boolean> {
     await matchStore.commit(result.event, result.state);
     state.match = result.state;
     state.events = [...state.events, result.event];
+    if (
+      result.event.type === "MatchEnded" &&
+      (result.state as { phase: string }).phase === "ended"
+    ) {
+      const ended = result.state as Extract<MatchState, { phase: "ended" }>;
+      if (ended.decisionBasis && ended.finalCounts && ended.finalHpTotals) {
+        state.summary = {
+          outcome: ended.outcome,
+          decisionBasis: ended.decisionBasis,
+          finalCounts: ended.finalCounts,
+          finalHpTotals: ended.finalHpTotals,
+          rulesVersion: ended.rulesVersion,
+          endedAt: ended.endedAt,
+          ...(ended.coinFlipResult
+            ? { coinFlipResult: ended.coinFlipResult }
+            : {}),
+        };
+      }
+    }
+    if (
+      result.event.type === "SetupCreated" &&
+      result.state.phase === "setup"
+    ) {
+      try {
+        const latest = await matchStore.getSummary();
+        state.summary = latest;
+      } catch {
+        // Keep current summary on fetch failure
+      }
+    }
     return true;
   } catch {
     state.matchError = "Canonical storage could not commit the command.";
@@ -1029,9 +1168,48 @@ async function reopenEndedMatch(): Promise<void> {
   await commitResult(reopenMatch(state.match, new Date().toISOString()));
 }
 async function confirmAction(): Promise<void> {
-  if (state.match === null || !state.confirmation) return;
+  if (!state.confirmation) return;
   const confirmation = state.confirmation;
   state.confirmation = null;
+  if (confirmation === "remove-summary") {
+    state.saving = true;
+    render();
+    try {
+      await matchStore.deleteSummary(true);
+      state.summary = null;
+      state.matchError = null;
+    } catch {
+      state.matchError =
+        "Canonical storage could not remove the prior summary.";
+    } finally {
+      state.saving = false;
+      render();
+    }
+    return;
+  }
+  if (confirmation === "start-new" && state.match?.phase === "ended") {
+    state.saving = true;
+    render();
+    try {
+      const setup = createSetup(crypto.randomUUID(), new Date().toISOString());
+      await matchStore.commit(setup.event, setup.state);
+      state.match = setup.state;
+      state.events = [setup.event];
+      state.matchError = null;
+      try {
+        state.summary = await matchStore.getSummary();
+      } catch {
+        // keep existing
+      }
+    } catch {
+      state.matchError = "Canonical storage could not start a new Match.";
+    } finally {
+      state.saving = false;
+      render();
+    }
+    return;
+  }
+  if (state.match === null) return;
   if (confirmation === "undo") {
     await commitResult(
       undoLastEvent(state.match, state.events, new Date().toISOString(), true),
@@ -1039,7 +1217,20 @@ async function confirmAction(): Promise<void> {
     return;
   }
   if (confirmation === "end" && state.match.phase === "active") {
-    await commitResult(endMatch(state.match, new Date().toISOString(), true));
+    const preview = state.endGamePreview;
+    let random: RandomSource = cryptoRandomSource;
+    if (preview?.coinFlipResult) {
+      const expected = preview.coinFlipResult;
+      random = { nextUint32: () => (expected === "Drow" ? 0 : 1) };
+    }
+    const result = endMatch(
+      state.match,
+      new Date().toISOString(),
+      true,
+      random,
+    );
+    state.endGamePreview = null;
+    await commitResult(result);
     return;
   }
   if (confirmation === "remove" && state.match.phase === "ended") {
@@ -1049,6 +1240,7 @@ async function confirmAction(): Promise<void> {
       await matchStore.deleteMatch(state.match.matchId, true);
       state.match = null;
       state.events = [];
+      state.summary = null;
       state.matchError = null;
     } catch {
       state.matchError = "Canonical storage could not remove the Ended Match.";
@@ -1077,6 +1269,11 @@ async function confirmAction(): Promise<void> {
     state.match = null;
     state.events = [];
     state.matchError = null;
+    try {
+      state.summary = await matchStore.getSummary();
+    } catch {
+      // keep prior summary on fetch failure
+    }
   } catch {
     state.matchError = "Canonical storage could not discard the Match.";
   } finally {
@@ -1089,12 +1286,30 @@ async function restoreMatch(): Promise<void> {
     const restored = await matchStore.restore();
     state.match = restored?.state ?? null;
     state.events = restored?.events ?? [];
+    state.summary = restored?.summary ?? null;
+    if (state.summary === null) {
+      try {
+        state.summary = await matchStore.getSummary();
+      } catch {
+        // keep null on fetch failure
+      }
+    }
     state.matchError = null;
   } catch {
     state.match = null;
     state.events = [];
-    state.matchError =
-      "Saved canonical data is incompatible, incomplete, or structurally invalid.";
+    state.summary = null;
+    try {
+      state.summary = await matchStore.getSummary();
+    } catch {
+      // keep null
+    }
+    if (state.match === null && state.summary === null) {
+      state.matchError =
+        "Saved canonical data is incompatible, incomplete, or structurally invalid.";
+    } else {
+      state.matchError = null;
+    }
   } finally {
     state.matchLoaded = true;
     render();

@@ -87,6 +87,10 @@ export interface EndedMatchState extends CombatMatchState {
   readonly outcome: Exclude<MatchOutcome, null>;
   readonly endedAt: string;
   readonly endedSequence: number;
+  readonly decisionBasis?: DecisionBasis;
+  readonly finalCounts?: FinalTeamCounts;
+  readonly finalHpTotals?: FinalTeamCounts;
+  readonly coinFlipResult?: "Drow" | "Duergar";
 }
 
 export type MatchState = SetupMatchState | ActiveMatchState | EndedMatchState;
@@ -156,10 +160,40 @@ export interface SimultaneousEliminationRuledEvent extends EventBase {
   readonly overrideEvidence: string;
 }
 
+export type DecisionBasis =
+  "elimination" | "activeCount" | "activeHpTotal" | "coinFlip";
+
+export interface FinalTeamCounts {
+  readonly Drow: number;
+  readonly Duergar: number;
+}
+
+export interface EndGamePreview {
+  readonly outcome: Exclude<MatchOutcome, null>;
+  readonly decisionBasis: DecisionBasis;
+  readonly finalCounts: FinalTeamCounts;
+  readonly finalHpTotals: FinalTeamCounts;
+  readonly coinFlipResult?: "Drow" | "Duergar";
+}
+
+export interface MatchSummary {
+  readonly outcome: Exclude<MatchOutcome, null>;
+  readonly decisionBasis: DecisionBasis;
+  readonly finalCounts: FinalTeamCounts;
+  readonly finalHpTotals: FinalTeamCounts;
+  readonly rulesVersion: string;
+  readonly endedAt: string;
+  readonly coinFlipResult?: "Drow" | "Duergar";
+}
+
 export interface MatchEndedEvent extends EventBase {
   readonly type: "MatchEnded";
   readonly outcome: Exclude<MatchOutcome, null>;
   readonly eliminatedTeams: readonly ("Drow" | "Duergar")[];
+  readonly decisionBasis?: DecisionBasis;
+  readonly finalCounts?: FinalTeamCounts;
+  readonly finalHpTotals?: FinalTeamCounts;
+  readonly coinFlipResult?: "Drow" | "Duergar";
 }
 
 export interface MatchReopenedEvent extends EventBase {
@@ -581,6 +615,9 @@ export function finishTurn(
   state: ActiveMatchState,
   occurredAt: string,
 ): CommandResult<ActiveMatchState, TurnFinishedEvent> {
+  if ((state as MatchState).phase === "ended") {
+    throw new Error("The Ended Match is read-only.");
+  }
   const sequence = state.sequence + 1;
   const hpByCharacter = new Map(
     state.characters.map(({ characterId, hp }) => [characterId, hp]),
@@ -635,6 +672,9 @@ export function acknowledgeElimination(
   eliminatedTeam: "Drow" | "Duergar",
   occurredAt: string,
 ): CommandResult<ActiveMatchState, EliminationContinuedEvent> {
+  if ((state as MatchState).phase === "ended") {
+    throw new Error("The Ended Match is read-only.");
+  }
   if (
     state.eliminatedTeams.length !== 1 ||
     state.eliminatedTeams[0] !== eliminatedTeam ||
@@ -674,6 +714,9 @@ export function ruleSimultaneousElimination(
   overrideEvidence: string,
   occurredAt: string,
 ): CommandResult<ActiveMatchState, SimultaneousEliminationRuledEvent> {
+  if ((state as MatchState).phase === "ended") {
+    throw new Error("The Ended Match is read-only.");
+  }
   if (
     (outcome !== "Drow" && outcome !== "Duergar" && outcome !== "draw") ||
     state.eliminatedTeams.length !== 2 ||
@@ -707,29 +750,121 @@ export function ruleSimultaneousElimination(
   };
 }
 
+function teamOfCharacter(characterId: string): "Drow" | "Duergar" {
+  const character = RULESET.characters.find(({ id }) => id === characterId);
+  if (!character) throw new Error("The Match references an unknown character.");
+  return character.team;
+}
+
+function computeFinalTallies(state: ActiveMatchState): {
+  finalCounts: FinalTeamCounts;
+  finalHpTotals: FinalTeamCounts;
+} {
+  let drowCount = 0;
+  let duergarCount = 0;
+  let drowHp = 0;
+  let duergarHp = 0;
+  for (const { characterId, hp } of state.characters) {
+    if (hp === 0) continue;
+    const team = teamOfCharacter(characterId);
+    if (team === "Drow") {
+      drowCount += 1;
+      drowHp += hp;
+    } else {
+      duergarCount += 1;
+      duergarHp += hp;
+    }
+  }
+  return {
+    finalCounts: { Drow: drowCount, Duergar: duergarCount },
+    finalHpTotals: { Drow: drowHp, Duergar: duergarHp },
+  };
+}
+
+export function getEndGamePreview(
+  state: ActiveMatchState,
+  random: RandomSource = cryptoRandomSource,
+): EndGamePreview {
+  const { finalCounts, finalHpTotals } = computeFinalTallies(state);
+  if (state.eliminatedTeams.length === 1) {
+    const outcome: Exclude<MatchOutcome, null> =
+      state.eliminatedTeams[0] === "Drow" ? "Duergar" : "Drow";
+    if (state.outcome !== null && state.outcome !== outcome) {
+      throw new Error(
+        "End Game elimination outcome does not match Match State.",
+      );
+    }
+    return {
+      outcome,
+      decisionBasis: "elimination",
+      finalCounts,
+      finalHpTotals,
+    };
+  }
+  if (state.eliminatedTeams.length === 2) {
+    if (state.outcome === null) {
+      throw new Error("End Game needs a resolved Team Elimination result.");
+    }
+    const basisOutcome = state.outcome as Exclude<MatchOutcome, null>;
+    return {
+      outcome: basisOutcome,
+      decisionBasis: "elimination",
+      finalCounts,
+      finalHpTotals,
+    };
+  }
+  if (state.eliminatedTeams.length !== 0) {
+    throw new Error("End Game Team Elimination state is invalid.");
+  }
+  if (finalCounts.Drow !== finalCounts.Duergar) {
+    return {
+      outcome: finalCounts.Drow > finalCounts.Duergar ? "Drow" : "Duergar",
+      decisionBasis: "activeCount",
+      finalCounts,
+      finalHpTotals,
+    };
+  }
+  if (finalHpTotals.Drow !== finalHpTotals.Duergar) {
+    return {
+      outcome: finalHpTotals.Drow > finalHpTotals.Duergar ? "Drow" : "Duergar",
+      decisionBasis: "activeHpTotal",
+      finalCounts,
+      finalHpTotals,
+    };
+  }
+  const coinFlipResult = nextBounded(random, 2) === 0 ? "Drow" : "Duergar";
+  return {
+    outcome: coinFlipResult,
+    decisionBasis: "coinFlip",
+    finalCounts,
+    finalHpTotals,
+    coinFlipResult,
+  };
+}
+
 export function endMatch(
   state: ActiveMatchState,
   occurredAt: string,
   confirmed: boolean,
+  random: RandomSource = cryptoRandomSource,
 ): CommandResult<EndedMatchState, MatchEndedEvent> {
   if (!confirmed) throw new Error("End Game confirmation is required.");
-  if (
-    state.outcome === null ||
-    (state.eliminatedTeams.length !== 1 &&
-      state.eliminatedTeams.length !== 2) ||
-    (state.eliminatedTeams.length === 1 && state.outcome === "draw")
-  ) {
-    throw new Error("End Game needs a resolved Team Elimination result.");
-  }
+  const preview = getEndGamePreview(state, random);
   const sequence = state.sequence + 1;
   return {
     state: {
       ...state,
       phase: "ended",
       sequence,
-      outcome: state.outcome,
+      outcome: preview.outcome,
       endedAt: occurredAt,
       endedSequence: sequence,
+      decisionBasis: preview.decisionBasis,
+      finalCounts: preview.finalCounts,
+      finalHpTotals: preview.finalHpTotals,
+      ...(preview.coinFlipResult
+        ? { coinFlipResult: preview.coinFlipResult }
+        : {}),
     },
     event: {
       type: "MatchEnded",
@@ -737,8 +872,14 @@ export function endMatch(
       sequence,
       rulesVersion: state.rulesVersion,
       occurredAt,
-      outcome: state.outcome,
+      outcome: preview.outcome,
       eliminatedTeams: [...state.eliminatedTeams],
+      decisionBasis: preview.decisionBasis,
+      finalCounts: preview.finalCounts,
+      finalHpTotals: preview.finalHpTotals,
+      ...(preview.coinFlipResult
+        ? { coinFlipResult: preview.coinFlipResult }
+        : {}),
     },
   };
 }
@@ -762,7 +903,7 @@ export function reopenMatch(
     majorActionUsed: state.majorActionUsed,
     eliminatedTeams: state.eliminatedTeams,
     acknowledgedEliminations: state.acknowledgedEliminations,
-    outcome: state.outcome,
+    outcome: null,
   };
   return {
     state: active,
@@ -856,6 +997,9 @@ export function resolveBasicAttack(
   input: BasicAttackInput,
   occurredAt: string,
 ): CommandResult<ActiveMatchState, ActionResolvedEvent> {
+  if ((state as MatchState).phase === "ended") {
+    throw new Error("The Ended Match is read-only.");
+  }
   if (state.rulesVersion !== RULESET.version) {
     throw new Error("Basic Attack needs the exact bundled Ruleset.");
   }
@@ -1300,6 +1444,54 @@ export function assertMatchStateStructure(
   ) {
     throw new Error("The Ended Match state is structurally invalid.");
   }
+  if (value.phase === "ended" && schemaVersion === MATCH_SCHEMA_VERSION) {
+    const ended = value as unknown as EndedMatchState;
+    if (
+      ended.decisionBasis !== undefined &&
+      ended.decisionBasis !== "elimination" &&
+      ended.decisionBasis !== "activeCount" &&
+      ended.decisionBasis !== "activeHpTotal" &&
+      ended.decisionBasis !== "coinFlip"
+    ) {
+      throw new Error("The Ended Match decision basis is invalid.");
+    }
+    if (
+      (ended.decisionBasis !== undefined ||
+        ended.finalCounts !== undefined ||
+        ended.finalHpTotals !== undefined) &&
+      (!isRecord(ended.finalCounts) ||
+        !Number.isInteger((ended.finalCounts as FinalTeamCounts).Drow) ||
+        !Number.isInteger((ended.finalCounts as FinalTeamCounts).Duergar) ||
+        (ended.finalCounts as FinalTeamCounts).Drow < 0 ||
+        (ended.finalCounts as FinalTeamCounts).Duergar < 0 ||
+        !isRecord(ended.finalHpTotals) ||
+        !Number.isInteger((ended.finalHpTotals as FinalTeamCounts).Drow) ||
+        !Number.isInteger((ended.finalHpTotals as FinalTeamCounts).Duergar) ||
+        (ended.finalHpTotals as FinalTeamCounts).Drow < 0 ||
+        (ended.finalHpTotals as FinalTeamCounts).Duergar < 0)
+    ) {
+      throw new Error("The Ended Match final team tallies are invalid.");
+    }
+    if (
+      ended.coinFlipResult !== undefined &&
+      ended.coinFlipResult !== "Drow" &&
+      ended.coinFlipResult !== "Duergar"
+    ) {
+      throw new Error("The Ended Match coin flip result is invalid.");
+    }
+    if (
+      ended.decisionBasis === "coinFlip" &&
+      ended.coinFlipResult === undefined
+    ) {
+      throw new Error("The Ended Match coin flip result is invalid.");
+    }
+    if (
+      ended.coinFlipResult !== undefined &&
+      ended.decisionBasis !== "coinFlip"
+    ) {
+      throw new Error("The Ended Match coin flip result is invalid.");
+    }
+  }
   if (schemaVersion === MATCH_SCHEMA_VERSION) {
     assertStringArray(value.spentReactionIds, "spent Reactions");
     assertStringArray(value.eliminatedTeams, "Team Elimination state");
@@ -1324,6 +1516,83 @@ export function assertMatchStateStructure(
       throw new Error("The canonical combat state is structurally invalid.");
     }
   }
+}
+
+export function assertMatchSummaryStructure(
+  value: unknown,
+): asserts value is MatchSummary {
+  if (
+    !isRecord(value) ||
+    (value.outcome !== "Drow" &&
+      value.outcome !== "Duergar" &&
+      value.outcome !== "draw") ||
+    (value.decisionBasis !== "elimination" &&
+      value.decisionBasis !== "activeCount" &&
+      value.decisionBasis !== "activeHpTotal" &&
+      value.decisionBasis !== "coinFlip") ||
+    !isRecord(value.finalCounts) ||
+    !Number.isInteger((value.finalCounts as unknown as FinalTeamCounts).Drow) ||
+    !Number.isInteger(
+      (value.finalCounts as unknown as FinalTeamCounts).Duergar,
+    ) ||
+    (value.finalCounts as unknown as FinalTeamCounts).Drow < 0 ||
+    (value.finalCounts as unknown as FinalTeamCounts).Duergar < 0 ||
+    !isRecord(value.finalHpTotals) ||
+    !Number.isInteger(
+      (value.finalHpTotals as unknown as FinalTeamCounts).Drow,
+    ) ||
+    !Number.isInteger(
+      (value.finalHpTotals as unknown as FinalTeamCounts).Duergar,
+    ) ||
+    (value.finalHpTotals as unknown as FinalTeamCounts).Drow < 0 ||
+    (value.finalHpTotals as unknown as FinalTeamCounts).Duergar < 0 ||
+    typeof value.rulesVersion !== "string" ||
+    value.rulesVersion.length === 0 ||
+    typeof value.endedAt !== "string" ||
+    value.endedAt.length === 0
+  ) {
+    throw new Error("The Match Summary is structurally invalid.");
+  }
+  if (
+    value.coinFlipResult !== undefined &&
+    value.coinFlipResult !== "Drow" &&
+    value.coinFlipResult !== "Duergar"
+  ) {
+    throw new Error("The Match Summary coin flip result is invalid.");
+  }
+  if (
+    value.decisionBasis === "coinFlip" &&
+    value.coinFlipResult === undefined
+  ) {
+    throw new Error("The Match Summary coin flip result is invalid.");
+  }
+  if (
+    value.coinFlipResult !== undefined &&
+    value.decisionBasis !== "coinFlip"
+  ) {
+    throw new Error("The Match Summary coin flip result is invalid.");
+  }
+}
+
+export function toMatchSummary(state: EndedMatchState): MatchSummary {
+  if (
+    state.decisionBasis === undefined ||
+    state.finalCounts === undefined ||
+    state.finalHpTotals === undefined
+  ) {
+    throw new Error("The Ended Match does not contain summary fields.");
+  }
+  const summary: MatchSummary = {
+    outcome: state.outcome,
+    decisionBasis: state.decisionBasis,
+    finalCounts: state.finalCounts,
+    finalHpTotals: state.finalHpTotals,
+    rulesVersion: state.rulesVersion,
+    endedAt: state.endedAt,
+    ...(state.coinFlipResult ? { coinFlipResult: state.coinFlipResult } : {}),
+  };
+  assertMatchSummaryStructure(summary);
+  return summary;
 }
 
 export function migrateLegacyMatch(
@@ -1531,11 +1800,118 @@ export function restoreStateFromEvents(
       if (current.phase !== "active") {
         throw new Error("End Game cannot apply to this Match State.");
       }
-      const expected = endMatch(current, event.occurredAt, true);
-      if (!canonicalMatchRecordsEqual(expected.event, event)) {
-        throw new Error("End Game does not follow Match State.");
+      if (event.decisionBasis === undefined) {
+        if (
+          event.outcome === "draw"
+            ? event.eliminatedTeams.length !== 2
+            : event.eliminatedTeams.length === 0
+        ) {
+          throw new Error("End Game does not follow Match State.");
+        }
+        const expectedLegacy = (() => {
+          if (current.eliminatedTeams.length === 1) {
+            const expectedOutcome =
+              current.eliminatedTeams[0] === "Drow" ? "Duergar" : "Drow";
+            if (
+              event.outcome !== expectedOutcome ||
+              !canonicalMatchRecordsEqual(
+                [...current.eliminatedTeams],
+                event.eliminatedTeams,
+              )
+            ) {
+              throw new Error("End Game does not follow Match State.");
+            }
+            return {
+              outcome: expectedOutcome,
+              eliminatedTeams: [...current.eliminatedTeams] as (
+                "Drow" | "Duergar"
+              )[],
+            };
+          }
+          if (current.eliminatedTeams.length === 2) {
+            if (
+              current.outcome === null ||
+              event.outcome !== current.outcome ||
+              !canonicalMatchRecordsEqual(
+                [...current.eliminatedTeams],
+                event.eliminatedTeams,
+              )
+            ) {
+              throw new Error("End Game does not follow Match State.");
+            }
+            return {
+              outcome: current.outcome as Exclude<MatchOutcome, null>,
+              eliminatedTeams: [...current.eliminatedTeams] as (
+                "Drow" | "Duergar"
+              )[],
+            };
+          }
+          throw new Error("End Game does not follow Match State.");
+        })();
+        if (
+          event.outcome !== expectedLegacy.outcome ||
+          !canonicalMatchRecordsEqual(
+            [...event.eliminatedTeams],
+            expectedLegacy.eliminatedTeams,
+          )
+        ) {
+          throw new Error("End Game does not follow Match State.");
+        }
+        current = {
+          ...current,
+          phase: "ended",
+          sequence: event.sequence,
+          outcome: event.outcome,
+          endedAt: event.occurredAt,
+          endedSequence: event.sequence,
+        } as EndedMatchState;
+      } else {
+        let preview: EndGamePreview;
+        if (event.decisionBasis === "coinFlip") {
+          if (
+            event.coinFlipResult !== "Drow" &&
+            event.coinFlipResult !== "Duergar"
+          ) {
+            throw new Error("End Game does not follow Match State.");
+          }
+          const deterministicRandom: RandomSource = {
+            nextUint32: () => (event.coinFlipResult === "Drow" ? 0 : 1),
+          };
+          preview = getEndGamePreview(current, deterministicRandom);
+        } else {
+          preview = getEndGamePreview(current);
+        }
+        if (
+          preview.outcome !== event.outcome ||
+          preview.decisionBasis !== event.decisionBasis ||
+          !canonicalMatchRecordsEqual(preview.finalCounts, event.finalCounts) ||
+          !canonicalMatchRecordsEqual(
+            preview.finalHpTotals,
+            event.finalHpTotals,
+          ) ||
+          preview.coinFlipResult !== event.coinFlipResult ||
+          !canonicalMatchRecordsEqual(
+            [...current.eliminatedTeams],
+            event.eliminatedTeams,
+          )
+        ) {
+          throw new Error("End Game does not follow Match State.");
+        }
+        current = {
+          ...current,
+          phase: "ended",
+          sequence: event.sequence,
+          outcome: preview.outcome,
+          endedAt: event.occurredAt,
+          endedSequence: event.sequence,
+          decisionBasis: preview.decisionBasis,
+          finalCounts: preview.finalCounts,
+          finalHpTotals: preview.finalHpTotals,
+          ...(preview.coinFlipResult
+            ? { coinFlipResult: preview.coinFlipResult }
+            : {}),
+        } as EndedMatchState;
       }
-      current = expected.state;
     } else if (event.type === "MatchReopened") {
       if (current.phase !== "ended") {
         throw new Error("Reopen Match cannot apply to this Match State.");
@@ -1586,6 +1962,7 @@ export function getUndoPreview(
   state: MatchState,
   events: readonly MatchEvent[],
 ): UndoPreview | null {
+  if (state.phase === "ended") return null;
   const target = findUndoTarget(events);
   if (target === null) return null;
   if (events.length !== state.sequence) {

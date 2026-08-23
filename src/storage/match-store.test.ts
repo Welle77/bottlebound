@@ -304,12 +304,14 @@ describe("IndexedDbMatchStore", () => {
     await expect(store.restore()).resolves.toEqual({
       state: started.state,
       events: [setup.event, generated.event, started.event],
+      summary: null,
     });
     await store.commit(action.event, action.state);
 
     await expect(store.restore()).resolves.toEqual({
       state: action.state,
       events: [setup.event, generated.event, started.event, action.event],
+      summary: null,
     });
     const undo = undoLastEvent(
       action.state,
@@ -327,6 +329,7 @@ describe("IndexedDbMatchStore", () => {
         action.event,
         undo.event,
       ],
+      summary: null,
     });
   });
 
@@ -368,6 +371,7 @@ describe("IndexedDbMatchStore", () => {
     await expect(store.restore()).resolves.toEqual({
       state: action.state,
       events: [setup.event, generated.event, started.event, action.event],
+      summary: null,
     });
     expect(action.state.spentReactionIds).toEqual([
       "drow-paladin-divine-shield",
@@ -404,6 +408,7 @@ describe("IndexedDbMatchStore", () => {
         firstUndo.event,
         secondUndo.event,
       ],
+      summary: null,
     });
   });
 
@@ -443,6 +448,7 @@ describe("IndexedDbMatchStore", () => {
     await expect(store.restore()).resolves.toEqual({
       state: started.state,
       events: [setup.event, generated.event, started.event],
+      summary: null,
     });
   });
 
@@ -460,6 +466,7 @@ describe("IndexedDbMatchStore", () => {
     await expect(store.restore()).resolves.toEqual({
       state: generated.state,
       events: [setup.event, generated.event],
+      summary: null,
     });
   });
 
@@ -536,6 +543,7 @@ describe("IndexedDbMatchStore", () => {
     await expect(store.restore()).resolves.toEqual({
       state: undone.state,
       events: [...restored!.events, undone.event],
+      summary: null,
     });
     expect(undone.state).toMatchObject({
       phase: "active",
@@ -555,6 +563,7 @@ describe("IndexedDbMatchStore", () => {
     await expect(store.restore()).resolves.toEqual({
       state: turned.state,
       events: [...restored!.events, undone.event, turned.event],
+      summary: null,
     });
   });
 
@@ -641,6 +650,7 @@ describe("IndexedDbMatchStore", () => {
     await expect(store.restore()).resolves.toEqual({
       state: setup.state,
       events: [setup.event],
+      summary: null,
     });
   });
 
@@ -718,6 +728,7 @@ describe("IndexedDbMatchStore", () => {
     await expect(store.restore()).resolves.toEqual({
       state: setup.state,
       events: [setup.event],
+      summary: null,
     });
   });
 
@@ -797,6 +808,7 @@ describe("IndexedDbMatchStore", () => {
     await expect(store.restore()).resolves.toEqual({
       state: advanced.state,
       events: [setup.event, generated.event, started.event, advanced.event],
+      summary: null,
     });
   });
 
@@ -850,6 +862,7 @@ describe("IndexedDbMatchStore", () => {
     await expect(store.restore()).resolves.toEqual({
       state: continued.state,
       events: [...results.map(({ event }) => event), continued.event],
+      summary: null,
     });
     const undone = undoLastEvent(
       continued.state,
@@ -882,6 +895,10 @@ describe("IndexedDbMatchStore", () => {
         reopened.event,
         endedAgain.event,
       ],
+      summary: expect.objectContaining({
+        outcome: "Drow",
+        decisionBasis: "elimination",
+      }),
     });
     await store.deleteMatch(endedAgain.state.matchId, true);
     await expect(store.restore()).resolves.toBeNull();
@@ -912,6 +929,7 @@ describe("IndexedDbMatchStore", () => {
       await expect(store.restore()).resolves.toEqual({
         state: ruled.state,
         events: [...results.map(({ event }) => event), ruled.event],
+        summary: null,
       });
 
       const ended = endMatch(ruled.state, "2026-08-22T14:09:00.000Z", true);
@@ -934,6 +952,10 @@ describe("IndexedDbMatchStore", () => {
       await expect(store.restore()).resolves.toEqual({
         state: undone.state,
         events: [...history, undone.event],
+        summary: expect.objectContaining({
+          outcome,
+          decisionBasis: "elimination",
+        }),
       });
     },
   );
@@ -967,6 +989,7 @@ describe("IndexedDbMatchStore", () => {
     await expect(store.restore()).resolves.toEqual({
       state: current,
       events: results.map(({ event }) => event),
+      summary: null,
     });
   });
 
@@ -994,6 +1017,7 @@ describe("IndexedDbMatchStore", () => {
     await expect(store.restore()).resolves.toEqual({
       state: started.state,
       events: [setup.event, generated.event, started.event],
+      summary: null,
     });
   });
 
@@ -1024,6 +1048,7 @@ describe("IndexedDbMatchStore", () => {
     await expect(restarted.restore()).resolves.toEqual({
       state: undone.state,
       events: [...history, undone.event],
+      summary: null,
     });
   });
 
@@ -1056,6 +1081,7 @@ describe("IndexedDbMatchStore", () => {
     await expect(store.restore()).resolves.toEqual({
       state: generated.state,
       events: history,
+      summary: null,
     });
   });
 });

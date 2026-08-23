@@ -2,22 +2,27 @@ import {
   MATCH_SCHEMA_VERSION,
   LEGACY_MATCH_SCHEMA_VERSION,
   assertMatchStateStructure,
+  assertMatchSummaryStructure,
   canonicalMatchRecordsEqual,
   getUndoPreview,
   migrateLegacyMatch,
   restoreStateFromEvents,
+  toMatchSummary,
   type InitiativeEntry,
   type MatchEvent,
   type MatchState,
+  type MatchSummary,
 } from "../domain/match";
 import { RULESET } from "../domain/ruleset";
 
 const DEFAULT_DATABASE_NAME = "bottlebound-match";
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const METADATA_STORE = "metadata";
 const SNAPSHOT_STORE = "snapshots";
 const EVENT_STORE = "events";
+const SUMMARY_STORE = "summaries";
 const CURRENT_MATCH_KEY = "current-match";
+const LATEST_SUMMARY_KEY = "latest-summary";
 
 interface CurrentMatchMetadata {
   readonly matchId: string;
@@ -29,6 +34,7 @@ interface CurrentMatchMetadata {
 export interface RestoredMatch {
   readonly state: MatchState;
   readonly events: readonly MatchEvent[];
+  readonly summary: MatchSummary | null;
 }
 
 function requestResult<T>(request: IDBRequest<T>): Promise<T> {
@@ -183,6 +189,64 @@ function assertCanonicalState(
       value.outcome === null)
   ) {
     throw new Error("The Ended Match is structurally invalid.");
+  }
+  if (value.phase === "ended") {
+    const ended = value as Record<string, unknown>;
+    if (
+      ended.decisionBasis !== undefined &&
+      ended.decisionBasis !== "elimination" &&
+      ended.decisionBasis !== "activeCount" &&
+      ended.decisionBasis !== "activeHpTotal" &&
+      ended.decisionBasis !== "coinFlip"
+    ) {
+      throw new Error("The Ended Match is structurally invalid.");
+    }
+    if (
+      (ended.decisionBasis !== undefined ||
+        ended.finalCounts !== undefined ||
+        ended.finalHpTotals !== undefined) &&
+      (!isRecord(ended.finalCounts) ||
+        !Number.isInteger(
+          (ended.finalCounts as Record<string, unknown>).Drow as number,
+        ) ||
+        !Number.isInteger(
+          (ended.finalCounts as Record<string, unknown>).Duergar as number,
+        ) ||
+        ((ended.finalCounts as Record<string, unknown>).Drow as number) < 0 ||
+        ((ended.finalCounts as Record<string, unknown>).Duergar as number) <
+          0 ||
+        !isRecord(ended.finalHpTotals) ||
+        !Number.isInteger(
+          (ended.finalHpTotals as Record<string, unknown>).Drow as number,
+        ) ||
+        !Number.isInteger(
+          (ended.finalHpTotals as Record<string, unknown>).Duergar as number,
+        ) ||
+        ((ended.finalHpTotals as Record<string, unknown>).Drow as number) < 0 ||
+        ((ended.finalHpTotals as Record<string, unknown>).Duergar as number) <
+          0)
+    ) {
+      throw new Error("The Ended Match is structurally invalid.");
+    }
+    if (
+      ended.coinFlipResult !== undefined &&
+      ended.coinFlipResult !== "Drow" &&
+      ended.coinFlipResult !== "Duergar"
+    ) {
+      throw new Error("The Ended Match is structurally invalid.");
+    }
+    if (
+      ended.decisionBasis === "coinFlip" &&
+      ended.coinFlipResult === undefined
+    ) {
+      throw new Error("The Ended Match is structurally invalid.");
+    }
+    if (
+      ended.coinFlipResult !== undefined &&
+      ended.decisionBasis !== "coinFlip"
+    ) {
+      throw new Error("The Ended Match is structurally invalid.");
+    }
   }
 }
 
@@ -571,11 +635,72 @@ function assertCanonicalEvent(
         value.outcome !== "Duergar" &&
         value.outcome !== "draw") ||
       !Array.isArray(value.eliminatedTeams) ||
-      (value.eliminatedTeams.length === 1
-        ? value.outcome === "draw" || value.eliminatedTeams[0] === value.outcome
-        : value.eliminatedTeams.length !== 2 ||
-          value.eliminatedTeams[0] !== "Drow" ||
-          value.eliminatedTeams[1] !== "Duergar")
+      !value.eliminatedTeams.every(
+        (team: unknown) => team === "Drow" || team === "Duergar",
+      ) ||
+      new Set(value.eliminatedTeams).size !== value.eliminatedTeams.length ||
+      (value.eliminatedTeams.length === 0 && value.outcome === "draw") ||
+      (value.eliminatedTeams.length === 1 &&
+        (value.outcome === "draw" ||
+          value.eliminatedTeams[0] === value.outcome)) ||
+      (value.eliminatedTeams.length === 2 &&
+        (value.eliminatedTeams[0] !== "Drow" ||
+          value.eliminatedTeams[1] !== "Duergar"))
+    ) {
+      throw new Error("The canonical End Game Event is invalid.");
+    }
+    if (
+      value.decisionBasis !== undefined &&
+      value.decisionBasis !== "elimination" &&
+      value.decisionBasis !== "activeCount" &&
+      value.decisionBasis !== "activeHpTotal" &&
+      value.decisionBasis !== "coinFlip"
+    ) {
+      throw new Error("The canonical End Game Event is invalid.");
+    }
+    if (
+      (value.decisionBasis !== undefined ||
+        value.finalCounts !== undefined ||
+        value.finalHpTotals !== undefined) &&
+      (!isRecord(value.finalCounts) ||
+        !Number.isInteger(
+          (value.finalCounts as Record<string, unknown>).Drow as number,
+        ) ||
+        !Number.isInteger(
+          (value.finalCounts as Record<string, unknown>).Duergar as number,
+        ) ||
+        ((value.finalCounts as Record<string, unknown>).Drow as number) < 0 ||
+        ((value.finalCounts as Record<string, unknown>).Duergar as number) <
+          0 ||
+        !isRecord(value.finalHpTotals) ||
+        !Number.isInteger(
+          (value.finalHpTotals as Record<string, unknown>).Drow as number,
+        ) ||
+        !Number.isInteger(
+          (value.finalHpTotals as Record<string, unknown>).Duergar as number,
+        ) ||
+        ((value.finalHpTotals as Record<string, unknown>).Drow as number) < 0 ||
+        ((value.finalHpTotals as Record<string, unknown>).Duergar as number) <
+          0)
+    ) {
+      throw new Error("The canonical End Game Event is invalid.");
+    }
+    if (
+      value.coinFlipResult !== undefined &&
+      value.coinFlipResult !== "Drow" &&
+      value.coinFlipResult !== "Duergar"
+    ) {
+      throw new Error("The canonical End Game Event is invalid.");
+    }
+    if (
+      value.decisionBasis === "coinFlip" &&
+      value.coinFlipResult === undefined
+    ) {
+      throw new Error("The canonical End Game Event is invalid.");
+    }
+    if (
+      value.coinFlipResult !== undefined &&
+      value.decisionBasis !== "coinFlip"
     ) {
       throw new Error("The canonical End Game Event is invalid.");
     }
@@ -797,6 +922,22 @@ function assertCommit(event: MatchEvent, state: MatchState): void {
     ) {
       throw new Error("The End Game Event and snapshot do not match.");
     }
+    if (
+      (event as unknown as Record<string, unknown>).decisionBasis !==
+        (state as unknown as Record<string, unknown>).decisionBasis ||
+      !canonicalMatchRecordsEqual(
+        (event as unknown as Record<string, unknown>).finalCounts,
+        (state as unknown as Record<string, unknown>).finalCounts,
+      ) ||
+      !canonicalMatchRecordsEqual(
+        (event as unknown as Record<string, unknown>).finalHpTotals,
+        (state as unknown as Record<string, unknown>).finalHpTotals,
+      ) ||
+      (event as unknown as Record<string, unknown>).coinFlipResult !==
+        (state as unknown as Record<string, unknown>).coinFlipResult
+    ) {
+      throw new Error("The End Game Event and snapshot do not match.");
+    }
     return;
   }
   if (event.type === "MatchReopened") {
@@ -887,6 +1028,9 @@ export class IndexedDbMatchStore {
           });
           events.createIndex("matchId", "matchId", { unique: false });
         }
+        if (!database.objectStoreNames.contains(SUMMARY_STORE)) {
+          database.createObjectStore(SUMMARY_STORE);
+        }
       });
       request.addEventListener("success", () => resolve(request.result), {
         once: true,
@@ -907,7 +1051,7 @@ export class IndexedDbMatchStore {
     assertCommit(event, state);
     const database = await this.open();
     const transaction = database.transaction(
-      [METADATA_STORE, SNAPSHOT_STORE, EVENT_STORE],
+      [METADATA_STORE, SNAPSHOT_STORE, EVENT_STORE, SUMMARY_STORE],
       "readwrite",
     );
     const completion = transactionComplete(transaction);
@@ -915,67 +1059,84 @@ export class IndexedDbMatchStore {
     const current = await requestResult<CurrentMatchMetadata | undefined>(
       metadataStore.get(CURRENT_MATCH_KEY),
     );
-    const expectedSequence = current ? current.sequence + 1 : 1;
-    if (
-      event.sequence !== expectedSequence ||
-      (current !== undefined &&
-        (current.matchId !== event.matchId ||
-          current.rulesVersion !== state.rulesVersion))
-    ) {
-      transaction.abort();
-      await completion.catch(() => undefined);
-      throw new Error("The new record must continue the committed sequence.");
-    }
-    if (event.type === "UndoApplied") {
-      const previousState = await requestResult<MatchState | undefined>(
-        transaction.objectStore(SNAPSHOT_STORE).get(event.matchId),
+    const isReplacement =
+      current !== undefined &&
+      current.matchId !== event.matchId &&
+      event.type === "SetupCreated" &&
+      event.sequence === 1;
+    if (isReplacement) {
+      const oldSnapshotStore = transaction.objectStore(SNAPSHOT_STORE);
+      const eventStore = transaction.objectStore(EVENT_STORE);
+      const oldKeys = await requestResult<IDBValidKey[]>(
+        eventStore.index("matchId").getAllKeys(current.matchId),
       );
-      const previousEvents = await requestResult<MatchEvent[]>(
-        transaction
-          .objectStore(EVENT_STORE)
-          .index("matchId")
-          .getAll(event.matchId),
-      );
-      if (previousState === undefined) {
-        transaction.abort();
-        await completion.catch(() => undefined);
-        throw new Error("Undo needs the last committed Match State.");
-      }
-      const preview = getUndoPreview(previousState, previousEvents);
+      oldSnapshotStore.delete(current.matchId);
+      oldKeys.forEach((key) => eventStore.delete(key));
+    } else {
+      const expectedSequence = current ? current.sequence + 1 : 1;
       if (
-        preview === null ||
-        preview.target.sequence !== event.targetSequence ||
-        preview.target.type !== event.targetType ||
-        !canonicalMatchRecordsEqual(preview.restoredState, state)
+        event.sequence !== expectedSequence ||
+        (current !== undefined &&
+          (current.matchId !== event.matchId ||
+            current.rulesVersion !== state.rulesVersion))
       ) {
         transaction.abort();
         await completion.catch(() => undefined);
-        throw new Error("The Undo Event and restored snapshot do not match.");
+        throw new Error("The new record must continue the committed sequence.");
       }
-    }
-    if (
-      event.type === "ActionResolved" ||
-      event.type === "SimultaneousEliminationRuled"
-    ) {
-      const previousState = await requestResult<MatchState | undefined>(
-        transaction.objectStore(SNAPSHOT_STORE).get(event.matchId),
-      );
-      const previousEvents = await requestResult<MatchEvent[]>(
-        transaction
-          .objectStore(EVENT_STORE)
-          .index("matchId")
-          .getAll(event.matchId),
-      );
+      if (event.type === "UndoApplied") {
+        const previousState = await requestResult<MatchState | undefined>(
+          transaction.objectStore(SNAPSHOT_STORE).get(event.matchId),
+        );
+        const previousEvents = await requestResult<MatchEvent[]>(
+          transaction
+            .objectStore(EVENT_STORE)
+            .index("matchId")
+            .getAll(event.matchId),
+        );
+        if (previousState === undefined) {
+          transaction.abort();
+          await completion.catch(() => undefined);
+          throw new Error("Undo needs the last committed Match State.");
+        }
+        const preview = getUndoPreview(previousState, previousEvents);
+        if (
+          preview === null ||
+          preview.target.sequence !== event.targetSequence ||
+          preview.target.type !== event.targetType ||
+          !canonicalMatchRecordsEqual(preview.restoredState, state)
+        ) {
+          transaction.abort();
+          await completion.catch(() => undefined);
+          throw new Error("The Undo Event and restored snapshot do not match.");
+        }
+      }
       if (
-        previousState === undefined ||
-        !canonicalMatchRecordsEqual(
-          restoreStateFromEvents([...previousEvents, event]),
-          state,
-        )
+        event.type === "ActionResolved" ||
+        event.type === "SimultaneousEliminationRuled"
       ) {
-        transaction.abort();
-        await completion.catch(() => undefined);
-        throw new Error("The Match Event and committed snapshot do not match.");
+        const previousState = await requestResult<MatchState | undefined>(
+          transaction.objectStore(SNAPSHOT_STORE).get(event.matchId),
+        );
+        const previousEvents = await requestResult<MatchEvent[]>(
+          transaction
+            .objectStore(EVENT_STORE)
+            .index("matchId")
+            .getAll(event.matchId),
+        );
+        if (
+          previousState === undefined ||
+          !canonicalMatchRecordsEqual(
+            restoreStateFromEvents([...previousEvents, event]),
+            state,
+          )
+        ) {
+          transaction.abort();
+          await completion.catch(() => undefined);
+          throw new Error(
+            "The Match Event and committed snapshot do not match.",
+          );
+        }
       }
     }
     try {
@@ -990,6 +1151,12 @@ export class IndexedDbMatchStore {
         } satisfies CurrentMatchMetadata,
         CURRENT_MATCH_KEY,
       );
+      if (event.type === "MatchEnded") {
+        const endedState = state as Extract<MatchState, { phase: "ended" }>;
+        const summary = toMatchSummary(endedState);
+        assertMatchSummaryStructure(summary);
+        transaction.objectStore(SUMMARY_STORE).put(summary, LATEST_SUMMARY_KEY);
+      }
     } catch (error) {
       transaction.abort();
       await completion.catch(() => undefined);
@@ -1001,7 +1168,7 @@ export class IndexedDbMatchStore {
   async restore(): Promise<RestoredMatch | null> {
     const database = await this.open();
     const transaction = database.transaction(
-      [METADATA_STORE, SNAPSHOT_STORE, EVENT_STORE],
+      [METADATA_STORE, SNAPSHOT_STORE, EVENT_STORE, SUMMARY_STORE],
       "readwrite",
     );
     const completion = transactionComplete(transaction);
@@ -1014,6 +1181,14 @@ export class IndexedDbMatchStore {
     const allEvents = await requestResult<unknown[]>(
       transaction.objectStore(EVENT_STORE).getAll(),
     );
+    const summaryRaw = await requestResult<unknown>(
+      transaction.objectStore(SUMMARY_STORE).get(LATEST_SUMMARY_KEY),
+    );
+    let summary: MatchSummary | null = null;
+    if (summaryRaw !== undefined) {
+      assertMatchSummaryStructure(summaryRaw);
+      summary = summaryRaw;
+    }
     if (metadata === undefined) {
       if (allSnapshots.length > 0 || allEvents.length > 0) {
         transaction.abort();
@@ -1021,6 +1196,11 @@ export class IndexedDbMatchStore {
         throw new Error("Saved canonical data is incomplete.");
       }
       await completion;
+      if (summary !== null) {
+        // Prior summary persists without an Active Ended snapshot
+        // Expose via getSummary; restore signals no Active Match
+        return null;
+      }
       return null;
     }
     const state = allSnapshots[0];
@@ -1088,7 +1268,7 @@ export class IndexedDbMatchStore {
           .objectStore(METADATA_STORE)
           .put(migratedMetadata, CURRENT_MATCH_KEY);
         await completion;
-        return { state: migrated.state, events: migratedEvents };
+        return { state: migrated.state, events: migratedEvents, summary };
       } catch (error) {
         try {
           transaction.abort();
@@ -1101,14 +1281,40 @@ export class IndexedDbMatchStore {
     }
     assertRestoredMatch(metadata, state, allEvents);
     await completion;
-    return { state, events: allEvents as MatchEvent[] };
+    return {
+      state: state as MatchState,
+      events: allEvents as MatchEvent[],
+      summary,
+    };
+  }
+
+  async getSummary(): Promise<MatchSummary | null> {
+    const database = await this.open();
+    const transaction = database.transaction([SUMMARY_STORE], "readonly");
+    const completion = transactionComplete(transaction);
+    const raw = await requestResult<unknown>(
+      transaction.objectStore(SUMMARY_STORE).get(LATEST_SUMMARY_KEY),
+    );
+    await completion;
+    if (raw === undefined) return null;
+    assertMatchSummaryStructure(raw);
+    return raw;
+  }
+
+  async deleteSummary(confirmed: boolean): Promise<void> {
+    if (!confirmed) throw new Error("Remove confirmation is required.");
+    const database = await this.open();
+    const transaction = database.transaction([SUMMARY_STORE], "readwrite");
+    const completion = transactionComplete(transaction);
+    transaction.objectStore(SUMMARY_STORE).delete(LATEST_SUMMARY_KEY);
+    await completion;
   }
 
   async deleteMatch(matchId: string, confirmed: boolean): Promise<void> {
     if (!confirmed) throw new Error("Discard confirmation is required.");
     const database = await this.open();
     const transaction = database.transaction(
-      [METADATA_STORE, SNAPSHOT_STORE, EVENT_STORE],
+      [METADATA_STORE, SNAPSHOT_STORE, EVENT_STORE, SUMMARY_STORE],
       "readwrite",
     );
     const completion = transactionComplete(transaction);
@@ -1122,12 +1328,19 @@ export class IndexedDbMatchStore {
       throw new Error("The requested Match is not the saved Match.");
     }
     metadataStore.delete(CURRENT_MATCH_KEY);
+    const snapshot = await requestResult<MatchState | undefined>(
+      transaction.objectStore(SNAPSHOT_STORE).get(matchId),
+    );
+    const shouldDeleteSummary = snapshot?.phase === "ended";
     transaction.objectStore(SNAPSHOT_STORE).delete(matchId);
     const eventStore = transaction.objectStore(EVENT_STORE);
     const eventKeys = await requestResult<IDBValidKey[]>(
       eventStore.index("matchId").getAllKeys(matchId),
     );
     eventKeys.forEach((key) => eventStore.delete(key));
+    if (shouldDeleteSummary) {
+      transaction.objectStore(SUMMARY_STORE).delete(LATEST_SUMMARY_KEY);
+    }
     await completion;
   }
 }

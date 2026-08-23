@@ -37,6 +37,18 @@ _Avoid_: Throw segment, hit group
 The permanent Match State condition that starts when all six characters on one team are Downed at the same time.
 _Avoid_: Team loss, defeat flag
 
+**Active Character**:
+A character in the Match who is not Downed.
+_Avoid_: Standing character, alive character
+
+**Decision Basis**:
+The ordered rule that selects the Ended Match outcome: permanent Team Elimination, then Active-character counts, then Active-character HP totals, then one recorded digital Coin Flip.
+_Avoid_: Tiebreak logic, win condition
+
+**Coin Flip**:
+One immediate digital flip that resolves a remaining tie between teams. The Referee Console records its result with the End Game result and uses no decorative animation.
+_Avoid_: Random roll, dice
+
 **Ended Match**:
 A Match after the referee confirms End Game. It is read-only until the referee reopens or removes it.
 _Avoid_: Finished game, archived Match

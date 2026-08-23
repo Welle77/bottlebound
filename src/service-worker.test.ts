@@ -37,8 +37,7 @@ describe("service worker navigation responses", () => {
           addEventListener: (
             type: string,
             listener: (event: WorkerEvent) => void,
-          ) =>
-            listeners.set(type, listener),
+          ) => listeners.set(type, listener),
         },
         URL,
       },

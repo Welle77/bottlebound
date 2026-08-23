@@ -653,7 +653,11 @@ describe("Active Match commands", () => {
       endedAt: "2026-08-22T14:05:00.000Z",
     });
     const reopened = reopenMatch(ended.state, "2026-08-22T14:06:00.000Z");
-    expect(reopened.state).toEqual({ ...attack.state, sequence: 6 });
+    expect(reopened.state).toEqual({
+      ...attack.state,
+      sequence: 6,
+      outcome: null,
+    });
     expect(reopened.event).toMatchObject({
       type: "MatchReopened",
       endedSequence: 5,
@@ -853,7 +857,11 @@ describe("Active Match commands", () => {
       });
       expect(
         reopenMatch(ended.state, "2026-08-22T14:22:00.000Z").state,
-      ).toEqual({ ...ruled.state, sequence: ended.state.sequence + 1 });
+      ).toEqual({
+        ...ruled.state,
+        sequence: ended.state.sequence + 1,
+        outcome: null,
+      });
 
       const history: MatchEvent[] = [
         ...steps.map(({ event }) => event),
