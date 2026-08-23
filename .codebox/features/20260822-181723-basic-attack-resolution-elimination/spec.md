@@ -3,13 +3,13 @@ slug: 20260822-181723-basic-attack-resolution-elimination
 title: Basic Attack resolution and elimination
 branch: feature/offline-initiative-turn-tracking
 target_branch: main
-current_phase: ship
+current_phase: done
 phases:
   planning: done
   code: done
   test: done
   review: done
-  ship: pending
+  ship: done
 gate_policy:
   planning: gate
   code: auto

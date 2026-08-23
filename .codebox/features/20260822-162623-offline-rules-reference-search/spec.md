@@ -3,13 +3,13 @@ slug: 20260822-162623-offline-rules-reference-search
 title: Offline rules reference and search
 branch: feature/offline-initiative-turn-tracking
 target_branch: main
-current_phase: ship
+current_phase: done
 phases:
   planning: done
   code: done
   test: done
   review: done
-  ship: blocked
+  ship: done
 gate_policy:
   planning: gate
   code: auto

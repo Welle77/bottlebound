@@ -3,13 +3,13 @@ slug: 20260822-142445-offline-initiative-turn-tracking
 title: Offline initiative and turn tracking
 branch: feature/offline-initiative-turn-tracking
 target_branch: main
-current_phase: ship
+current_phase: done
 phases:
   planning: done
   code: done
   test: done
   review: done
-  ship: blocked
+  ship: done
 gate_policy:
   planning: gate
   code: auto
