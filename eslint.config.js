@@ -18,4 +18,14 @@ export default tseslint.config(
       globals: globals.serviceworker,
     },
   },
+  {
+    files: ["src/**/*.ts", "tests/**/*.ts"],
+    rules: {
+      // Strict default counting: every physical line counts, including blanks
+      // and comments.
+      "max-lines": ["error", { max: 800 }],
+      "max-params": "error",
+      "prefer-const": "error",
+    },
+  },
 );

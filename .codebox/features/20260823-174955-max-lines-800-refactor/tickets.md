@@ -21,9 +21,9 @@ only the four known remaining violations (match.ts, match.test.ts,
 match-store.ts, match-store.test.ts).
 
 **Acceptance criteria:**
-- [ ] `max-lines` rule active with strict default counting, max 800.
-- [ ] No extracted module exceeds 800 lines; `src/main.ts` entry point stays.
-- [ ] Build and focused tests pass.
+- [x] `max-lines` rule active with strict default counting, max 800.
+- [x] No extracted module exceeds 800 lines; `src/main.ts` entry point stays.
+- [x] Build and focused tests pass.
 
 ## T02: Split domain match engine and its test suite
 
@@ -44,9 +44,9 @@ domain/match.test.ts); lint reports only remaining known violations outside
 the domain scope.
 
 **Acceptance criteria:**
-- [ ] Every file in the domain scope is under 800 lines.
-- [ ] Existing public surface of the match engine preserved (imports keep working).
-- [ ] Focused tests pass unchanged in assertions.
+- [x] Every file in the domain scope is under 800 lines.
+- [x] Existing public surface of the match engine preserved (imports keep working).
+- [x] Focused tests pass unchanged in assertions.
 
 ## T03: Split match store and its test suite
 
@@ -64,9 +64,87 @@ multiple test files under 800 lines each without weakening assertions.
 storage scope.
 
 **Acceptance criteria:**
-- [ ] Every file in the storage scope is under 800 lines.
-- [ ] Existing exports of match-store preserved for importers.
-- [ ] Storage tests pass unchanged in assertions.
+- [x] Every file in the storage scope is under 800 lines.
+- [x] Existing exports of match-store preserved for importers.
+- [x] Storage tests pass unchanged in assertions.
+
+## T04: Enable max-params 4 and prefer-const
+
+**Blocked by:** None (config-only; independent of T01–T03 outcomes but runs
+after them so lint is green at its checkpoint)
+
+**What to deliver:** ESLint enforces core `max-params` with `max: 4` and core
+`prefer-const` across the whole linted TypeScript surface (src and tests,
+including Playwright specs). Both rules measured at zero existing violations
+before enabling, so no source refactors are expected; if a violation appears,
+fix it behavior-preservingly within this ticket's scope.
+
+**Scope ownership:** `eslint.config.js`, plus minimal behavior-preserving
+fixes only if one of the two new rules reports a violation.
+
+**Verification:** `pnpm run build`; `pnpm run test:focused`; `pnpm run lint`
+fully green.
+
+**Acceptance criteria:**
+- [x] `max-params` active with its default configuration (`max: 3`).
+- [x] `prefer-const` active for src and tests including Playwright specs.
+- [x] Lint, build, and focused tests pass with zero violations from both rules.
+
+## T05: Fix 18 pre-existing Playwright failures
+
+**Blocked by:** None (independent of T01–T04; added after Test exposed
+pre-existing red)
+
+**What to deliver:** The full configured suite passes: the 18 Playwright
+failures proven to reproduce identically at merge-base `577250c` are fixed.
+Known signatures:
+
+1. Ten failures in `acceptance.spec.ts` and `rules-reference.spec.ts`: both
+   open IndexedDB database `"bottlebound-match"` at version 1 while production
+   uses version 2 (see `manual-end-game.spec.ts` for the working pattern).
+2. Eight failures in `elimination-workflow.spec.ts`: the test expects the
+   elimination winner heading after Reopen Match but the page shows Active
+   state plus Prior Match Summary. Diagnose first: if this is a stale spec,
+   correct the expectation; if it is a genuine application bug, stop and
+   return one precise blocker instead of changing production behavior.
+
+**Scope ownership:** `tests/browser/acceptance.spec.ts`,
+`tests/browser/rules-reference.spec.ts`, `tests/browser/elimination-workflow.spec.ts`.
+Production changes require returning a blocker for user guidance.
+
+**Verification:** targeted Playwright specs green; full `pnpm run test`
+(vitest + Playwright) green; no assertion weakened to mask a real defect.
+
+**Acceptance criteria:**
+- [x] All 18 previously failing Playwright tests pass.
+- [x] Full configured suite passes end to end.
+- [x] No assertion weakened or deleted to hide a real defect; any suspected
+      application bug is reported as a blocker, not papered over.
+
+## T06: Include Playwright CLI tooling in the feature change set
+
+**Blocked by:** None (independent; added on user resume direction
+2026-08-23)
+
+**What to deliver:** The Playwright CLI tooling changes are part of this
+feature rather than out-of-band residue: `@playwright/cli` dev dependency with
+its regenerated lockfile, the `.opencode/skills/playwright-cli/` skill assets,
+and `.gitignore` entries for `.playwright-cli/` and `.playwright/`. The skill
+Markdown files and `pnpm-lock.yaml` are formatted so the repository format
+check passes. No documentation beyond the existing skill assets is written.
+
+**Scope ownership:** `package.json` dependency entry, `pnpm-lock.yaml`,
+`.opencode/skills/playwright-cli/**`, `.gitignore`.
+
+**Verification:** `pnpm run format:check`; `pnpm run lint`; confirm
+dependency installs and Playwright suite still runs via `pnpm run test`.
+
+**Acceptance criteria:**
+- [x] `@playwright/cli` present in `package.json` and installable from the
+      committed lockfile.
+- [x] Skill assets under `.opencode/skills/playwright-cli/` pass the format
+      check.
+- [x] `pnpm run format:check`, `pnpm run lint`, and `pnpm run test` all green.
 
 ## Parallel groups
 

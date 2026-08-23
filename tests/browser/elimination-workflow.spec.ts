@@ -182,10 +182,19 @@ test("normal Team Elimination continues, ends, reopens, and removes exactly", as
 
   await page.getByRole("button", { name: "Reopen Match" }).click();
   await expect(
-    page.getByRole("heading", { name: `${winner} wins` }),
+    page.getByRole("heading", { name: "Active Match" }),
   ).toBeVisible();
+  await expect(page.locator("[data-prior-summary]")).toContainText(
+    `${winner} wins`,
+  );
   await page.getByRole("button", { name: "End Game" }).click();
+  await expect(
+    page.getByRole("heading", { name: "End this Match?" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Confirm End Game" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Ended Match" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Remove Match" }).click();
   await expect(
     page.getByRole("heading", { name: /Remove this Ended Match/ }),
@@ -311,8 +320,13 @@ for (const ruling of [
 
     await page.getByRole("button", { name: "Reopen Match" }).click();
     await expect(
-      page.getByRole("heading", { name: ruling.result }),
+      page.getByRole("heading", { name: "Active Match" }),
     ).toBeVisible();
-    await expect(page.getByText(/Recorded referee override/)).toBeVisible();
+    await expect(page.locator("[data-prior-summary]")).toContainText(
+      ruling.result,
+    );
+    await expect(
+      page.getByRole("heading", { name: "Both teams are eliminated" }),
+    ).toBeVisible();
   });
 }

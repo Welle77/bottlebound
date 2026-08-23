@@ -1,6 +1,16 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": [
-    "github:trifork/codebox#feature/opencode-harness-compatibility"
-  ]
+  "plugin": ["github:trifork/codebox#feature/opencode-harness-compatibility"],
+  "permission": {
+    "bash": {
+      "playwright-cli*": "allow",
+      "playwright*": "allow",
+      "pnpm exec playwright*": "allow",
+      "pnpm exec playwright-cli*": "allow",
+      "npx playwright*": "allow"
+    },
+    "skill": {
+      "playwright-cli": "allow"
+    }
+  }
 }
