@@ -359,15 +359,28 @@ function assertCanonicalEvent(
     return;
   }
   if (value.type === "ActionResolved") {
-    const attack = RULESET.basicAttacks.find(({ id }) => id === value.attackId);
+    const historicalRuleset =
+      typeof expectedRulesVersion === "string" &&
+      expectedRulesVersion !== RULESET.version;
+    const attack = historicalRuleset
+      ? undefined
+      : RULESET.basicAttacks.find(({ id }) => id === value.attackId);
     if (
-      !attack ||
       value.actionType !== "Basic Attack" ||
-      value.sourceCharacterId !== attack.characterId ||
-      value.attackType !== attack.attackType ||
-      value.rangePaces !== attack.rangePaces ||
-      value.damage !== attack.damage ||
-      value.rulesSourceAnchor !== attack.sourceAnchor ||
+      (!historicalRuleset &&
+        (!attack ||
+          value.sourceCharacterId !== attack.characterId ||
+          value.attackType !== attack.attackType ||
+          value.rangePaces !== attack.rangePaces ||
+          value.damage !== attack.damage ||
+          value.rulesSourceAnchor !== attack.sourceAnchor)) ||
+      (historicalRuleset &&
+        (!Number.isInteger(value.rangePaces) ||
+          (value.rangePaces as number) < 1 ||
+          !Number.isInteger(value.damage) ||
+          (value.damage as number) < 0 ||
+          typeof value.rulesSourceAnchor !== "string" ||
+          value.rulesSourceAnchor.length === 0)) ||
       !Array.isArray(value.attackLegs) ||
       value.attackLegs.length === 0 ||
       value.attackLegs.length > 2 ||
@@ -398,8 +411,13 @@ function assertCanonicalEvent(
         leg.sourceCharacterId !== value.sourceCharacterId ||
         leg.attackId !== value.attackId ||
         leg.rangePaces !== value.rangePaces ||
-        leg.redirectedByReactionId !==
-          (index === 0 ? null : "duergar-monk-deflecting-palm") ||
+        (index === 0 && leg.redirectedByReactionId !== null) ||
+        (index === 1 &&
+          (typeof leg.redirectedByReactionId !== "string" ||
+            leg.redirectedByReactionId.length === 0 ||
+            (!historicalRuleset &&
+              leg.redirectedByReactionId !==
+                "duergar-monk-deflecting-palm"))) ||
         leg.towardCharacterId !==
           (index === 0 ? null : value.sourceCharacterId) ||
         !Array.isArray(leg.affectedCharacterIds) ||
@@ -425,17 +443,27 @@ function assertCanonicalEvent(
       if (!isRecord(reactionResolution)) {
         throw new Error("The canonical Action Resolution Reaction is invalid.");
       }
-      const reaction = RULESET.reactions.find(
-        ({ id }) => id === reactionResolution.reactionId,
-      );
+      const reaction = historicalRuleset
+        ? null
+        : RULESET.reactions.find(
+            ({ id }) => id === reactionResolution.reactionId,
+          );
+      const owner = historicalRuleset
+        ? reactionResolution.ownerCharacterId
+        : reaction?.ownerCharacterId;
       if (
-        !reaction ||
-        reactionResolution.ownerCharacterId !== reaction.ownerCharacterId ||
+        (historicalRuleset &&
+          (typeof reactionResolution.reactionId !== "string" ||
+            reactionResolution.reactionId.length === 0)) ||
+        (!historicalRuleset && !reaction) ||
+        typeof owner !== "string" ||
+        owner.length === 0 ||
+        (!historicalRuleset && reactionResolution.ownerCharacterId !== owner) ||
         typeof reactionResolution.protectedCharacterId !== "string" ||
         !affectedCharacterIds.includes(
           reactionResolution.protectedCharacterId,
         ) ||
-        reactionOwners.has(reaction.ownerCharacterId) ||
+        reactionOwners.has(owner) ||
         !Array.isArray(reactionResolution.warnings) ||
         !reactionResolution.warnings.every(
           (warning) => typeof warning === "string" && warning.length > 0,
@@ -449,33 +477,45 @@ function assertCanonicalEvent(
             isRecord(operation) &&
             (operation.type === "prevent-damage-and-effects" ||
               (operation.type === "manual-movement" &&
-                operation.characterId === reaction.ownerCharacterId &&
-                operation.maxPaces === 2 &&
+                operation.characterId === owner &&
                 typeof operation.instruction === "string" &&
-                operation.instruction.length > 0) ||
+                operation.instruction.length > 0 &&
+                (historicalRuleset || operation.maxPaces === 2)) ||
               (operation.type === "redirect-physical-attack" &&
-                reaction.name === "Deflecting Palm" &&
-                operation.fromCharacterId === reaction.ownerCharacterId &&
-                operation.towardCharacterId === value.sourceCharacterId)),
+                operation.fromCharacterId === owner &&
+                operation.towardCharacterId === value.sourceCharacterId &&
+                (historicalRuleset || reaction?.name === "Deflecting Palm"))),
         )
       ) {
         throw new Error("The canonical Action Resolution Reaction is invalid.");
       }
-      reactionOwners.add(reaction.ownerCharacterId);
+      reactionOwners.add(owner);
     });
-    const deflectingPalm = value.reactions.find(
-      (reactionResolution) =>
+    let redirectOwnerId: string | null = null;
+    for (const reactionResolution of value.reactions) {
+      if (
         isRecord(reactionResolution) &&
-        reactionResolution.reactionId === "duergar-monk-deflecting-palm",
-    );
+        typeof reactionResolution.ownerCharacterId === "string" &&
+        Array.isArray(reactionResolution.operations) &&
+        reactionResolution.operations.some(
+          (operation) =>
+            isRecord(operation) &&
+            operation.type === "redirect-physical-attack",
+        )
+      ) {
+        redirectOwnerId = reactionResolution.ownerCharacterId;
+        break;
+      }
+    }
     const firstLeg = value.attackLegs[0];
     const initialAffectedCharacterIds =
       isRecord(firstLeg) && Array.isArray(firstLeg.affectedCharacterIds)
         ? firstLeg.affectedCharacterIds
         : [];
     if (
-      (value.attackLegs.length === 2) !== Boolean(deflectingPalm) ||
-      (deflectingPalm && !initialAffectedCharacterIds.includes("duergar-monk"))
+      (value.attackLegs.length === 2) !== Boolean(redirectOwnerId) ||
+      (redirectOwnerId !== null &&
+        !initialAffectedCharacterIds.includes(redirectOwnerId))
     ) {
       throw new Error("The canonical redirected Attack Leg is invalid.");
     }

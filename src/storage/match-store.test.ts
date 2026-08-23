@@ -12,6 +12,7 @@ import {
   ruleSimultaneousElimination,
   startMatch,
   undoLastEvent,
+  type ActiveMatchState,
   type MatchEvent,
   type MatchState,
 } from "../domain/match";
@@ -183,6 +184,75 @@ function readRawMatch(
       { once: true },
     );
   });
+}
+
+function simultaneousEliminationRun(matchId: string): {
+  results: Array<{ event: MatchEvent; state: MatchState }>;
+  finalState: ActiveMatchState;
+} {
+  const setup = createSetup(matchId, "2026-08-22T14:00:00.000Z");
+  const generated = generateInitiative(
+    setup.state,
+    randomQueue([19, 19, 18, 18, 17, 14, 12, 11, 12, 11, 11, 10]),
+    "2026-08-22T14:01:00.000Z",
+  );
+  const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
+  const confirmations = {
+    range: true,
+    lineOfSight: true,
+    legalBottleContact: true,
+    terrainContact: true,
+  };
+  const characterIds = started.state.characters.map(
+    ({ characterId }) => characterId,
+  );
+  const everywhere = (exceptCharacterId: string) =>
+    characterIds.filter((characterId) => characterId !== exceptCharacterId);
+  const sources = [
+    "drow-rogue",
+    "drow-druid",
+    "drow-paladin",
+    "duergar-monk",
+    "duergar-fighter",
+    "duergar-barbarian",
+  ];
+  const affectedLists = [
+    everywhere("drow-rogue"),
+    everywhere("drow-druid"),
+    everywhere("drow-paladin"),
+    ["drow-paladin", "duergar-barbarian"],
+    ["drow-rogue", "drow-druid", "duergar-fighter", "drow-paladin"],
+    ["drow-paladin", "duergar-monk", "duergar-barbarian"],
+  ];
+  const results: Array<{ event: MatchEvent; state: MatchState }> = [
+    setup,
+    generated,
+    started,
+  ];
+  let current = started.state;
+  affectedLists.forEach((affectedCharacterIds, index) => {
+    const attacked = resolveBasicAttack(
+      current,
+      {
+        sourceCharacterId: sources[index]!,
+        affectedCharacterIds,
+        physicalConfirmations: confirmations,
+        majorActionOverride: null,
+      },
+      `2026-08-22T14:${String(3 + index * 2).padStart(2, "0")}:00.000Z`,
+    );
+    results.push(attacked);
+    current = attacked.state;
+    if (index < affectedLists.length - 1) {
+      const turned = finishTurn(
+        current,
+        `2026-08-22T14:${String(4 + index * 2).padStart(2, "0")}:00.000Z`,
+      );
+      results.push(turned);
+      current = turned.state;
+    }
+  });
+  return { results, finalState: current };
 }
 
 describe("IndexedDbMatchStore", () => {
@@ -410,6 +480,82 @@ describe("IndexedDbMatchStore", () => {
       ...setup.state,
       rulesVersion: "BB-prior-release",
     } satisfies MatchState);
+  });
+
+  it("restores an unavailable-version Match with combat history from recorded evidence", async () => {
+    const factory = new IDBFactory();
+    const databaseName = "restore-prior-rules-combat";
+    const store = new IndexedDbMatchStore(factory, databaseName);
+    const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
+    const generated = generateInitiative(
+      setup.state,
+      randomQueue([19, 19, 18, 18, 17, 14, 12, 11, 12, 11, 11, 10]),
+      "2026-08-22T14:01:00.000Z",
+    );
+    const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
+    const action = resolveBasicAttack(
+      started.state,
+      {
+        sourceCharacterId: started.state.initiative[0]!.characterId,
+        affectedCharacterIds: ["duergar-ranger"],
+        physicalConfirmations: {
+          range: true,
+          lineOfSight: true,
+          legalBottleContact: true,
+          terrainContact: true,
+        },
+        majorActionOverride: null,
+      },
+      "2026-08-22T14:03:00.000Z",
+    );
+    for (const result of [setup, generated, started, action])
+      await store.commit(result.event, result.state);
+    await rewriteStoredRulesVersion(factory, databaseName, "BB-prior-release");
+
+    const restored = await store.restore();
+
+    expect(restored?.state.rulesVersion).toBe("BB-prior-release");
+    expect(restored?.events).toHaveLength(4);
+    expect(
+      restored?.events.every(
+        ({ rulesVersion }) => rulesVersion === "BB-prior-release",
+      ),
+    ).toBe(true);
+    expect(restored?.state).toEqual({
+      ...action.state,
+      rulesVersion: "BB-prior-release",
+    });
+
+    const undone = undoLastEvent(
+      restored!.state,
+      restored!.events,
+      "2026-08-22T14:04:00.000Z",
+      true,
+    );
+    await store.commit(undone.event, undone.state);
+    await expect(store.restore()).resolves.toEqual({
+      state: undone.state,
+      events: [...restored!.events, undone.event],
+    });
+    expect(undone.state).toMatchObject({
+      phase: "active",
+      majorActionUsed: false,
+      spentReactionIds: [],
+      characters: started.state.characters.map(({ characterId, hp }) => ({
+        characterId,
+        hp,
+      })),
+    });
+
+    const turned = finishTurn(
+      undone.state as Extract<MatchState, { phase: "active" }>,
+      "2026-08-22T14:05:00.000Z",
+    );
+    await store.commit(turned.event, turned.state);
+    await expect(store.restore()).resolves.toEqual({
+      state: turned.state,
+      events: [...restored!.events, undone.event, turned.event],
+    });
   });
 
   it("atomically migrates Setup and Active schema-2 Matches without losing state or history", async () => {
@@ -746,52 +892,21 @@ describe("IndexedDbMatchStore", () => {
     async (outcome) => {
       const factory = new IDBFactory();
       const store = new IndexedDbMatchStore(factory, `simultaneous-${outcome}`);
-      const setup = createSetup(
+      const { results, finalState } = simultaneousEliminationRun(
         `match-simultaneous-${outcome}`,
-        "2026-08-22T14:00:00.000Z",
       );
-      const generated = generateInitiative(
-        setup.state,
-        randomQueue([19, 19, 18, 18, 17, 14, 12, 11, 12, 11, 11, 10]),
-        "2026-08-22T14:01:00.000Z",
-      );
-      const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
-      const results: Array<{ event: MatchEvent; state: MatchState }> = [
-        setup,
-        generated,
-        started,
-      ];
-      let current = started.state;
-      for (let attackIndex = 0; attackIndex < 5; attackIndex += 1) {
-        const attack = resolveBasicAttack(
-          current,
-          {
-            sourceCharacterId: started.state.initiative[0]!.characterId,
-            affectedCharacterIds: started.state.characters.map(
-              ({ characterId }) => characterId,
-            ),
-            physicalConfirmations: {
-              range: true,
-              lineOfSight: true,
-              legalBottleContact: true,
-              terrainContact: true,
-            },
-            majorActionOverride:
-              attackIndex === 0 ? null : "Referee confirmed repeated attack.",
-          },
-          `2026-08-22T14:0${attackIndex + 3}:00.000Z`,
-        );
-        current = attack.state;
-        results.push(attack);
-      }
       for (const result of results)
         await store.commit(result.event, result.state);
+      expect(finalState).toMatchObject({
+        eliminatedTeams: ["Drow", "Duergar"],
+        outcome: null,
+      });
 
       const ruled = ruleSimultaneousElimination(
-        current,
+        finalState,
         outcome,
         "The authoritative rules do not define simultaneous Team Elimination; the referee selected this override.",
-        "2026-08-22T14:08:00.000Z",
+        "2026-08-22T14:20:00.000Z",
       );
       await store.commit(ruled.event, ruled.state);
       await expect(store.restore()).resolves.toEqual({
@@ -828,44 +943,9 @@ describe("IndexedDbMatchStore", () => {
       new IDBFactory(),
       "failed-simultaneous-ruling",
     );
-    const setup = createSetup(
+    const { results, finalState: current } = simultaneousEliminationRun(
       "match-failed-simultaneous",
-      "2026-08-22T14:00:00.000Z",
     );
-    const generated = generateInitiative(
-      setup.state,
-      randomQueue([19, 19, 18, 18, 17, 14, 12, 11, 12, 11, 11, 10]),
-      "2026-08-22T14:01:00.000Z",
-    );
-    const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
-    const results: Array<{ event: MatchEvent; state: MatchState }> = [
-      setup,
-      generated,
-      started,
-    ];
-    let current = started.state;
-    for (let attackIndex = 0; attackIndex < 5; attackIndex += 1) {
-      const action = resolveBasicAttack(
-        current,
-        {
-          sourceCharacterId: started.state.initiative[0]!.characterId,
-          affectedCharacterIds: started.state.characters.map(
-            ({ characterId }) => characterId,
-          ),
-          physicalConfirmations: {
-            range: true,
-            lineOfSight: true,
-            legalBottleContact: true,
-            terrainContact: true,
-          },
-          majorActionOverride:
-            attackIndex === 0 ? null : "Referee confirmed repeated attack.",
-        },
-        `2026-08-22T14:0${attackIndex + 3}:00.000Z`,
-      );
-      current = action.state;
-      results.push(action);
-    }
     expect(current).toMatchObject({
       eliminatedTeams: ["Drow", "Duergar"],
       outcome: null,

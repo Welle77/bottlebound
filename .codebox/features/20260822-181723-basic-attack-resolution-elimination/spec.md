@@ -3,12 +3,12 @@ slug: 20260822-181723-basic-attack-resolution-elimination
 title: Basic Attack resolution and elimination
 branch: feature/offline-initiative-turn-tracking
 target_branch: main
-current_phase: review
+current_phase: ship
 phases:
   planning: done
   code: done
   test: done
-  review: blocked
+  review: done
   ship: pending
 gate_policy:
   planning: gate
@@ -21,11 +21,9 @@ model_routing:
   aliases:
     lightweight: [gpt-5.6-luna, claude-haiku-4.5]
     general: [gpt-5.6-terra, claude-sonnet-5]
-    frontier: [gpt-5.6-sol, claude-opus-4.8]
+    frontier: [gpt-5.6-sol, claude-opus-4.8, Ox Alpha Free]
   phases:
     planning: frontier
-    test: general
-    review: lightweight
 ---
 
 # Basic Attack resolution and elimination

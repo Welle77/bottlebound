@@ -863,6 +863,12 @@ export function resolveBasicAttack(
   if (input.sourceCharacterId !== activeCharacterId) {
     throw new Error("Basic Attack needs the active character as its source.");
   }
+  const activeCharacter = state.characters.find(
+    ({ characterId }) => characterId === activeCharacterId,
+  );
+  if (!activeCharacter || activeCharacter.hp === 0) {
+    throw new Error("A Downed character cannot use Basic Attack.");
+  }
   const attack = RULESET.basicAttacks.find(
     ({ characterId }) => characterId === input.sourceCharacterId,
   );
@@ -1098,6 +1104,83 @@ export function resolveBasicAttack(
       eliminatedTeams: resultingEliminations,
       outcome,
     },
+  };
+}
+
+function applyHistoricalActionResolution(
+  state: ActiveMatchState,
+  event: ActionResolvedEvent,
+): ActiveMatchState {
+  if (event.rulesVersion !== state.rulesVersion) {
+    throw new Error(
+      "The Action Resolution rules version does not follow Match State.",
+    );
+  }
+  if (event.actionType !== "Basic Attack") {
+    throw new Error("The historical Action Resolution is unsupported.");
+  }
+  const activeCharacterId = state.initiative[state.activeSlot - 1]?.characterId;
+  if (event.sourceCharacterId !== activeCharacterId) {
+    throw new Error("The Action Resolution source is not active.");
+  }
+  if (state.majorActionUsed && event.majorActionOverride === null) {
+    throw new Error("A second Basic Attack needs a recorded referee override.");
+  }
+  const affected = new Set<string>();
+  for (const leg of event.attackLegs) {
+    for (const characterId of leg.affectedCharacterIds) {
+      if (affected.has(characterId)) {
+        throw new Error("The Action Resolution contacts must be unique.");
+      }
+      affected.add(characterId);
+    }
+  }
+  for (const effect of event.effects) {
+    if (!affected.has(effect.characterId)) {
+      throw new Error("The Action Resolution effect references no contact.");
+    }
+    const character = state.characters.find(
+      ({ characterId }) => characterId === effect.characterId,
+    );
+    if (!character || character.hp !== effect.hpBefore) {
+      throw new Error("The Action Resolution does not follow Match State.");
+    }
+    if (effect.hpAfter < 0 || effect.hpAfter > effect.hpBefore) {
+      throw new Error("The Action Resolution damage evidence is invalid.");
+    }
+  }
+  if (
+    event.eliminatedTeams.some(
+      (team) => team !== "Drow" && team !== "Duergar",
+    ) ||
+    new Set(event.eliminatedTeams).size !== event.eliminatedTeams.length
+  ) {
+    throw new Error("The Action Resolution eliminations are invalid.");
+  }
+  const characters = state.characters.map((character) => {
+    const effect = event.effects.find(
+      ({ characterId }) => characterId === character.characterId,
+    );
+    return effect ? { ...character, hp: effect.hpAfter } : character;
+  });
+  return {
+    ...state,
+    sequence: event.sequence,
+    majorActionUsed: true,
+    spentReactionIds: [
+      ...new Set([
+        ...state.spentReactionIds,
+        ...event.reactions.map(({ reactionId }) => reactionId),
+      ]),
+    ],
+    characters,
+    eliminatedTeams: [...event.eliminatedTeams],
+    outcome:
+      event.eliminatedTeams.length === 1
+        ? event.eliminatedTeams[0] === "Drow"
+          ? "Duergar"
+          : "Drow"
+        : null,
   };
 }
 
@@ -1386,29 +1469,33 @@ export function restoreStateFromEvents(
         );
       }
       const activeState: ActiveMatchState = current;
-      const expected = resolveBasicAttack(
-        activeState,
-        {
-          sourceCharacterId: event.sourceCharacterId,
-          attackLegs: event.attackLegs.map(({ affectedCharacterIds }) => ({
-            affectedCharacterIds,
-          })),
-          physicalConfirmations: event.physicalConfirmations,
-          reactions: event.reactions.map(
-            ({ reactionId, protectedCharacterId, override }) => ({
-              reactionId,
-              protectedCharacterId,
-              override,
-            }),
-          ),
-          majorActionOverride: event.majorActionOverride,
-        },
-        event.occurredAt,
-      );
-      if (!canonicalMatchRecordsEqual(expected.event, event)) {
-        throw new Error("The Action Resolution does not follow Match State.");
+      if (activeState.rulesVersion === RULESET.version) {
+        const expected = resolveBasicAttack(
+          activeState,
+          {
+            sourceCharacterId: event.sourceCharacterId,
+            attackLegs: event.attackLegs.map(({ affectedCharacterIds }) => ({
+              affectedCharacterIds,
+            })),
+            physicalConfirmations: event.physicalConfirmations,
+            reactions: event.reactions.map(
+              ({ reactionId, protectedCharacterId, override }) => ({
+                reactionId,
+                protectedCharacterId,
+                override,
+              }),
+            ),
+            majorActionOverride: event.majorActionOverride,
+          },
+          event.occurredAt,
+        );
+        if (!canonicalMatchRecordsEqual(expected.event, event)) {
+          throw new Error("The Action Resolution does not follow Match State.");
+        }
+        current = expected.state;
+      } else {
+        current = applyHistoricalActionResolution(activeState, event);
       }
-      current = expected.state;
     } else if (event.type === "EliminationContinued") {
       if (current.phase !== "active") {
         throw new Error("Continue cannot apply to this Match State.");

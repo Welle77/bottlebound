@@ -16,7 +16,9 @@ import {
   restoreStateFromEvents,
   startMatch,
   undoLastEvent,
+  type ActiveMatchState,
   type MatchEvent,
+  type MatchState,
   type RandomSource,
 } from "./match";
 import { RULESET, RULES_VERSION } from "./ruleset";
@@ -33,6 +35,75 @@ function queuedRandom(...values: number[]): RandomSource {
       return value;
     },
   };
+}
+
+function simultaneousEliminationRun(matchId: string): {
+  steps: Array<{ event: MatchEvent; state: MatchState }>;
+  finalState: ActiveMatchState;
+} {
+  const setup = createSetup(matchId, "2026-08-22T14:00:00.000Z");
+  const generated = generateInitiative(
+    setup.state,
+    queuedRandom(19, 19, 18, 18, 17, 14, 12, 11, 12, 11, 11, 10),
+    "2026-08-22T14:01:00.000Z",
+  );
+  const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
+  const confirmations = {
+    range: true,
+    lineOfSight: true,
+    legalBottleContact: true,
+    terrainContact: true,
+  };
+  const characterIds = started.state.characters.map(
+    ({ characterId }) => characterId,
+  );
+  const everywhere = (exceptCharacterId: string) =>
+    characterIds.filter((characterId) => characterId !== exceptCharacterId);
+  const sources = [
+    "drow-rogue",
+    "drow-druid",
+    "drow-paladin",
+    "duergar-monk",
+    "duergar-fighter",
+    "duergar-barbarian",
+  ];
+  const affectedLists = [
+    everywhere("drow-rogue"),
+    everywhere("drow-druid"),
+    everywhere("drow-paladin"),
+    ["drow-paladin", "duergar-barbarian"],
+    ["drow-rogue", "drow-druid", "duergar-fighter", "drow-paladin"],
+    ["drow-paladin", "duergar-monk", "duergar-barbarian"],
+  ];
+  const steps: Array<{ event: MatchEvent; state: MatchState }> = [
+    setup,
+    generated,
+    started,
+  ];
+  let current = started.state;
+  affectedLists.forEach((affectedCharacterIds, index) => {
+    const attacked = resolveBasicAttack(
+      current,
+      {
+        sourceCharacterId: sources[index]!,
+        affectedCharacterIds,
+        physicalConfirmations: confirmations,
+        majorActionOverride: null,
+      },
+      `2026-08-22T14:${String(3 + index * 2).padStart(2, "0")}:00.000Z`,
+    );
+    steps.push(attacked);
+    current = attacked.state;
+    if (index < affectedLists.length - 1) {
+      const turned = finishTurn(
+        current,
+        `2026-08-22T14:${String(4 + index * 2).padStart(2, "0")}:00.000Z`,
+      );
+      steps.push(turned);
+      current = turned.state;
+    }
+  });
+  return { steps, finalState: current };
 }
 
 describe("Setup Match commands", () => {
@@ -681,7 +752,11 @@ describe("Active Match commands", () => {
       ...started.state,
       characters: started.state.characters.map((character) => ({
         ...character,
-        hp: finalCharacters.includes(character.characterId) ? 1 : 0,
+        hp:
+          character.characterId === sourceCharacterId ||
+          finalCharacters.includes(character.characterId)
+            ? 1
+            : 0,
       })),
     };
 
@@ -689,7 +764,7 @@ describe("Active Match commands", () => {
       nearlyEliminated,
       {
         sourceCharacterId,
-        affectedCharacterIds: finalCharacters,
+        affectedCharacterIds: [...finalCharacters, sourceCharacterId],
         physicalConfirmations: {
           range: true,
           lineOfSight: true,
@@ -704,7 +779,10 @@ describe("Active Match commands", () => {
       nearlyEliminated,
       {
         sourceCharacterId,
-        affectedCharacterIds: [...finalCharacters].reverse(),
+        affectedCharacterIds: [
+          sourceCharacterId,
+          ...[...finalCharacters].reverse(),
+        ],
         physicalConfirmations: {
           range: true,
           lineOfSight: true,
@@ -741,47 +819,20 @@ describe("Active Match commands", () => {
   it.each(["Drow", "Duergar", "draw"] as const)(
     "records a %s simultaneous-elimination ruling and restores it exactly",
     (outcome) => {
-      const setup = createSetup(
+      const { steps, finalState } = simultaneousEliminationRun(
         `match-simultaneous-${outcome}`,
-        "2026-08-22T14:00:00.000Z",
       );
-      const generated = generateInitiative(
-        setup.state,
-        queuedRandom(19, 19, 18, 18, 17, 14, 12, 11, 12, 11, 11, 10),
-        "2026-08-22T14:01:00.000Z",
-      );
-      const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
-      const attackHistory: MatchEvent[] = [];
-      let current = started.state;
-      let attack: ReturnType<typeof resolveBasicAttack> | null = null;
-      for (let attackIndex = 0; attackIndex < 5; attackIndex += 1) {
-        attack = resolveBasicAttack(
-          current,
-          {
-            sourceCharacterId: started.state.initiative[0]!.characterId,
-            affectedCharacterIds: RULESET.characters.map(({ id }) => id),
-            physicalConfirmations: {
-              range: true,
-              lineOfSight: true,
-              legalBottleContact: true,
-              terrainContact: true,
-            },
-            majorActionOverride:
-              attackIndex === 0 ? null : "Referee confirmed repeated attack.",
-          },
-          `2026-08-22T14:0${attackIndex + 3}:00.000Z`,
-        );
-        current = attack.state;
-        attackHistory.push(attack.event);
-      }
-      if (!attack) throw new Error("The test needs a final Action Resolution.");
+      expect(finalState).toMatchObject({
+        eliminatedTeams: ["Drow", "Duergar"],
+        outcome: null,
+      });
       const evidence =
         "The authoritative rules do not define simultaneous Team Elimination; the referee selected the recorded result.";
       const ruled = ruleSimultaneousElimination(
-        attack.state,
+        finalState,
         outcome,
         evidence,
-        "2026-08-22T14:04:00.000Z",
+        "2026-08-22T14:20:00.000Z",
       );
 
       expect(ruled.state).toMatchObject({
@@ -794,41 +845,40 @@ describe("Active Match commands", () => {
         outcome,
         overrideEvidence: evidence,
       });
-      const ended = endMatch(ruled.state, "2026-08-22T14:09:00.000Z", true);
+      const ended = endMatch(ruled.state, "2026-08-22T14:21:00.000Z", true);
       expect(ended.state).toMatchObject({
         phase: "ended",
         eliminatedTeams: ["Drow", "Duergar"],
         outcome,
       });
       expect(
-        reopenMatch(ended.state, "2026-08-22T14:10:00.000Z").state,
+        reopenMatch(ended.state, "2026-08-22T14:22:00.000Z").state,
       ).toEqual({ ...ruled.state, sequence: ended.state.sequence + 1 });
 
       const history: MatchEvent[] = [
-        setup.event,
-        generated.event,
-        started.event,
-        ...attackHistory,
+        ...steps.map(({ event }) => event),
         ruled.event,
       ];
       expect(restoreStateFromEvents(history)).toEqual(ruled.state);
       const undoRuling = undoLastEvent(
         ruled.state,
         history,
-        "2026-08-22T14:05:00.000Z",
+        "2026-08-22T14:23:00.000Z",
         true,
       );
       history.push(undoRuling.event);
-      expect(undoRuling.state).toEqual({ ...attack.state, sequence: 10 });
+      expect(undoRuling.state).toEqual({
+        ...finalState,
+        sequence: ruled.state.sequence + 1,
+      });
       const undoAttack = undoLastEvent(
         undoRuling.state,
         history,
-        "2026-08-22T14:06:00.000Z",
+        "2026-08-22T14:24:00.000Z",
         true,
       );
       expect(undoAttack.state).toMatchObject({
         phase: "active",
-        sequence: 11,
         eliminatedTeams: [],
         outcome: null,
       });
@@ -985,6 +1035,94 @@ describe("Active Match commands", () => {
     expect(
       finishTurn(second.state, "2026-08-22T14:05:00.000Z").state,
     ).toMatchObject({ majorActionUsed: false, activeSlot: 2 });
+  });
+
+  it("rejects a Basic Attack from a Downed active character", () => {
+    const setup = createSetup(
+      "match-downed-source",
+      "2026-08-22T14:00:00.000Z",
+    );
+    const generated = generateInitiative(
+      setup.state,
+      queuedRandom(19, 19, 18, 18, 17, 14, 12, 11, 12, 11, 11, 10),
+      "2026-08-22T14:01:00.000Z",
+    );
+    const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
+    const sourceCharacterId = started.state.initiative[0]!.characterId;
+
+    expect(() =>
+      resolveBasicAttack(
+        {
+          ...started.state,
+          characters: started.state.characters.map((character) =>
+            character.characterId === sourceCharacterId
+              ? { ...character, hp: 0 }
+              : character,
+          ),
+        },
+        {
+          sourceCharacterId,
+          affectedCharacterIds: ["duergar-ranger"],
+          physicalConfirmations: {
+            range: true,
+            lineOfSight: true,
+            legalBottleContact: true,
+            terrainContact: true,
+          },
+          majorActionOverride: null,
+        },
+        "2026-08-22T14:03:00.000Z",
+      ),
+    ).toThrow("Downed");
+  });
+
+  it("replays an unavailable-version Action Resolution from its recorded evidence", () => {
+    const setup = createSetup("match-historical", "2026-08-22T14:00:00.000Z");
+    const generated = generateInitiative(
+      setup.state,
+      queuedRandom(19, 19, 18, 18, 17, 14, 12, 11, 12, 11, 11, 10),
+      "2026-08-22T14:01:00.000Z",
+    );
+    const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
+    const attack = resolveBasicAttack(
+      started.state,
+      {
+        sourceCharacterId: started.state.initiative[0]!.characterId,
+        affectedCharacterIds: ["duergar-ranger"],
+        physicalConfirmations: {
+          range: true,
+          lineOfSight: true,
+          legalBottleContact: true,
+          terrainContact: true,
+        },
+        majorActionOverride: null,
+      },
+      "2026-08-22T14:03:00.000Z",
+    );
+    const historicalVersion = "BB-prior-release";
+    const history = [setup.event, generated.event, started.event].map(
+      (event) => ({ ...event, rulesVersion: historicalVersion }) as MatchEvent,
+    );
+    const resolvedEvent = {
+      ...attack.event,
+      rulesVersion: historicalVersion,
+    } as MatchEvent;
+    const expectedState = { ...attack.state, rulesVersion: historicalVersion };
+
+    expect(restoreStateFromEvents([...history, resolvedEvent])).toEqual(
+      expectedState,
+    );
+
+    const corruptedEffects = attack.event.effects.map((effect) => ({
+      ...effect,
+      hpBefore: effect.hpBefore + 1,
+    }));
+    expect(() =>
+      restoreStateFromEvents([
+        ...history,
+        { ...resolvedEvent, effects: corruptedEffects } as MatchEvent,
+      ]),
+    ).toThrow("does not follow Match State");
   });
 
   it("applies several protective Reactions only to their selected characters", () => {
