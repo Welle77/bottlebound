@@ -69,12 +69,35 @@ export interface RulesetReferenceCharacter extends RulesetCharacter {
   readonly abilities: readonly RulesetAbility[];
 }
 
+export interface StructuredAbility {
+  readonly id: string;
+  readonly name: string;
+  readonly ownerCharacterId: string;
+  readonly actionType: "standard" | "powerful" | "reaction";
+  readonly attackType: string;
+  readonly interaction: "physical-attack" | "targeted-attack" | "self" | "ally" | "enemy" | "utility";
+  readonly targetPolicy: {
+    readonly relation: "self" | "ally" | "enemy" | "any";
+    readonly cardinality: "one" | "all-in-range" | "self";
+    readonly lifeState: "active" | "downed" | "either";
+  };
+  readonly range: string;
+  readonly lineOfSight: string;
+  readonly ballRequired: string;
+  readonly reactionTrigger: string;
+  readonly manualChecks: readonly string[];
+  readonly operations: readonly string[];
+  readonly rulesText: string;
+  readonly sourceAnchor: string;
+}
+
 export interface Ruleset {
   readonly version: string;
   readonly characters: readonly RulesetCharacter[];
   readonly referenceCharacters: readonly RulesetReferenceCharacter[];
   readonly basicAttacks: readonly RulesetBasicAttack[];
   readonly reactions: readonly RulesetReaction[];
+  readonly abilities: readonly StructuredAbility[];
 }
 
 export const RULES_VERSION = "BB20260822A1";
@@ -243,10 +266,107 @@ const reactions = reactionConfigurations.map((configuration) => {
   });
 });
 
+function slugAbility(value: string): string {
+  return value
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-|-$/g, "");
+}
+
+function inferAbilityStructure(
+  characterId: string,
+  ability: RulesetAbility,
+): StructuredAbility {
+  const actionType =
+    ability.type === "Powerful"
+      ? ("powerful" as const)
+      : ability.type === "Reaction"
+        ? ("reaction" as const)
+        : ("standard" as const);
+  const interaction: StructuredAbility["interaction"] =
+    ability.ballRequired === "Yes"
+      ? "physical-attack"
+      : ability.attackType === "Ability Attack"
+        ? "targeted-attack"
+        : ability.target === "Self"
+          ? "self"
+          : ability.target.includes("ally")
+            ? "ally"
+            : ability.target.includes("enemy")
+              ? "enemy"
+              : "utility";
+  const relation: StructuredAbility["targetPolicy"]["relation"] =
+    ability.target === "Self"
+      ? "self"
+      : ability.target.includes("ally") && ability.target.includes("enemy")
+        ? "any"
+        : ability.target.includes("ally")
+          ? "ally"
+          : ability.target.includes("enemy")
+            ? "enemy"
+            : "any";
+  const cardinality: StructuredAbility["targetPolicy"]["cardinality"] =
+    ability.target.includes("All living") || ability.target.includes("All")
+      ? "all-in-range"
+      : ability.target === "Self" || ability.target === "None — physical throw"
+        ? "self"
+        : "one";
+  const lifeState: StructuredAbility["targetPolicy"]["lifeState"] =
+    ability.effect.toLowerCase().includes("downed") ? "either" : "active";
+  const manualChecks: string[] = [];
+  if (ability.range !== "Self" && ability.range !== "N/A") manualChecks.push("range");
+  if (ability.lineOfSight === "Yes") manualChecks.push("lineOfSight");
+  if (ability.ballRequired === "Yes") manualChecks.push("legalBottleContact", "terrainContact");
+  const operations: string[] = [];
+  const effectLower = ability.effect.toLowerCase();
+  if (effectLower.includes("takes 1 damage") || effectLower.includes("takes 1 damage")) operations.push("deal-damage");
+  if (effectLower.includes("+1 damage") || effectLower.includes("add-damage") || ability.name === "Hunter's Mark" || ability.name === "Hex") operations.push("add-damage");
+  if (effectLower.includes("prevent all damage")) operations.push("prevent-damage-and-effects");
+  if (effectLower.includes("reduce")) operations.push("reduce-remaining-damage");
+  if (effectLower.includes("restores 1 hp") || effectLower.includes("heal")) operations.push("heal");
+  if (effectLower.includes("revive") || effectLower.includes("restore a downed")) operations.push("revive");
+  if (effectLower.includes("maximum hp")) operations.push("change-max-hp");
+  if (effectLower.includes("movement") && effectLower.includes("maximum of 1")) operations.push("set-movement-cap");
+  if (effectLower.includes("movement") && effectLower.includes("3 paces")) operations.push("set-movement-cap");
+  if (effectLower.includes("cannot use a powerful ability")) operations.push("prohibit-action-type");
+  if (effectLower.includes("cannot be affected by physically")) operations.push("ignore-physical-attack");
+  if (effectLower.includes("redirect")) operations.push("redirect-physical-attack");
+  if (effectLower.includes("move") && effectLower.includes("paces")) operations.push("manual-movement-instruction");
+  if (operations.length === 0) operations.push("apply-effect");
+  return Object.freeze({
+    id: `${characterId}-${slugAbility(ability.name)}`,
+    name: ability.name,
+    ownerCharacterId: characterId,
+    actionType,
+    attackType: ability.attackType,
+    interaction,
+    targetPolicy: Object.freeze({ relation, cardinality, lifeState }),
+    range: ability.range,
+    lineOfSight: ability.lineOfSight,
+    ballRequired: ability.ballRequired,
+    reactionTrigger: ability.type === "Reaction" ? "attack-would-affect" : "",
+    manualChecks: Object.freeze(manualChecks),
+    operations: Object.freeze(operations),
+    rulesText: ability.effect,
+    sourceAnchor: ability.sourceAnchor,
+  });
+}
+
+const abilities = Object.freeze(
+  referenceCharacters.flatMap((character) =>
+    character.abilities.map((ability) => inferAbilityStructure(character.id, ability)),
+  ),
+);
+
+if (abilities.length !== 24) {
+  throw new Error(`Expected 24 structured abilities; found ${abilities.length}.`);
+}
+
 export const RULESET: Ruleset = Object.freeze({
   version: RULES_VERSION,
   characters: Object.freeze(characters),
   referenceCharacters: Object.freeze(referenceCharacters),
   basicAttacks: Object.freeze(basicAttacks),
   reactions: Object.freeze(reactions),
+  abilities: Object.freeze(abilities),
 });

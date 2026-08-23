@@ -3,11 +3,13 @@ slug: 20260823-165210-ability-activation-effect-expiry
 title: Ability activation and effect expiry
 branch: feature/ability-activation-effect-expiry
 target_branch: main
-current_phase: code
+current_phase: done
 phases:
   planning: done
-  code: running
-  test: pending
+  code: done
+  test: done
+  review: done
+  ship: skipped
   review: pending
   ship: pending
 gate_policy:
