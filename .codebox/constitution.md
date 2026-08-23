@@ -47,8 +47,6 @@ model suffixes still require a complete match.
 ```yaml
 default: frontier
 aliases:
-  lightweight: [gpt-5.6-luna, claude-haiku-4.5]
-  general: [gpt-5.6-terra, claude-sonnet-5]
   frontier: [opencode/x-preview-f-free, muse-spark-1.2-contributor-free, opencode/muse-spark-1.2-contributor-free]
 phases:
   planning: frontier
