@@ -53,6 +53,10 @@ _Avoid_: Random roll, dice
 A Match after the referee confirms End Game. It is read-only until the referee reopens or removes it.
 _Avoid_: Finished game, archived Match
 
+**Spent Ability**:
+An ability that a character legally activated during the Match; it stays unavailable for the rest of the Match, including after Revival.
+_Avoid_: Used ability, consumed ability
+
 **Ruleset**:
 One immutable version of the complete authoritative BOTTLEBOUND rules, including universal rules, roster data, ability cards, and quick reference.
 _Avoid_: Rules data, rules document version

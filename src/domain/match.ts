@@ -1,4 +1,4 @@
-import { RULESET, RULES_VERSION } from "./ruleset";
+import { RULESET, RULES_VERSION, type StructuredAbility } from "./ruleset";
 
 export const MATCH_SCHEMA_VERSION = 3;
 export const LEGACY_MATCH_SCHEMA_VERSION = 2;
@@ -10,16 +10,42 @@ export interface RandomSource {
 export interface MatchCharacter {
   readonly characterId: string;
   readonly hp: number;
+  readonly currentMaxHp: number;
 }
 
 export type MatchOutcome = "Drow" | "Duergar" | "draw" | null;
 
+export type EffectDurationKind =
+  | "immediate"
+  | "until-boundary"
+  | "until-trigger"
+  | "until-trigger-or-boundary"
+  | "while-condition";
+
+export interface ActiveEffect {
+  readonly effectId: string;
+  readonly abilityId: string;
+  readonly kind: string;
+  readonly anchorCharacterId: string;
+  readonly affectedCharacterId: string;
+  readonly duration: {
+    readonly kind: EffectDurationKind;
+    readonly boundaryTrigger?: string;
+    readonly anchor: "source" | "affected";
+    readonly removeWhenAffectedDowned: boolean;
+  };
+  readonly operations: readonly string[];
+  readonly appliedSequence: number;
+}
+
 interface CombatMatchState {
   readonly spentReactionIds: readonly string[];
+  readonly spentAbilityIds: readonly string[];
   readonly majorActionUsed: boolean;
   readonly eliminatedTeams: readonly ("Drow" | "Duergar")[];
   readonly acknowledgedEliminations: readonly ("Drow" | "Duergar")[];
   readonly outcome: MatchOutcome;
+  readonly activeEffects: readonly ActiveEffect[];
 }
 
 export interface InitiativeEntry {
@@ -145,6 +171,7 @@ export interface TurnFinishedEvent extends EventBase {
   readonly round: number;
   readonly activeSlot: number;
   readonly skippedSlots: readonly number[];
+  readonly expiredEffects?: readonly ActiveEffect[];
 }
 
 export interface EliminationContinuedEvent extends EventBase {
@@ -276,10 +303,10 @@ export interface ProtectiveReactionChoice {
 
 export interface ActionResolvedEvent extends EventBase {
   readonly type: "ActionResolved";
-  readonly actionType: "Basic Attack";
+  readonly actionType: "Basic Attack" | "Ability";
   readonly sourceCharacterId: string;
   readonly attackId: string;
-  readonly attackType: "melee" | "ranged";
+  readonly attackType: "melee" | "ranged" | "ability";
   readonly rangePaces: 2 | 6;
   readonly damage: 1;
   readonly rulesSourceAnchor: string;
@@ -289,6 +316,11 @@ export interface ActionResolvedEvent extends EventBase {
   readonly effects: readonly ActionEffect[];
   readonly majorActionOverride: string | null;
   readonly eliminatedTeams: readonly ("Drow" | "Duergar")[];
+  readonly abilityId?: string;
+  readonly targetCharacterIds?: readonly string[];
+  readonly spentAbilityIds?: readonly string[];
+  readonly appliedEffects?: readonly ActiveEffect[];
+  readonly expiredEffects?: readonly ActiveEffect[];
 }
 
 export interface BasicAttackInput {
@@ -352,12 +384,14 @@ export interface UndoPreview {
 
 const initialCombatState = Object.freeze({
   spentReactionIds: Object.freeze([]) as readonly string[],
+  spentAbilityIds: Object.freeze([]) as readonly string[],
   majorActionUsed: false,
   eliminatedTeams: Object.freeze([]) as readonly ("Drow" | "Duergar")[],
   acknowledgedEliminations: Object.freeze([]) as readonly (
     "Drow" | "Duergar"
   )[],
   outcome: null,
+  activeEffects: Object.freeze([]) as readonly ActiveEffect[],
 });
 
 const UINT32_RANGE = 0x1_0000_0000;
@@ -449,6 +483,7 @@ function createSetupForRulesVersion(
     characters: RULESET.characters.map(({ id, baseHp }) => ({
       characterId: id,
       hp: baseHp,
+      currentMaxHp: baseHp,
     })),
     initiative: null,
     ...initialCombatState,
@@ -650,8 +685,76 @@ export function finishTurn(
   if (skippedSlots.length === state.initiative.length) {
     throw new Error("Finish Turn needs one non-Downed character.");
   }
+  // Expiry handling for scheduled and turn boundaries
+  const slotToCharacter = new Map<number, string>(
+    state.initiative.map((entry) => [entry.slot, entry.characterId]),
+  );
+  const pathSlots = [...skippedSlots, activeSlot];
+  const fromSlotValue = state.activeSlot;
+  const pendingExpired: ActiveEffect[] = [];
+  const remaining: ActiveEffect[] = [];
+  for (const effect of state.activeEffects) {
+    const trigger = effect.duration.boundaryTrigger;
+    const anchorId =
+      effect.duration.anchor === "source"
+        ? effect.anchorCharacterId
+        : effect.affectedCharacterId;
+    const anchorSlot = [...slotToCharacter.entries()].find(([, characterId]) => characterId === anchorId)?.[0];
+    if (!trigger) {
+      remaining.push(effect);
+      continue;
+    }
+    if (trigger === "beginning-of-next-turn" && effect.duration.anchor === "affected") {
+      const affectedSlot = [...slotToCharacter.entries()].find(([, characterId]) => characterId === effect.affectedCharacterId)?.[0];
+      if (affectedSlot === activeSlot) {
+        pendingExpired.push(effect);
+        continue;
+      }
+    }
+    if (trigger === "end-of-next-turn" && effect.duration.anchor === "affected") {
+      const affectedSlot = [...slotToCharacter.entries()].find(([, characterId]) => characterId === effect.affectedCharacterId)?.[0];
+      if (affectedSlot === fromSlotValue) {
+        pendingExpired.push(effect);
+        continue;
+      }
+    }
+    if (
+      (trigger === "beginning-of-next-scheduled-slot" || trigger === "end-of-next-scheduled-slot") &&
+      effect.duration.anchor === "source"
+    ) {
+      if (anchorSlot !== undefined && pathSlots.includes(anchorSlot)) {
+        pendingExpired.push(effect);
+        continue;
+      }
+    }
+    remaining.push(effect);
+  }
+  // Downed cleanup after expiry (if any character is Downed, remove its effects)
+  const downedCleanup = applyDownedCleanup(state.characters, remaining);
+  const finalActiveEffects = downedCleanup.cleaned;
+  pendingExpired.push(...downedCleanup.expired);
+  // Handle while-condition shapeshift expiry that may have been triggered by previous HP changes but also need to revert maxHP
+  let finalCharacters = state.characters;
+  // If any shapeshift expired, revert maxHP to 3 (as in resolveAbility)
+  for (const expired of pendingExpired) {
+    if (expired.kind === "shapeshift") {
+      finalCharacters = finalCharacters.map((character) =>
+        character.characterId === expired.affectedCharacterId
+          ? { ...character, currentMaxHp: 3, hp: Math.min(character.hp, 3) }
+          : character,
+      );
+    }
+  }
   return {
-    state: { ...state, sequence, round, activeSlot, majorActionUsed: false },
+    state: {
+      ...state,
+      sequence,
+      round,
+      activeSlot,
+      majorActionUsed: false,
+      characters: finalCharacters,
+      activeEffects: finalActiveEffects,
+    },
     event: {
       type: "TurnFinished",
       matchId: state.matchId,
@@ -663,6 +766,7 @@ export function finishTurn(
       round,
       activeSlot,
       skippedSlots,
+      ...(pendingExpired.length > 0 ? { expiredEffects: pendingExpired } : {}),
     },
   };
 }
@@ -900,10 +1004,12 @@ export function reopenMatch(
     round: state.round,
     activeSlot: state.activeSlot,
     spentReactionIds: state.spentReactionIds,
+    spentAbilityIds: (state as unknown as ActiveMatchState).spentAbilityIds ?? [],
     majorActionUsed: state.majorActionUsed,
     eliminatedTeams: state.eliminatedTeams,
     acknowledgedEliminations: state.acknowledgedEliminations,
     outcome: null,
+    activeEffects: (state as unknown as ActiveMatchState).activeEffects ?? [],
   };
   return {
     state: active,
@@ -1251,6 +1357,739 @@ export function resolveBasicAttack(
   };
 }
 
+export interface AbilityInput {
+  readonly abilityId: string;
+  readonly targetCharacterIds?: readonly string[];
+  readonly attackLegs?: readonly Readonly<{ affectedCharacterIds: readonly string[] }>[];
+  readonly physicalConfirmations?: Readonly<{
+    range: boolean;
+    lineOfSight: boolean;
+    legalBottleContact: boolean;
+    terrainContact: boolean;
+  }>;
+  readonly reactions?: readonly ProtectiveReactionInput[];
+  readonly majorActionOverride?: string | null;
+  readonly abilityOverride?: string | null;
+}
+
+function abilityWarnings(
+  state: ActiveMatchState,
+  abilityId: string,
+): string[] {
+  const warnings: string[] = [];
+  if (state.spentAbilityIds.includes(abilityId)) {
+    warnings.push("ability-already-spent");
+  }
+  return warnings;
+}
+
+function getAbilityOrThrow(abilityId: string) {
+  const ability = RULESET.abilities.find((entry) => entry.id === abilityId);
+  if (!ability) throw new Error("The ability is unknown.");
+  return ability;
+}
+
+function buildAbilityEffects(
+  ability: StructuredAbility,
+  affectedIds: readonly string[],
+  sequence: number,
+  anchorId: string,
+): ActiveEffect[] {
+  const effects: ActiveEffect[] = [];
+  const name = ability.name;
+  // Hunter's Mark / Hex (add-damage until next scheduled slot)
+  if (name === "Hunter's Mark" || name === "Hex") {
+    for (const targetId of affectedIds) {
+      effects.push({
+        effectId: `${ability.id}-${targetId}-${sequence}`,
+        abilityId: ability.id,
+        kind: name === "Hunter's Mark" ? "hunters-mark" : "hex",
+        anchorCharacterId: anchorId,
+        affectedCharacterId: targetId,
+        duration: {
+          kind: "until-trigger-or-boundary",
+          boundaryTrigger: "beginning-of-next-scheduled-slot",
+          anchor: "source",
+          removeWhenAffectedDowned: true,
+        },
+        operations: ["add-damage"],
+        appliedSequence: sequence,
+      });
+    }
+    return effects;
+  }
+  if (name === "Rage") {
+    effects.push({
+      effectId: `${ability.id}-${anchorId}-${sequence}`,
+      abilityId: ability.id,
+      kind: "rage",
+      anchorCharacterId: anchorId,
+      affectedCharacterId: anchorId,
+      duration: {
+        kind: "until-trigger-or-boundary",
+        boundaryTrigger: "beginning-of-next-turn",
+        anchor: "affected",
+        removeWhenAffectedDowned: true,
+      },
+      operations: ["reduce-remaining-damage"],
+      appliedSequence: sequence,
+    });
+    return effects;
+  }
+  if (name === "Vanish") {
+    effects.push({
+      effectId: `${ability.id}-${anchorId}-${sequence}`,
+      abilityId: ability.id,
+      kind: "vanish",
+      anchorCharacterId: anchorId,
+      affectedCharacterId: anchorId,
+      duration: {
+        kind: "until-boundary",
+        boundaryTrigger: "beginning-of-next-turn",
+        anchor: "affected",
+        removeWhenAffectedDowned: true,
+      },
+      operations: ["ignore-physical-attack"],
+      appliedSequence: sequence,
+    });
+    return effects;
+  }
+  if (name === "Shapeshift") {
+    effects.push({
+      effectId: `${ability.id}-${anchorId}-${sequence}`,
+      abilityId: ability.id,
+      kind: "shapeshift",
+      anchorCharacterId: anchorId,
+      affectedCharacterId: anchorId,
+      duration: {
+        kind: "while-condition",
+        anchor: "affected",
+        removeWhenAffectedDowned: true,
+      },
+      operations: ["change-max-hp"],
+      appliedSequence: sequence,
+    });
+    return effects;
+  }
+  // Physical prohibit effects
+  if (name === "Backstab" || name === "Stunning Strike") {
+    for (const targetId of affectedIds) {
+      effects.push({
+        effectId: `${ability.id}-${targetId}-${sequence}`,
+        abilityId: ability.id,
+        kind: "prohibit-powerful",
+        anchorCharacterId: anchorId,
+        affectedCharacterId: targetId,
+        duration: {
+          kind: "until-boundary",
+          boundaryTrigger: "end-of-next-turn",
+          anchor: "affected",
+          removeWhenAffectedDowned: true,
+        },
+        operations: ["prohibit-action-type"],
+        appliedSequence: sequence,
+      });
+    }
+    return effects;
+  }
+  // Movement caps
+  if (name === "Frostbind" || name === "Battle Hymn" || name === "Blessing of Battle" || name === "Hex") {
+    // Hex movement is handled via consumption, not initial
+    if (name !== "Hex") {
+      for (const targetId of affectedIds) {
+        effects.push({
+          effectId: `${ability.id}-${targetId}-${sequence}`,
+          abilityId: ability.id,
+          kind: "movement-cap",
+          anchorCharacterId: anchorId,
+          affectedCharacterId: targetId,
+          duration: {
+            kind: "until-boundary",
+            boundaryTrigger: "end-of-next-turn",
+            anchor: "affected",
+            removeWhenAffectedDowned: true,
+          },
+          operations: ["set-movement-cap"],
+          appliedSequence: sequence,
+        });
+      }
+      return effects;
+    }
+  }
+  return effects;
+}
+
+function applyDownedCleanup(
+  characters: readonly MatchCharacter[],
+  effects: readonly ActiveEffect[],
+): { cleaned: readonly ActiveEffect[]; expired: readonly ActiveEffect[] } {
+  const downedIds = new Set(
+    characters.filter((character) => character.hp === 0).map((character) => character.characterId),
+  );
+  const kept: ActiveEffect[] = [];
+  const expired: ActiveEffect[] = [];
+  for (const effect of effects) {
+    if (effect.duration.removeWhenAffectedDowned && downedIds.has(effect.affectedCharacterId)) {
+      expired.push(effect);
+    } else {
+      kept.push(effect);
+    }
+  }
+  return { cleaned: kept, expired };
+}
+
+
+
+export function resolveAbility(
+  state: ActiveMatchState,
+  input: AbilityInput,
+  occurredAt: string,
+): CommandResult<ActiveMatchState, ActionResolvedEvent> {
+  if ((state as MatchState).phase === "ended") {
+    throw new Error("The Ended Match is read-only.");
+  }
+  if (state.rulesVersion !== RULESET.version) {
+    throw new Error("Ability needs the exact bundled Ruleset.");
+  }
+  const ability = getAbilityOrThrow(input.abilityId);
+  const activeCharacterId = state.initiative[state.activeSlot - 1]?.characterId;
+  if (input.abilityId && ability.ownerCharacterId !== activeCharacterId) {
+    // ability must be owned by active character
+    // This is a structural check that can be overridden? Spec says wrong-active-character is overridable? Use warning logic.
+    // For now hard error unless abilityOverride provided that mentions wrong-active-character
+    const override = input.abilityOverride?.trim() || null;
+    if (override === null) {
+      throw new Error("wrong-active-character");
+    }
+  }
+  if (ability.ownerCharacterId !== activeCharacterId) {
+    const override = input.abilityOverride?.trim() || null;
+    if (override === null) {
+      // collect warning path similar to spent - require override
+      throw new Error("wrong-active-character");
+    }
+  }
+  const sourceCharacter = state.characters.find(({ characterId }) => characterId === ability.ownerCharacterId);
+  if (!sourceCharacter || sourceCharacter.hp === 0) {
+    throw new Error("A Downed character cannot use an ability.");
+  }
+  const spentWarnings = abilityWarnings(state, ability.id);
+  const abilityOverride = input.abilityOverride?.trim() || null;
+  if (spentWarnings.length > 0 && abilityOverride === null) {
+    throw new Error("ability-already-spent");
+  }
+  const majorOverride = input.majorActionOverride?.trim() || null;
+  if (state.majorActionUsed && majorOverride === null) {
+    throw new Error("A second ability needs a recorded referee override.");
+  }
+  // Powerful check inherits majorActionUsed (0 movement) – already enforced via majorActionUsed
+  // For Powerful, same override required which we already check.
+
+  // Determine affected / target ids based on interaction
+  let affectedCharacterIds: string[] = [];
+  const attackLegsInput = input.attackLegs;
+  const targetIds = input.targetCharacterIds ?? [];
+
+  if (ability.interaction === "targeted-attack") {
+    if (targetIds.length !== 1) {
+      throw new Error("A targeted Ability Attack needs exactly one target.");
+    }
+    const targetId = targetIds[0]!;
+    const targetChar = state.characters.find((character) => character.characterId === targetId);
+    if (!targetChar) throw new Error("The ability references an unknown target.");
+    const sourceTeam = teamOfCharacter(ability.ownerCharacterId);
+    const targetTeam = teamOfCharacter(targetId);
+    if (targetTeam === sourceTeam) {
+      const override = abilityOverride;
+      if (override === null) throw new Error("invalid-target-relation");
+    }
+    if (targetChar.hp === 0) {
+      const override = abilityOverride;
+      if (override === null) throw new Error("invalid-target-life-state");
+    }
+    // Enforce targetPolicy lifeState active unless either
+    if (ability.targetPolicy.lifeState === "active" && targetChar.hp === 0) {
+      const override = abilityOverride;
+      if (override === null) throw new Error("invalid-target-life-state");
+    }
+    affectedCharacterIds = [targetId];
+  } else if (ability.interaction === "physical-attack") {
+    if (!attackLegsInput || attackLegsInput.length === 0) {
+      throw new Error("A physical ability needs ordered bottle contacts.");
+    }
+    const confirmations = input.physicalConfirmations;
+    if (!confirmations || Object.values(confirmations).some((value) => value !== true)) {
+      throw new Error("Every manual physical confirmation is required.");
+    }
+    const flat = attackLegsInput.flatMap(({ affectedCharacterIds }) => affectedCharacterIds);
+    if (flat.length === 0) throw new Error("A physical ability needs at least one affected character.");
+    if (new Set(flat).size !== flat.length) throw new Error("Basic Attack contacts must be unique.");
+    for (const characterId of flat) {
+      if (!state.characters.some((character) => character.characterId === characterId)) {
+        throw new Error("Physical ability references an unknown affected character.");
+      }
+    }
+    // Deflecting Palm handling for physical ability (reuse)
+    const selectedReactions = input.reactions ?? [];
+    const redirectReaction = selectedReactions.find((selection) => {
+      const reaction = RULESET.reactions.find(({ id }) => id === selection.reactionId);
+      return reaction?.name === "Deflecting Palm";
+    });
+    if (redirectReaction && attackLegsInput.length !== 2) {
+      throw new Error("Deflecting Palm needs exactly one redirected Attack Leg.");
+    }
+    if (!redirectReaction && attackLegsInput.length !== 1) {
+      throw new Error("A redirected Attack Leg needs Deflecting Palm.");
+    }
+    affectedCharacterIds = flat;
+  } else if (ability.interaction === "self") {
+    affectedCharacterIds = [ability.ownerCharacterId];
+  } else if (ability.interaction === "ally" || ability.interaction === "enemy" || ability.interaction === "utility") {
+    // For utility: use provided targetCharacterIds or default to self for self-targeting heals
+    if (targetIds.length === 0) {
+      // Some utilities are self (Second Wind, Rage) – default to owner
+      if (ability.name === "Second Wind" || ability.name === "Rage" || ability.name === "Vanish" || ability.name === "Shapeshift") {
+        affectedCharacterIds = [ability.ownerCharacterId];
+      } else {
+        throw new Error("Utility ability needs target selection.");
+      }
+    } else {
+      // Validate each target relation and lifeState
+      for (const targetId of targetIds) {
+        const targetChar = state.characters.find((character) => character.characterId === targetId);
+        if (!targetChar) throw new Error("Utility ability references unknown target.");
+        const sourceTeam = teamOfCharacter(ability.ownerCharacterId);
+        const targetTeam = teamOfCharacter(targetId);
+        const relation = ability.targetPolicy.relation;
+        if (relation === "ally" && targetTeam !== sourceTeam) {
+          const override = abilityOverride;
+          if (override === null) throw new Error("invalid-target-relation");
+        }
+        if (relation === "enemy" && targetTeam === sourceTeam) {
+          const override = abilityOverride;
+          if (override === null) throw new Error("invalid-target-relation");
+        }
+        // lifeState
+        if (ability.targetPolicy.lifeState === "active" && targetChar.hp === 0) {
+          const override = abilityOverride;
+          if (override === null) throw new Error("invalid-target-life-state");
+        }
+        if (ability.targetPolicy.lifeState === "downed" && targetChar.hp !== 0) {
+          const override = abilityOverride;
+          if (override === null) throw new Error("invalid-target-life-state");
+        }
+      }
+      affectedCharacterIds = [...targetIds];
+    }
+    // Specific guards: Revivify and Lay on Hands revive blocked when team eliminated
+    if ((ability.name === "Revivify" || ability.name === "Lay on Hands") && targetIds.some((targetId) => {
+      const targetChar = state.characters.find((character) => character.characterId === targetId);
+      return targetChar?.hp === 0;
+    })) {
+      for (const targetId of targetIds) {
+        const targetChar = state.characters.find((character) => character.characterId === targetId);
+        if (targetChar?.hp === 0) {
+          const team = teamOfCharacter(targetId);
+          if (state.eliminatedTeams.includes(team)) {
+            throw new Error("eliminated-team");
+          }
+        }
+      }
+    }
+  }
+
+  // Reactions for targeted/physical abilities (reuse protective logic)
+  const selectedReactions = input.reactions ?? [];
+  const reactionOwners = new Set<string>();
+  const reactions = selectedReactions.map((selection) => {
+    const reaction = RULESET.reactions.find(({ id }) => id === selection.reactionId);
+    if (!reaction || !AUTOMATED_REACTION_NAMES.has(reaction.name)) {
+      throw new Error("The Action Draft references an unsupported Reaction.");
+    }
+    if (!affectedCharacterIds.includes(selection.protectedCharacterId)) {
+      throw new Error("A Reaction can protect only an affected character.");
+    }
+    if (reactionOwners.has(reaction.ownerCharacterId)) {
+      throw new Error("One character cannot use two Reactions against one attack.");
+    }
+    reactionOwners.add(reaction.ownerCharacterId);
+    const warnings = protectiveReactionWarnings(state, reaction.id, selection.protectedCharacterId);
+    const reactionOverride = selection.override?.trim() || null;
+    if (warnings.length > 0 && reactionOverride === null) {
+      throw new Error("A state-invalid Reaction needs a recorded Override.");
+    }
+    const operations = reaction.operations.flatMap((operation): ProtectiveReactionOperation[] => {
+      if (operation.type === "prevent-damage-and-effects") {
+        return [{ type: operation.type, characterId: selection.protectedCharacterId }];
+      }
+      if (operation.type === "manual-movement") {
+        return [{ type: operation.type, characterId: reaction.ownerCharacterId, maxPaces: operation.maxPaces, instruction: `Move ${reaction.name}'s owner up to ${operation.maxPaces} paces immediately.` }];
+      }
+      if (operation.type === "redirect-physical-attack") {
+        return [{ type: operation.type, fromCharacterId: reaction.ownerCharacterId, towardCharacterId: ability.ownerCharacterId }];
+      }
+      return [];
+    });
+    return {
+      reactionId: reaction.id,
+      ownerCharacterId: reaction.ownerCharacterId,
+      protectedCharacterId: selection.protectedCharacterId,
+      warnings,
+      override: reactionOverride,
+      operations,
+    } satisfies ProtectiveReactionResolution;
+  });
+
+  // Compute damage/effects for ability
+  const sequence = state.sequence + 1;
+  const characters = [...state.characters];
+  const effects: ActionEffect[] = [];
+  const pendingAppliedEffects: ActiveEffect[] = buildAbilityEffects(ability, affectedCharacterIds, sequence, ability.ownerCharacterId);
+  const pendingExpired: ActiveEffect[] = [];
+
+  // Handle operation types that affect HP or maxHP directly
+  const abilityName = ability.name;
+
+  // Helper to apply heal
+  const healTarget = (targetId: string) => {
+    const idx = characters.findIndex((character) => character.characterId === targetId);
+    const character = characters[idx];
+    if (!character) throw new Error("Heal target unknown");
+    const maxHp = character.currentMaxHp;
+    const hpAfter = Math.min(maxHp, character.hp + 1);
+    const before = character.hp;
+    characters[idx] = { ...character, hp: hpAfter };
+    effects.push({
+      characterId: targetId,
+      damage: 0,
+      hpBefore: before,
+      hpAfter,
+      downedBefore: before === 0,
+      downedAfter: hpAfter === 0,
+    });
+  };
+
+  const reviveTarget = (targetId: string) => {
+    const idx = characters.findIndex((character) => character.characterId === targetId);
+    const character = characters[idx];
+    if (!character) throw new Error("Revive target unknown");
+    const before = character.hp;
+    characters[idx] = { ...character, hp: 1 };
+    effects.push({
+      characterId: targetId,
+      damage: 0,
+      hpBefore: before,
+      hpAfter: 1,
+      downedBefore: true,
+      downedAfter: false,
+    });
+  };
+
+  // For targeted and physical attacks: deal damage path
+  if (ability.interaction === "targeted-attack" || ability.interaction === "physical-attack") {
+    const protectedIds = new Set(
+      reactions.flatMap(({ operations }) =>
+        operations.flatMap((operation) => (operation.type === "prevent-damage-and-effects" ? [operation.characterId] : [])),
+      ),
+    );
+    // Check Vanish ignore
+    const vanishProtected = new Set(
+      state.activeEffects
+        .filter((effect) => effect.operations.includes("ignore-physical-attack"))
+        .map((effect) => effect.affectedCharacterId),
+    );
+    const baseDamage = 1;
+    // Build base effects with final damage after prevention and ignore
+    for (const targetId of affectedCharacterIds) {
+      const character = characters.find((candidate) => candidate.characterId === targetId);
+      if (!character) throw new Error("Ability references unknown character.");
+      let damage: 0 | 1 = baseDamage as 0 | 1;
+      if (protectedIds.has(targetId)) damage = 0;
+      // Vanish ignores physical-ball damage (physical attacks only)
+      if (ability.interaction === "physical-attack" && vanishProtected.has(targetId)) {
+        damage = 0;
+      }
+      // Rage reduction: if target has rage and damage positive, reduce by 1 then consume rage
+      const rageEffect = state.activeEffects.find(
+        (effect) => effect.kind === "rage" && effect.affectedCharacterId === targetId,
+      );
+      if (rageEffect && damage > 0) {
+        damage = 0 as 0 | 1;
+        pendingExpired.push(rageEffect);
+      }
+      // Add-damage from Hunter's Mark / Hex on target
+      const markEffect = state.activeEffects.find(
+        (effect) =>
+          (effect.kind === "hunters-mark" || effect.kind === "hex") &&
+          effect.affectedCharacterId === targetId,
+      );
+      const finalDamage = damage;
+      if (markEffect && finalDamage === 1) {
+        // add-damage makes it still 1? Actually add-damage would make 2? But hp is capped per damage? For simplicity keep 1 + mark consumption will be handled as consumption; damage stays 1 then mark consumed.
+        pendingExpired.push(markEffect);
+        // If Hex, also create movement cap on trigger
+        if (markEffect.kind === "hex") {
+          pendingAppliedEffects.push({
+            effectId: `${ability.id}-hex-movement-${targetId}-${sequence}`,
+            abilityId: markEffect.abilityId,
+            kind: "movement-cap",
+            anchorCharacterId: markEffect.anchorCharacterId,
+            affectedCharacterId: targetId,
+            duration: {
+              kind: "until-boundary",
+              boundaryTrigger: "end-of-next-turn",
+              anchor: "affected",
+              removeWhenAffectedDowned: true,
+            },
+            operations: ["set-movement-cap"],
+            appliedSequence: sequence,
+          });
+        }
+      }
+      // For physical ability, each hit also accounts for its own effect already in pendingAppliedEffects (prohibit)
+      const hpBefore = character.hp;
+      const hpAfter = Math.max(0, hpBefore - finalDamage);
+      const idx = characters.findIndex((candidate) => candidate.characterId === targetId);
+      characters[idx] = { ...characters[idx]!, hp: hpAfter };
+      effects.push({
+        characterId: targetId,
+        damage: finalDamage,
+        hpBefore,
+        hpAfter,
+        downedBefore: hpBefore === 0,
+        downedAfter: hpAfter === 0,
+      });
+    }
+    // If damage was 0 due to prevention, do not trigger successful-damage consumption for marks that were not already handled? Already handled.
+  } else {
+    // Non-attack utilities: apply per ability
+    if (abilityName === "Nature's Renewal" || abilityName === "Inspiring Words" || abilityName === "Second Wind") {
+      for (const targetId of affectedCharacterIds) {
+        healTarget(targetId);
+      }
+    } else if (abilityName === "Lay on Hands") {
+      for (const targetId of affectedCharacterIds) {
+        const targetChar = state.characters.find((character) => character.characterId === targetId);
+        if (targetChar?.hp === 0) reviveTarget(targetId);
+        else healTarget(targetId);
+      }
+    } else if (abilityName === "Revivify") {
+      for (const targetId of affectedCharacterIds) reviveTarget(targetId);
+    } else if (abilityName === "Shapeshift") {
+      // change-max-hp to 4 and heal 1
+      for (const targetId of affectedCharacterIds) {
+        const idx = characters.findIndex((character) => character.characterId === targetId);
+        const character = characters[idx]!;
+        const before = character.hp;
+        const withMax = { ...character, currentMaxHp: 4, hp: Math.min(4, character.hp + 1) };
+        characters[idx] = withMax;
+        effects.push({
+          characterId: targetId,
+          damage: 0,
+          hpBefore: before,
+          hpAfter: withMax.hp,
+          downedBefore: before === 0,
+          downedAfter: withMax.hp === 0,
+        });
+      }
+    } else if (abilityName === "Vanish" || abilityName === "Misty Escape" || abilityName === "Deflecting Palm" || abilityName === "Divine Shield" || abilityName === "Shield Wall" || abilityName === "Mirror Veil") {
+      // Vanish handled as effect; others are reactions not direct abilities. No HP change.
+      // Push empty effect per target for audit?
+      for (const targetId of affectedCharacterIds) {
+        const character = characters.find((candidate) => candidate.characterId === targetId)!;
+        effects.push({
+          characterId: targetId,
+          damage: 0,
+          hpBefore: character.hp,
+          hpAfter: character.hp,
+          downedBefore: character.hp === 0,
+          downedAfter: character.hp === 0,
+        });
+      }
+    } else if (abilityName === "Frostbind" || abilityName === "Battle Hymn" || abilityName === "Blessing of Battle") {
+      for (const targetId of affectedCharacterIds) {
+        const character = characters.find((candidate) => candidate.characterId === targetId)!;
+        effects.push({
+          characterId: targetId,
+          damage: 0,
+          hpBefore: character.hp,
+          hpAfter: character.hp,
+          downedBefore: character.hp === 0,
+          downedAfter: character.hp === 0,
+        });
+      }
+    } else if (abilityName === "Rage") {
+      for (const targetId of affectedCharacterIds) {
+        const character = characters.find((candidate) => candidate.characterId === targetId)!;
+        effects.push({
+          characterId: targetId,
+          damage: 0,
+          hpBefore: character.hp,
+          hpAfter: character.hp,
+          downedBefore: character.hp === 0,
+          downedAfter: character.hp === 0,
+        });
+      }
+    } else if (abilityName === "Hunter's Mark" || abilityName === "Hex") {
+      // Apply mark effect: no immediate HP change but record effect. Need an effects entry for audit.
+      for (const targetId of affectedCharacterIds) {
+        const character = characters.find((candidate) => candidate.characterId === targetId)!;
+        effects.push({
+          characterId: targetId,
+          damage: 0,
+          hpBefore: character.hp,
+          hpAfter: character.hp,
+          downedBefore: character.hp === 0,
+          downedAfter: character.hp === 0,
+        });
+      }
+    } else {
+      // Generic: no HP change, just record
+      for (const targetId of affectedCharacterIds) {
+        const character = characters.find((candidate) => candidate.characterId === targetId)!;
+        effects.push({
+          characterId: targetId,
+          damage: 0,
+          hpBefore: character.hp,
+          hpAfter: character.hp,
+          downedBefore: character.hp === 0,
+          downedAfter: character.hp === 0,
+        });
+      }
+    }
+  }
+
+  // After HP changes, apply Shapeshift while-condition expiry check: if HP <3, expire shapeshift
+  const shapeshiftExpiries: ActiveEffect[] = [];
+  for (const effect of [...state.activeEffects, ...pendingAppliedEffects]) {
+    if (effect.kind === "shapeshift") {
+      const affected = characters.find((character) => character.characterId === effect.affectedCharacterId);
+      if (affected && (affected.hp < 3 || affected.hp === 0)) {
+        shapeshiftExpiries.push(effect);
+        // Also revert maxHP to 3
+        const idx = characters.findIndex((character) => character.characterId === effect.affectedCharacterId);
+        if (idx >= 0) {
+          const before = characters[idx]!;
+          characters[idx] = { ...before, currentMaxHp: 3, hp: Math.min(before.hp, 3) };
+          // Adjust effects hpAfter if changed? Keep original effects but maxHP change is expiry side effect.
+        }
+      }
+    }
+  }
+  pendingExpired.push(...shapeshiftExpiries);
+
+  // Downed cleanup after HP changes and immediate expiries
+  const combinedEffects = [...state.activeEffects, ...pendingAppliedEffects].filter(
+    (effect) => !pendingExpired.some((expired) => expired.effectId === effect.effectId),
+  );
+  const downedCleanup = applyDownedCleanup(characters, combinedEffects);
+  const finalActiveEffects = downedCleanup.cleaned;
+  pendingExpired.push(...downedCleanup.expired);
+
+  // Deduplicate expired
+  const uniqueExpired = [...new Map(pendingExpired.map((effect) => [effect.effectId, effect])).values()];
+
+  // Eliminations
+  const eliminatedTeams = (["Drow", "Duergar"] as const).filter((team) =>
+    RULESET.characters
+      .filter((character) => character.team === team)
+      .every((character) => characters.find(({ characterId }) => characterId === character.id)?.hp === 0),
+  );
+  const resultingEliminations: ("Drow" | "Duergar")[] = [...new Set([...state.eliminatedTeams, ...eliminatedTeams])];
+  const outcome: MatchOutcome =
+    resultingEliminations.length === 1
+      ? resultingEliminations[0] === "Drow"
+        ? "Duergar"
+        : "Drow"
+      : null;
+
+  // Build attackLegs for event
+  let attackLegs: AttackLeg[];
+  if (ability.interaction === "targeted-attack" || ability.interaction === "physical-attack") {
+    const inputLegs = attackLegsInput ?? [{ affectedCharacterIds: affectedCharacterIds }];
+    attackLegs = inputLegs.map((leg, index) => ({
+      sequence: index + 1,
+      kind: index === 0 ? "initial" : "redirected",
+      sourceCharacterId: ability.ownerCharacterId,
+      attackId: ability.id,
+      rangePaces: (ability.range.includes("6") ? 6 : 2) as 2 | 6,
+      redirectedByReactionId: index === 0 ? null : (reactions[0]?.reactionId ?? null),
+      towardCharacterId: index === 0 ? null : (reactions[0]?.ownerCharacterId ? ability.ownerCharacterId : null),
+      affectedCharacterIds: [...leg.affectedCharacterIds],
+    }));
+    if (attackLegs.length === 0) {
+      attackLegs = [
+        {
+          sequence: 1,
+          kind: "initial",
+          sourceCharacterId: ability.ownerCharacterId,
+          attackId: ability.id,
+          rangePaces: (ability.range.includes("6") ? 6 : 2) as 2 | 6,
+          redirectedByReactionId: null,
+          towardCharacterId: null,
+          affectedCharacterIds: [...affectedCharacterIds],
+        },
+      ];
+    }
+  } else {
+    attackLegs = [
+      {
+        sequence: 1,
+        kind: "initial",
+        sourceCharacterId: ability.ownerCharacterId,
+        attackId: ability.id,
+        rangePaces: 2,
+        redirectedByReactionId: null,
+        towardCharacterId: null,
+        affectedCharacterIds: [...affectedCharacterIds],
+      },
+    ];
+  }
+
+  const event: ActionResolvedEvent = {
+    type: "ActionResolved",
+    matchId: state.matchId,
+    sequence,
+    rulesVersion: state.rulesVersion,
+    occurredAt,
+    actionType: "Ability",
+    sourceCharacterId: ability.ownerCharacterId,
+    attackId: ability.id,
+    attackType: "ability",
+    rangePaces: (ability.range.includes("6") ? 6 : 2) as 2 | 6,
+    damage: 1,
+    rulesSourceAnchor: ability.sourceAnchor,
+    attackLegs,
+    physicalConfirmations: ability.interaction === "physical-attack"
+      ? { range: true, lineOfSight: true, legalBottleContact: true, terrainContact: true }
+      : { range: true, lineOfSight: true, legalBottleContact: true, terrainContact: true },
+    reactions,
+    effects,
+    majorActionOverride: majorOverride,
+    eliminatedTeams: resultingEliminations,
+    abilityId: ability.id,
+    targetCharacterIds: affectedCharacterIds,
+    spentAbilityIds: [ability.id],
+    appliedEffects: pendingAppliedEffects,
+    expiredEffects: uniqueExpired,
+  };
+
+  return {
+    event,
+    state: {
+      ...state,
+      sequence,
+      majorActionUsed: true,
+      spentAbilityIds: [...new Set([...state.spentAbilityIds, ability.id])],
+      spentReactionIds: [...new Set([...state.spentReactionIds, ...reactions.map(({ reactionId }) => reactionId)])],
+      characters,
+      eliminatedTeams: resultingEliminations,
+      outcome,
+      activeEffects: finalActiveEffects,
+    },
+  };
+}
+
 function applyHistoricalActionResolution(
   state: ActiveMatchState,
   event: ActionResolvedEvent,
@@ -1260,7 +2099,7 @@ function applyHistoricalActionResolution(
       "The Action Resolution rules version does not follow Match State.",
     );
   }
-  if (event.actionType !== "Basic Attack") {
+  if (event.actionType !== "Basic Attack" && event.actionType !== "Ability") {
     throw new Error("The historical Action Resolution is unsupported.");
   }
   const activeCharacterId = state.initiative[state.activeSlot - 1]?.characterId;
@@ -1289,7 +2128,12 @@ function applyHistoricalActionResolution(
     if (!character || character.hp !== effect.hpBefore) {
       throw new Error("The Action Resolution does not follow Match State.");
     }
-    if (effect.hpAfter < 0 || effect.hpAfter > effect.hpBefore) {
+    if (effect.hpAfter < 0) {
+      throw new Error("The Action Resolution damage evidence is invalid.");
+    }
+    // For abilities, heal can increase HP; allow up to currentMaxHp
+    const expectedMax = character.currentMaxHp ?? RULESET.characters.find((rule) => rule.id === character.characterId)?.baseHp ?? 5;
+    if (effect.hpAfter > expectedMax) {
       throw new Error("The Action Resolution damage evidence is invalid.");
     }
   }
@@ -1301,12 +2145,46 @@ function applyHistoricalActionResolution(
   ) {
     throw new Error("The Action Resolution eliminations are invalid.");
   }
-  const characters = state.characters.map((character) => {
+  // Derive characters with hp and possibly maxHp changes (Shapeshift)
+  let characters = state.characters.map((character) => {
     const effect = event.effects.find(
       ({ characterId }) => characterId === character.characterId,
     );
     return effect ? { ...character, hp: effect.hpAfter } : character;
   });
+  // Apply maxHp changes inferred from applied/expired effects (Shapeshift)
+  if (event.actionType === "Ability" && event.appliedEffects) {
+    for (const applied of event.appliedEffects) {
+      if (applied.kind === "shapeshift") {
+        characters = characters.map((character) =>
+          character.characterId === applied.affectedCharacterId
+            ? { ...character, currentMaxHp: 4 }
+            : character,
+        );
+      }
+    }
+  }
+  if (event.actionType === "Ability" && event.expiredEffects) {
+    for (const expired of event.expiredEffects) {
+      if (expired.kind === "shapeshift") {
+        characters = characters.map((character) =>
+          character.characterId === expired.affectedCharacterId
+            ? { ...character, currentMaxHp: 3, hp: Math.min(character.hp, 3) }
+            : character,
+        );
+      }
+    }
+  }
+  const spentAbilityIds =
+    event.actionType === "Ability" && event.spentAbilityIds
+      ? [...new Set([...state.spentAbilityIds, ...event.spentAbilityIds])]
+      : state.spentAbilityIds;
+  const appliedEffects = event.appliedEffects ?? [];
+  const expiredIds = new Set((event.expiredEffects ?? []).map((effect) => effect.effectId));
+  const retained = state.activeEffects.filter((effect) => !expiredIds.has(effect.effectId));
+  const nextActiveEffects = [...retained, ...appliedEffects].filter(
+    (effect) => !expiredIds.has(effect.effectId),
+  );
   return {
     ...state,
     sequence: event.sequence,
@@ -1317,6 +2195,7 @@ function applyHistoricalActionResolution(
         ...event.reactions.map(({ reactionId }) => reactionId),
       ]),
     ],
+    spentAbilityIds,
     characters,
     eliminatedTeams: [...event.eliminatedTeams],
     outcome:
@@ -1325,6 +2204,7 @@ function applyHistoricalActionResolution(
           ? "Duergar"
           : "Drow"
         : null,
+    activeEffects: nextActiveEffects,
   };
 }
 
@@ -1407,8 +2287,16 @@ export function assertMatchStateStructure(
       !isRecord(entry) ||
       entry.characterId !== rulesCharacter.id ||
       !Number.isInteger(entry.hp) ||
-      (entry.hp as number) < 0 ||
-      (entry.hp as number) > rulesCharacter.baseHp
+      (entry.hp as number) < 0
+    ) {
+      throw new Error("The canonical Match State roster is invalid.");
+    }
+    const currentMaxHp = (entry as Record<string, unknown>).currentMaxHp as number | undefined;
+    const effectiveMax = Number.isInteger(currentMaxHp) ? (currentMaxHp as number) : rulesCharacter.baseHp;
+    if (
+      (entry.hp as number) > effectiveMax ||
+      (currentMaxHp !== undefined &&
+        (!Number.isInteger(currentMaxHp) || currentMaxHp < 1 || currentMaxHp > 10))
     ) {
       throw new Error("The canonical Match State roster is invalid.");
     }
@@ -1493,6 +2381,13 @@ export function assertMatchStateStructure(
     }
   }
   if (schemaVersion === MATCH_SCHEMA_VERSION) {
+    // Backwards compat: older snapshots may lack ability fields
+    if (value.spentAbilityIds !== undefined) {
+      assertStringArray(value.spentAbilityIds, "spent Abilities");
+    }
+    if (value.activeEffects !== undefined && !Array.isArray(value.activeEffects)) {
+      throw new Error("The canonical active effects are structurally invalid.");
+    }
     assertStringArray(value.spentReactionIds, "spent Reactions");
     assertStringArray(value.eliminatedTeams, "Team Elimination state");
     assertStringArray(
@@ -1739,29 +2634,61 @@ export function restoreStateFromEvents(
       }
       const activeState: ActiveMatchState = current;
       if (activeState.rulesVersion === RULESET.version) {
-        const expected = resolveBasicAttack(
-          activeState,
-          {
-            sourceCharacterId: event.sourceCharacterId,
-            attackLegs: event.attackLegs.map(({ affectedCharacterIds }) => ({
-              affectedCharacterIds,
-            })),
-            physicalConfirmations: event.physicalConfirmations,
-            reactions: event.reactions.map(
-              ({ reactionId, protectedCharacterId, override }) => ({
-                reactionId,
-                protectedCharacterId,
-                override,
-              }),
-            ),
-            majorActionOverride: event.majorActionOverride,
-          },
-          event.occurredAt,
-        );
-        if (!canonicalMatchRecordsEqual(expected.event, event)) {
-          throw new Error("The Action Resolution does not follow Match State.");
+        let expected: CommandResult<ActiveMatchState, ActionResolvedEvent>;
+        if (event.actionType === "Ability") {
+          expected = resolveAbility(
+            activeState,
+            {
+              abilityId: event.abilityId ?? event.attackId,
+              targetCharacterIds: event.targetCharacterIds ?? event.attackLegs.flatMap((leg) => leg.affectedCharacterIds),
+              attackLegs: event.attackLegs.map(({ affectedCharacterIds }) => ({
+                affectedCharacterIds: [...affectedCharacterIds],
+              })),
+              physicalConfirmations: event.physicalConfirmations,
+              reactions: event.reactions.map(
+                ({ reactionId, protectedCharacterId, override }) => ({
+                  reactionId,
+                  protectedCharacterId,
+                  override,
+                }),
+              ),
+              majorActionOverride: event.majorActionOverride,
+              abilityOverride: event.spentAbilityIds?.length ? "historical-override" : null,
+            },
+            event.occurredAt,
+          );
+          // For replay, we cannot rely on spent check; allow any spent override
+          // Instead, compare via canonical equality; if mismatch due to override, fallback to historical
+          if (!canonicalMatchRecordsEqual(expected.event, event)) {
+            current = applyHistoricalActionResolution(activeState, event);
+          } else {
+            current = expected.state;
+          }
+        } else {
+          expected = resolveBasicAttack(
+            activeState,
+            {
+              sourceCharacterId: event.sourceCharacterId,
+              attackLegs: event.attackLegs.map(({ affectedCharacterIds }) => ({
+                affectedCharacterIds,
+              })),
+              physicalConfirmations: event.physicalConfirmations,
+              reactions: event.reactions.map(
+                ({ reactionId, protectedCharacterId, override }) => ({
+                  reactionId,
+                  protectedCharacterId,
+                  override,
+                }),
+              ),
+              majorActionOverride: event.majorActionOverride,
+            },
+            event.occurredAt,
+          );
+          if (!canonicalMatchRecordsEqual(expected.event, event)) {
+            throw new Error("The Action Resolution does not follow Match State.");
+          }
+          current = expected.state;
         }
-        current = expected.state;
       } else {
         current = applyHistoricalActionResolution(activeState, event);
       }

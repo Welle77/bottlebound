@@ -40,11 +40,11 @@ Match. The referee retains all physical judgments.
 - `Define the second Codebox feature boundary` ([W10](tickets/10-next-codebox-boundary.md)) — Add an offline, version-bound rules reference and search before the application takes ownership of combat state.
 - `Define the third Codebox feature boundary` ([W11](tickets/11-third-codebox-boundary.md)) — Add guided Basic Attack resolution, objective Reaction effects, HP and Downed state, elimination End Game, and exact Undo and restore.
 - `Define the fourth Codebox feature boundary` ([W12](tickets/12-fourth-codebox-boundary.md)) — Complete the Match lifecycle with manual End Game, ordered tiebreak calculation, Reopen Match, and one local Match Summary.
+- `Define the fifth Codebox boundary` ([W13](tickets/13-ability-activation.md)) — Automate all 23 abilities: targeted Ability Attacks through the Basic Attack flow, ball-carried effects per legal hit, permanent Spent state, automatic effect expiry inside atomic events, and whole-resolution Undo.
 
 ## Not yet specified
 
-None for the fourth Codebox feature boundary. Ability activation and general
-effect work remain outside this boundary.
+None for the fifth Codebox boundary.
 
 ## Out of scope
 
@@ -58,7 +58,8 @@ effect work remain outside this boundary.
 
 ## Codebox handoff
 
-After **Basic Attack resolution and elimination** completes, start a fresh
-`/codebox` invocation for **Manual End Game, tiebreak, and Match summary**. Use
-this map, W01, W04, W07, W11, and W12 as planning context. Codebox performs its
-own Grill and creates canonical feature artifacts before implementation.
+Start a fresh `/codebox` invocation for **Ability activation and effect
+expiry**. Use this map, W01, W03, W04, W05, W11, W12, and W13 as planning
+context, plus `assets/fixed-rules-data-contract.md` for the automation
+vocabulary and per-ability coverage. Codebox performs its own Grill and
+creates canonical feature artifacts before implementation.

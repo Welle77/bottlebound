@@ -430,8 +430,9 @@ function assertCanonicalEvent(
       ? undefined
       : RULESET.basicAttacks.find(({ id }) => id === value.attackId);
     if (
-      value.actionType !== "Basic Attack" ||
+      (value.actionType !== "Basic Attack" && value.actionType !== "Ability") ||
       (!historicalRuleset &&
+        value.actionType === "Basic Attack" &&
         (!attack ||
           value.sourceCharacterId !== attack.characterId ||
           value.attackType !== attack.attackType ||
@@ -443,6 +444,11 @@ function assertCanonicalEvent(
           (value.rangePaces as number) < 1 ||
           !Number.isInteger(value.damage) ||
           (value.damage as number) < 0 ||
+          typeof value.rulesSourceAnchor !== "string" ||
+          value.rulesSourceAnchor.length === 0)) ||
+      (value.actionType === "Ability" &&
+        (typeof value.attackId !== "string" ||
+          value.attackId.length === 0 ||
           typeof value.rulesSourceAnchor !== "string" ||
           value.rulesSourceAnchor.length === 0)) ||
       !Array.isArray(value.attackLegs) ||
