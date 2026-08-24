@@ -17,6 +17,7 @@ import {
   type RulesUiState,
 } from "../rules-reference/rules-ui-state";
 import { IndexedDbMatchStore } from "../storage/match-store";
+import { loadRequirePhysicalConfirmations } from "./console-settings";
 
 export type Confirmation =
   | "reroll"
@@ -28,19 +29,58 @@ export type Confirmation =
   | "start-new"
   | null;
 export interface ActionDraft {
+  /** Which command opened this draft; ability drafts resolve through resolveAbility. */
+  readonly kind: "basic" | "ability";
   readonly sourceCharacterId: string;
   readonly rulesVersion: string;
-  step: "contacts" | "review";
+  /** The chosen Ruleset ability; null for Basic Attack drafts. */
+  readonly abilityId: string | null;
+  /**
+   * Chosen targets for targeted-attack and ally/enemy/utility ability
+   * drafts. Self abilities need none and physical-attack abilities use the
+   * ordered bottle contacts instead.
+   */
+  targets: string[];
+  /**
+   * Ability draft progression: select-target (targeted/ally/enemy/utility),
+   * reactions (targeted-attack only), contacts (physical-attack), review.
+   * Basic Attack drafts start at contacts.
+   */
+  step: "select-target" | "reactions" | "contacts" | "review";
   attackLegs: string[][];
   physicalConfirmations: Record<PhysicalAttackCheck, boolean>;
   reactions: Array<
     ProtectiveReactionInput & { readonly override: string | null }
   >;
+  /** Records a state-invalid ability choice (spent, wrong active character, invalid target). */
+  abilityOverride: boolean;
+  /**
+   * A domain error that demands a recorded Override before the ability can
+   * commit again; rendered as an explicit Override prompt.
+   */
+  overrideRequired: string | null;
   majorActionOverride: boolean;
 }
 
 export function draftAffectedCharacterIds(draft: ActionDraft): string[] {
   return draft.attackLegs.flatMap((leg) => leg);
+}
+export function createPhysicalConfirmations(
+  requireManualChecks: boolean,
+): Record<PhysicalAttackCheck, boolean> {
+  return requireManualChecks
+    ? {
+        range: false,
+        "line-of-sight": false,
+        "legal-bottle-contact": false,
+        "terrain-contact": false,
+      }
+    : {
+        range: true,
+        "line-of-sight": true,
+        "legal-bottle-contact": true,
+        "terrain-contact": true,
+      };
 }
 export interface ShellState {
   network: NetworkState;
@@ -55,6 +95,8 @@ export interface ShellState {
   confirmation: Confirmation;
   endGamePreview: EndGamePreview | null;
   actionDraft: ActionDraft | null;
+  abilityPickerOpen: boolean;
+  requirePhysicalConfirmations: boolean;
   saving: boolean;
   summary: MatchSummary | null;
 }
@@ -72,6 +114,8 @@ export const state: ShellState = {
   confirmation: null,
   endGamePreview: null,
   actionDraft: null,
+  abilityPickerOpen: false,
+  requirePhysicalConfirmations: loadRequirePhysicalConfirmations(),
   saving: false,
   summary: null,
 };

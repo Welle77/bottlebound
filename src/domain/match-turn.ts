@@ -90,17 +90,41 @@ export function finishTurn(
       const affectedSlot = [...slotToCharacter.entries()].find(
         ([, characterId]) => characterId === effect.affectedCharacterId,
       )?.[0];
-      if (affectedSlot === fromSlotValue) {
+      // The effect outlives the turn in which it was applied and expires at
+      // the end of the affected character's NEXT turn; an effect applied to
+      // the acting character itself (a self-hit or a self-buff) therefore
+      // survives this finish.
+      const appliedInThisTurn =
+        effect.appliedSequence === state.sequence &&
+        affectedSlot === fromSlotValue;
+      if (affectedSlot === fromSlotValue && !appliedInThisTurn) {
         pendingExpired.push(effect);
         continue;
       }
     }
     if (
-      (trigger === "beginning-of-next-scheduled-slot" ||
-        trigger === "end-of-next-scheduled-slot") &&
+      trigger === "beginning-of-next-scheduled-slot" &&
       effect.duration.anchor === "source"
     ) {
       if (anchorSlot !== undefined && pathSlots.includes(anchorSlot)) {
+        pendingExpired.push(effect);
+        continue;
+      }
+    }
+    if (
+      trigger === "end-of-next-scheduled-slot" &&
+      effect.duration.anchor === "source"
+    ) {
+      // "Until the end of the source's next scheduled initiative position"
+      // (Hunter's Mark, Hex): the effect expires when that position ends or
+      // is skipped, never during the turn in which the effect was applied.
+      const appliedInThisTurn =
+        effect.appliedSequence === state.sequence &&
+        fromSlotValue === anchorSlot;
+      const positionEnds =
+        anchorSlot !== undefined &&
+        (fromSlotValue === anchorSlot || skippedSlots.includes(anchorSlot));
+      if (positionEnds && !appliedInThisTurn) {
         pendingExpired.push(effect);
         continue;
       }

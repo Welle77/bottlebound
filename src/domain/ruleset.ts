@@ -317,8 +317,24 @@ function inferAbilityStructure(
       : ability.target === "Self" || ability.target === "None — physical throw"
         ? "self"
         : "one";
+  // Target life-state policy read from the printed cards: a Downed target
+  // requirement appears in the Target field ("1 Downed ally"), revive
+  // capability in phrases like "restore a Downed ally", and healing cards
+  // state their prohibition explicitly ("A Downed character cannot be
+  // targeted").
+  const effectLower = ability.effect.toLowerCase();
+  const targetLower = ability.target.toLowerCase();
   const lifeState: StructuredAbility["targetPolicy"]["lifeState"] =
-    ability.effect.toLowerCase().includes("downed") ? "either" : "active";
+    targetLower.includes("downed")
+      ? "downed"
+      : effectLower.includes("restore a downed") ||
+          effectLower.includes("stand their bottle")
+        ? "either"
+        : effectLower.includes("a downed character cannot be targeted")
+          ? "active"
+          : effectLower.includes("downed")
+            ? "either"
+            : "active";
   const manualChecks: string[] = [];
   if (ability.range !== "Self" && ability.range !== "N/A")
     manualChecks.push("range");
@@ -326,7 +342,8 @@ function inferAbilityStructure(
   if (ability.ballRequired === "Yes")
     manualChecks.push("legalBottleContact", "terrainContact");
   const operations: string[] = [];
-  const effectLower = ability.effect.toLowerCase();
+  const foldApostrophes = (value: string): string =>
+    value.replaceAll(/['’]/g, "");
   if (
     effectLower.includes("takes 1 damage") ||
     effectLower.includes("takes 1 damage")
@@ -335,7 +352,7 @@ function inferAbilityStructure(
   if (
     effectLower.includes("+1 damage") ||
     effectLower.includes("add-damage") ||
-    ability.name === "Hunter's Mark" ||
+    foldApostrophes(ability.name) === "Hunters Mark" ||
     ability.name === "Hex"
   )
     operations.push("add-damage");

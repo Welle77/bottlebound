@@ -35,13 +35,16 @@ test("an offline cold start restores exact Setup and Active Match state", async 
 
   await restarted.getByRole("button", { name: "Start Match" }).click();
   await restarted.getByRole("button", { name: "Finish Turn" }).click();
+  // The commit re-render is asynchronous; wait for the advanced turn to land
+  // before capturing state so the restart comparison cannot read the stale
+  // pre-commit panel.
+  await expect(restarted.getByText("Round 1 · Slot 2 of 12")).toBeVisible();
   const activeRows = await restarted
     .locator("[data-active-order-row]")
     .allTextContents();
   const activeCharacter = await restarted
     .locator("[data-active-character]")
     .textContent();
-  await expect(restarted.getByText("Round 1 · Slot 2 of 12")).toBeVisible();
 
   await restarted.close();
   restarted = await context.newPage();

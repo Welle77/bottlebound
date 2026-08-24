@@ -48,6 +48,15 @@ export function assertCommit(event: MatchEvent, state: MatchState): void {
     }
     return;
   }
+  if (event.type === "DisplayNamesAssigned") {
+    if (
+      state.phase !== "setup" ||
+      !canonicalMatchRecordsEqual(state.displayNames ?? {}, event.displayNames)
+    ) {
+      throw new Error("The Display Name event and snapshot do not match.");
+    }
+    return;
+  }
   if (event.type === "UndoApplied") {
     return;
   }
@@ -184,6 +193,7 @@ export function assertRestoredMatch(
       (index === 0 && event.type !== "SetupCreated") ||
       (index === 1 &&
         event.type !== "InitiativeGenerated" &&
+        event.type !== "DisplayNamesAssigned" &&
         event.type !== "MatchMigrated")
     ) {
       throw new Error("Saved canonical data has a partial sequence.");

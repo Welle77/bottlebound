@@ -1,7 +1,10 @@
 import { RULESET } from "./ruleset";
+import { resolveAttackDamageAgainstCharacter } from "./match-ability-effects";
+import { applyDownedCleanup } from "./match-turn";
 import type {
   ActionEffect,
   ActionResolvedEvent,
+  ActiveEffect,
   ActiveMatchState,
   BasicAttackInput,
   CommandResult,
@@ -244,17 +247,33 @@ export function resolveBasicAttack(
       ),
     ),
   );
+  const sequence = state.sequence + 1;
+  const appliedFromEffects: ActiveEffect[] = [];
+  const expiredFromEffects: ActiveEffect[] = [];
   const effects = affectedCharacterIds.map((characterId) => {
     const character = state.characters.find(
       (candidate) => candidate.characterId === characterId,
     );
     if (!character)
       throw new Error("Basic Attack references an unknown character.");
-    const damage = protectedCharacterIds.has(characterId) ? 0 : attack.damage;
-    const hpAfter = Math.max(0, character.hp - damage);
+    // A Basic Attack is a damaging attack and a physically thrown ball, so
+    // character-based damage effects (Hunter's Mark, Hex), Rage's reduction,
+    // and Vanish's physical immunity all apply to it exactly as they do to
+    // ability attacks (rules §8, §10(4), §11, §15 cards).
+    const resolved = resolveAttackDamageAgainstCharacter({
+      baseDamage: attack.damage,
+      affectedCharacterId: characterId,
+      physicalAttack: true,
+      prevented: protectedCharacterIds.has(characterId),
+      activeEffects: state.activeEffects,
+      sequence,
+    });
+    expiredFromEffects.push(...resolved.expired);
+    appliedFromEffects.push(...resolved.applied);
+    const hpAfter = Math.max(0, character.hp - resolved.finalDamage);
     return {
       characterId,
-      damage,
+      damage: resolved.finalDamage,
       hpBefore: character.hp,
       hpAfter,
       downedBefore: character.hp === 0,
@@ -267,13 +286,63 @@ export function resolveBasicAttack(
     );
     return effect ? { ...character, hp: effect.hpAfter } : character;
   });
+  const expiredEffectIds = new Set(
+    expiredFromEffects.map(({ effectId }) => effectId),
+  );
+  // Rules §9 and §15: temporary buffs and debuffs attached to a character end
+  // immediately when that character becomes Downed, and Shapeshift ends
+  // immediately when damage reduces the Druid below 3 HP with its maximum HP
+  // returning to 3. The Basic Attack path applies both right away instead of
+  // waiting for Finish Turn.
+  let finalCharacters = characters;
+  const expiredAfterDamage: ActiveEffect[] = [];
+  for (const effect of [...state.activeEffects, ...appliedFromEffects]) {
+    if (
+      expiredEffectIds.has(effect.effectId) ||
+      expiredAfterDamage.some(({ effectId }) => effectId === effect.effectId)
+    ) {
+      continue;
+    }
+    if (effect.kind !== "shapeshift") continue;
+    const bearer = finalCharacters.find(
+      ({ characterId }) => characterId === effect.affectedCharacterId,
+    );
+    if (!bearer || bearer.hp >= 3) continue;
+    expiredAfterDamage.push(effect);
+    finalCharacters = finalCharacters.map((character) =>
+      character.characterId === effect.affectedCharacterId
+        ? { ...character, currentMaxHp: 3, hp: Math.min(character.hp, 3) }
+        : character,
+    );
+  }
+  const survivingEffects = [
+    ...state.activeEffects.filter(
+      ({ effectId }) => !expiredEffectIds.has(effectId),
+    ),
+    ...appliedFromEffects,
+  ].filter(
+    (effect) =>
+      !expiredAfterDamage.some(({ effectId }) => effectId === effect.effectId),
+  );
+  const downedCleanup = applyDownedCleanup(finalCharacters, survivingEffects);
+  const activeEffects = downedCleanup.cleaned;
+  const uniqueExpiredEffects = [
+    ...new Map(
+      [
+        ...expiredFromEffects,
+        ...expiredAfterDamage,
+        ...downedCleanup.expired,
+      ].map((effect) => [effect.effectId, effect]),
+    ).values(),
+  ];
   const eliminatedTeams = (["Drow", "Duergar"] as const).filter((team) =>
     RULESET.characters
       .filter((character) => character.team === team)
       .every(
         (character) =>
-          characters.find(({ characterId }) => characterId === character.id)
-            ?.hp === 0,
+          finalCharacters.find(
+            ({ characterId }) => characterId === character.id,
+          )?.hp === 0,
       ),
   );
   const resultingEliminations: ("Drow" | "Duergar")[] = [
@@ -285,7 +354,6 @@ export function resolveBasicAttack(
         ? "Duergar"
         : "Drow"
       : null;
-  const sequence = state.sequence + 1;
   const event: ActionResolvedEvent = {
     type: "ActionResolved",
     matchId: state.matchId,
@@ -325,6 +393,12 @@ export function resolveBasicAttack(
     effects,
     majorActionOverride: override,
     eliminatedTeams: resultingEliminations,
+    ...(appliedFromEffects.length > 0
+      ? { appliedEffects: appliedFromEffects }
+      : {}),
+    ...(uniqueExpiredEffects.length > 0
+      ? { expiredEffects: uniqueExpiredEffects }
+      : {}),
   };
   return {
     event,
@@ -338,7 +412,8 @@ export function resolveBasicAttack(
           ...reactions.map(({ reactionId }) => reactionId),
         ]),
       ],
-      characters,
+      characters: finalCharacters,
+      activeEffects,
       eliminatedTeams: resultingEliminations,
       outcome,
     },
