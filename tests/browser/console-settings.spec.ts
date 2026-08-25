@@ -52,7 +52,7 @@ test("with the setting ON a Basic Attack still requires every manual physical ch
   page,
 }) => {
   await startMatch(page);
-  await expect(toggle(page)).toBeChecked();
+  await expect(toggle(page)).toBeHidden();
   await page.getByRole("button", { name: "Basic Attack" }).click();
   await page.getByLabel(/Ranger · Duergar/).check();
 
@@ -104,29 +104,35 @@ test("with the setting OFF a Basic Attack commits with zero manual check taps", 
   ).toContainText("3/3");
 });
 
-test("turning the setting OFF mid-draft satisfies the open draft while End Game stays confirmed", async ({
+test("the System check panel and the confirmation toggle hide while a Match is open and return after removal", async ({
   page,
 }) => {
-  await startMatch(page);
-  await page.getByRole("button", { name: "Basic Attack" }).click();
-  await page.getByLabel(/Ranger · Duergar/).check();
-  const review = page.getByRole("button", {
-    name: "Review Action Resolution",
-  });
-  await expect(review).toBeDisabled();
+  await page.goto("/");
+  await expect(toggle(page)).toBeVisible();
+  await expect(page.locator(".readiness-panel")).toBeVisible();
 
-  await toggle(page).uncheck();
-  await expect(page.getByLabel(CHECK_LABELS[0]!)).toBeHidden();
-  await expect(review).toBeEnabled();
-  await review.click();
-  await page.getByRole("button", { name: "Cancel draft" }).click();
+  await page.getByRole("button", { name: "Create Match" }).click();
+  await expect(toggle(page)).toBeHidden();
+  await expect(page.locator(".readiness-panel")).toBeHidden();
 
-  await page.getByRole("button", { name: "End Game" }).click();
-  await expect(
-    page.getByRole("heading", { name: "End this Match?" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("button", { name: "Generate initiative" }).click();
+  await page.getByRole("button", { name: "Start Match" }).click();
   await expect(
     page.getByRole("heading", { name: "Active Match" }),
   ).toBeVisible();
+  await expect(toggle(page)).toBeHidden();
+  await expect(page.locator(".readiness-panel")).toBeHidden();
+
+  await page.getByRole("button", { name: "End Game" }).click();
+  await page.getByRole("button", { name: "Confirm End Game" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Ended Match" }),
+  ).toBeVisible();
+  await expect(toggle(page)).toBeHidden();
+  await expect(page.locator(".readiness-panel")).toBeHidden();
+
+  await page.getByRole("button", { name: "Remove Match" }).click();
+  await page.getByRole("button", { name: "Confirm removal" }).click();
+  await expect(toggle(page)).toBeVisible();
+  await expect(page.locator(".readiness-panel")).toBeVisible();
 });

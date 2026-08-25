@@ -221,11 +221,6 @@ test("physical-attack ability reuses ordered contacts, Deflecting Palm redirect 
   page,
 }) => {
   await startMatch(page);
-  await expect(
-    page.getByRole("checkbox", {
-      name: "Require manual physical confirmations",
-    }),
-  ).toBeChecked();
   await activateCharacter(page, "Monk");
   await page.getByRole("button", { name: "Use Ability" }).click();
   await page.getByRole("button", { name: "Use Stunning Strike" }).click();

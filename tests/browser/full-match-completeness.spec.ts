@@ -37,8 +37,13 @@ async function runTurnsUntil(
 test("one named Match mixes Basic Attack, every ability interaction, undo, and End Game with confirmations off", async ({
   page,
 }) => {
-  // --- Setup: name four characters, then switch the console toggle OFF. ---
+  // --- Setup: switch the console toggle OFF, then name four characters. ---
   await page.goto("/");
+  await page.getByRole("checkbox", { name: CHECK_TOGGLE_LABEL }).uncheck();
+  await expect(
+    page.getByRole("checkbox", { name: CHECK_TOGGLE_LABEL }),
+  ).not.toBeChecked();
+
   await page.getByRole("button", { name: "Create Match" }).click();
   await page.locator("[data-display-names] summary").click();
   await page.locator('[data-display-name-for="drow-rogue"]').fill("Silk");
@@ -46,11 +51,6 @@ test("one named Match mixes Basic Attack, every ability interaction, undo, and E
   await page.locator('[data-display-name-for="duergar-monk"]').fill("Stone");
   await page.locator('[data-display-name-for="duergar-cleric"]').fill("Vesper");
   await page.getByRole("button", { name: "Save display names" }).click();
-
-  await page.getByRole("checkbox", { name: CHECK_TOGGLE_LABEL }).uncheck();
-  await expect(
-    page.getByRole("checkbox", { name: CHECK_TOGGLE_LABEL }),
-  ).not.toBeChecked();
 
   await page.getByRole("button", { name: "Generate initiative" }).click();
   await page.getByRole("button", { name: "Start Match" }).click();
@@ -192,7 +192,7 @@ test("one named Match mixes Basic Attack, every ability interaction, undo, and E
   await page.reload();
   await expect(
     page.getByRole("checkbox", { name: CHECK_TOGGLE_LABEL }),
-  ).not.toBeChecked();
+  ).toBeHidden();
   const silkRow = page.locator("[data-active-order-row]", { hasText: "Silk" });
   await expect(silkRow.locator(".display-name-ruleset")).toHaveText("Rogue");
   await expect(
