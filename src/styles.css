@@ -121,6 +121,27 @@ dd {
   font-size: clamp(1.05rem, 3vw, 1.3rem);
 }
 
+.console-setting {
+  display: flex;
+  min-height: 3rem;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  gap: var(--space-2);
+  border: 0.0625rem solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  padding: var(--space-2);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.console-setting input {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: 0 0 auto;
+}
+
 .panel,
 .action-panel,
 .match-panel,
@@ -514,6 +535,55 @@ dd {
   cursor: pointer;
 }
 
+.ability-option-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.ability-option {
+  display: grid;
+  gap: var(--space-2);
+  border: 0.0625rem solid var(--border);
+  border-radius: 0.5rem;
+  padding: var(--space-3);
+}
+
+.ability-option h3 {
+  margin: 0;
+}
+
+.ability-meta {
+  color: var(--text-muted);
+  margin: 0.25rem 0 0;
+}
+
+.ability-effect {
+  margin: 0.5rem 0 0;
+}
+
+.ability-option .match-actions {
+  justify-content: start;
+}
+
+.target-overrides {
+  margin-top: var(--space-3);
+  border-top: 0.0625rem solid var(--border);
+  padding-top: var(--space-2);
+}
+
+.target-overrides summary {
+  min-height: 3rem;
+  color: var(--accent);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.draft-warning {
+  border-left: 0.35rem solid var(--danger);
+  padding: var(--space-3);
+  background: #321d18;
+}
+
 .reaction-override {
   border-color: var(--danger);
 }
@@ -868,6 +938,52 @@ dd {
   .turn-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+.display-names-panel {
+  margin-top: var(--space-3);
+}
+
+.display-names-panel summary {
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.display-names-panel > p {
+  color: var(--text-muted);
+}
+
+.display-name-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+}
+
+.display-name-control {
+  display: grid;
+  gap: var(--space-1);
+  font-weight: 800;
+}
+
+.display-name-control input {
+  min-height: 3rem;
+  border: 0.125rem solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  color: #fff;
+  background: var(--surface-raised);
+  font: inherit;
+}
+
+.display-name-control input:focus-visible {
+  outline: 0.25rem solid #fff;
+  outline-offset: 0.25rem;
+}
+
+.display-name-ruleset {
+  color: var(--text-muted);
+  font-size: 0.8em;
+  font-weight: 700;
 }
 
 @media (prefers-reduced-motion: reduce) {

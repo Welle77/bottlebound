@@ -5,7 +5,7 @@ import {
   type MatchSummary,
   type ProtectiveReactionInput,
 } from "../domain/match";
-import { RULESET } from "../domain/ruleset";
+import { RULESET, type PhysicalAttackCheck } from "../domain/ruleset";
 import type {
   AppShellCacheState,
   NetworkState,
@@ -17,6 +17,7 @@ import {
   type RulesUiState,
 } from "../rules-reference/rules-ui-state";
 import { IndexedDbMatchStore } from "../storage/match-store";
+import { loadRequirePhysicalConfirmations } from "./console-settings";
 
 export type Confirmation =
   | "reroll"
@@ -28,19 +29,38 @@ export type Confirmation =
   | "start-new"
   | null;
 export interface ActionDraft {
+  /** Which command opened this draft; ability drafts resolve through resolveAbility. */
+  readonly kind: "basic" | "ability";
   readonly sourceCharacterId: string;
   readonly rulesVersion: string;
-  readonly step: "contacts" | "review";
+  /** The chosen Ruleset ability; null for Basic Attack drafts. */
+  readonly abilityId: string | null;
+  /**
+   * Chosen targets for targeted-attack and ally/enemy/utility ability
+   * drafts. Self abilities need none and physical-attack abilities use the
+   * ordered bottle contacts instead.
+   */
+  readonly targets: readonly string[];
+  /**
+   * Ability draft progression: select-target (targeted/ally/enemy/utility),
+   * reactions (targeted-attack only), contacts (physical-attack), review.
+   * Basic Attack drafts start at contacts.
+   */
+  readonly step: "select-target" | "reactions" | "contacts" | "review";
   readonly attackLegs: readonly (readonly string[])[];
-  readonly physicalConfirmations: {
-    readonly range: boolean;
-    readonly "line-of-sight": boolean;
-    readonly "legal-bottle-contact": boolean;
-    readonly "terrain-contact": boolean;
-  };
+  readonly physicalConfirmations: Readonly<
+    Record<PhysicalAttackCheck, boolean>
+  >;
   readonly reactions: ReadonlyArray<
     ProtectiveReactionInput & { readonly override: string | null }
   >;
+  /** Records a state-invalid ability choice (spent, wrong active character, invalid target). */
+  readonly abilityOverride: boolean;
+  /**
+   * A domain error that demands a recorded Override before the ability can
+   * commit again; rendered as an explicit Override prompt.
+   */
+  readonly overrideRequired: string | null;
   readonly majorActionOverride: boolean;
 }
 
@@ -48,6 +68,23 @@ export function draftAffectedCharacterIds(
   draft: ActionDraft,
 ): readonly string[] {
   return draft.attackLegs.flatMap((leg) => leg);
+}
+export function createPhysicalConfirmations(
+  requireManualChecks: boolean,
+): Readonly<Record<PhysicalAttackCheck, boolean>> {
+  return requireManualChecks
+    ? {
+        range: false,
+        "line-of-sight": false,
+        "legal-bottle-contact": false,
+        "terrain-contact": false,
+      }
+    : {
+        range: true,
+        "line-of-sight": true,
+        "legal-bottle-contact": true,
+        "terrain-contact": true,
+      };
 }
 export interface ShellState {
   readonly network: NetworkState;
@@ -62,6 +99,8 @@ export interface ShellState {
   readonly confirmation: Confirmation;
   readonly endGamePreview: EndGamePreview | null;
   readonly actionDraft: ActionDraft | null;
+  readonly abilityPickerOpen: boolean;
+  readonly requirePhysicalConfirmations: boolean;
   readonly saving: boolean;
   readonly summary: MatchSummary | null;
 }
@@ -97,6 +136,8 @@ export const state = new Ref<ShellState>({
   confirmation: null,
   endGamePreview: null,
   actionDraft: null,
+  abilityPickerOpen: false,
+  requirePhysicalConfirmations: loadRequirePhysicalConfirmations(),
   saving: false,
   summary: null,
 });

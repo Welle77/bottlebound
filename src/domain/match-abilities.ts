@@ -1,10 +1,10 @@
-import { castDraft, produce } from "immer";
-import { RULESET } from "./ruleset";
+import { RULESET, type StructuredAbility } from "./ruleset";
 import {
   AUTOMATED_REACTION_NAMES,
   protectiveReactionWarnings,
 } from "./match-combat";
 import { applyDownedCleanup } from "./match-turn";
+import { applyUtilityAbility } from "./match-ability-utility";
 import type {
   ActionEffect,
   ActionResolvedEvent,
@@ -17,6 +17,7 @@ import type {
   ProtectiveReactionInput,
   ProtectiveReactionOperation,
   ProtectiveReactionResolution,
+  MatchCharacter,
 } from "./match-types";
 
 export interface AbilityInput {
@@ -36,11 +37,27 @@ export interface AbilityInput {
   readonly abilityOverride?: string | null;
 }
 
+/**
+ * Hard maximum range in paces parsed from the ability card's Range field
+ * ("2 paces", "6 paces", "8 paces" — Deadeye). Attack interactions always
+ * carry their printed card range; anything else is an automation contract
+ * error.
+ */
+function attackRangePaces(ability: StructuredAbility): 2 | 6 | 8 {
+  const parsed = /^(\d+) paces$/.exec(ability.range);
+  const value = parsed ? Number(parsed[1]) : NaN;
+  if (value === 2 || value === 6 || value === 8) return value;
+  throw new Error(
+    `The ability has an unsupported attack range contract: ${ability.range}`,
+  );
+}
+
 import {
   abilityWarnings,
   buildAbilityEffects,
   getAbilityOrThrow,
   resolveAffectedCharacterIds,
+  resolveAttackDamageAgainstCharacter,
 } from "./match-ability-effects";
 
 export function resolveAbility(
@@ -78,6 +95,17 @@ export function resolveAbility(
   if (!sourceCharacter || sourceCharacter.hp === 0) {
     throw new Error("A Downed character cannot use an ability.");
   }
+  // Card gate: Shapeshift may be activated only while the Druid is active at
+  // exactly 2 or 3 HP (rules §15 Druid card).
+  if (
+    ability.name === "Shapeshift" &&
+    sourceCharacter.hp !== 2 &&
+    sourceCharacter.hp !== 3
+  ) {
+    throw new Error(
+      "Shapeshift may be activated only while the Druid is at 2 or 3 HP.",
+    );
+  }
   const spentWarnings = abilityWarnings(state, ability.id);
   const abilityOverride = input.abilityOverride?.trim() || null;
   if (spentWarnings.length > 0 && abilityOverride === null) {
@@ -86,6 +114,20 @@ export function resolveAbility(
   const majorOverride = input.majorActionOverride?.trim() || null;
   if (state.majorActionUsed && majorOverride === null) {
     throw new Error("A second ability needs a recorded referee override.");
+  }
+  // A character hit by Backstab or Stunning Strike cannot use a Powerful
+  // Ability on its next turn (rules §15 card effects).
+  if (ability.actionType === "powerful") {
+    const prohibited = state.activeEffects.some(
+      (effect) =>
+        effect.kind === "prohibit-powerful" &&
+        effect.affectedCharacterId === ability.ownerCharacterId,
+    );
+    if (prohibited) {
+      throw new Error(
+        "A Powerful Ability is prohibited on this turn by a recorded card effect.",
+      );
+    }
   }
   // Powerful check inherits majorActionUsed (0 movement) – already enforced via majorActionUsed
   // For Powerful, same override required which we already check.
@@ -181,70 +223,20 @@ export function resolveAbility(
 
   // Compute damage/effects for ability
   const sequence = state.sequence + 1;
-  // The update is genuinely incremental: per-target HP changes feed effect
-  // expiry checks. It therefore runs inside an immer workbench -- mutations
-  // are expressed on the draft while every produced snapshot stays immutable.
-  const workbench = produce(
-    {
-      characters: [...state.characters],
-      effects: [] as readonly ActionEffect[],
-      applied: [
-        ...buildAbilityEffects(ability, {
-          affectedIds: affectedCharacterIds,
-          sequence,
-          anchorId: ability.ownerCharacterId,
-        }),
-      ] as readonly ActiveEffect[],
-      expired: [] as readonly ActiveEffect[],
-    },
-    (draft) => {
-      // Handle operation types that affect HP or maxHP directly
-      const abilityName = ability.name;
+  // Per-target HP changes feed effect expiry checks, so the update is
+  // computed as one pure fold: every intermediate snapshot stays immutable.
+  const initialApplied: readonly ActiveEffect[] = buildAbilityEffects(ability, {
+    affectedIds: affectedCharacterIds,
+    sequence,
+    anchorId: ability.ownerCharacterId,
+  });
 
-      // Helper to apply heal
-      const healTarget = (targetId: string) => {
-        const idx = draft.characters.findIndex(
-          (character) => character.characterId === targetId,
-        );
-        const character = draft.characters[idx];
-        if (!character) throw new Error("Heal target unknown");
-        const maxHp = character.currentMaxHp;
-        const hpAfter = Math.min(maxHp, character.hp + 1);
-        const before = character.hp;
-        draft.characters[idx] = { ...character, hp: hpAfter };
-        draft.effects.push({
-          characterId: targetId,
-          damage: 0,
-          hpBefore: before,
-          hpAfter,
-          downedBefore: before === 0,
-          downedAfter: hpAfter === 0,
-        });
-      };
+  const isAttackInteraction =
+    ability.interaction === "targeted-attack" ||
+    ability.interaction === "physical-attack";
 
-      const reviveTarget = (targetId: string) => {
-        const idx = draft.characters.findIndex(
-          (character) => character.characterId === targetId,
-        );
-        const character = draft.characters[idx];
-        if (!character) throw new Error("Revive target unknown");
-        const before = character.hp;
-        draft.characters[idx] = { ...character, hp: 1 };
-        draft.effects.push({
-          characterId: targetId,
-          damage: 0,
-          hpBefore: before,
-          hpAfter: 1,
-          downedBefore: true,
-          downedAfter: false,
-        });
-      };
-
-      // For targeted and physical attacks: deal damage path
-      if (
-        ability.interaction === "targeted-attack" ||
-        ability.interaction === "physical-attack"
-      ) {
+  const attackOutcome = isAttackInteraction
+    ? (() => {
         const protectedIds = new Set(
           reactions.flatMap(({ operations }) =>
             operations.flatMap((operation) =>
@@ -263,236 +255,112 @@ export function resolveAbility(
             .map((effect) => effect.affectedCharacterId),
         );
         const baseDamage = 1;
-        // Build base effects with final damage after prevention and ignore
-        for (const targetId of affectedCharacterIds) {
-          const character = draft.characters.find(
-            (candidate) => candidate.characterId === targetId,
-          );
-          if (!character)
-            throw new Error("Ability references unknown character.");
-          const prevented: 0 | 1 =
-            protectedIds.has(targetId) ||
-            (ability.interaction === "physical-attack" &&
-              vanishProtected.has(targetId))
-              ? 0
-              : baseDamage;
-          // Rage reduction: if target has rage and damage positive, reduce by 1 then consume rage
-          const rageEffect = state.activeEffects.find(
-            (effect) =>
-              effect.kind === "rage" && effect.affectedCharacterId === targetId,
-          );
-          if (rageEffect && prevented > 0) {
-            draft.expired.push(castDraft(rageEffect));
-          }
-          // Add-damage from Hunter's Mark / Hex on target
-          const markEffect = state.activeEffects.find(
-            (effect) =>
-              (effect.kind === "hunters-mark" || effect.kind === "hex") &&
-              effect.affectedCharacterId === targetId,
-          );
-          const finalDamage = rageEffect && prevented > 0 ? 0 : prevented;
-          if (markEffect && finalDamage === 1) {
-            // add-damage makes it still 1? Actually add-damage would make 2? But hp is capped per damage? For simplicity keep 1 + mark consumption will be handled as consumption; damage stays 1 then mark consumed.
-            draft.expired.push(castDraft(markEffect));
-            // If Hex, also create movement cap on trigger
-            if (markEffect.kind === "hex") {
-              draft.applied.push({
-                effectId: `${ability.id}-hex-movement-${targetId}-${sequence}`,
-                abilityId: markEffect.abilityId,
-                kind: "movement-cap",
-                anchorCharacterId: markEffect.anchorCharacterId,
-                affectedCharacterId: targetId,
-                duration: {
-                  kind: "until-boundary",
-                  boundaryTrigger: "end-of-next-turn",
-                  anchor: "affected",
-                  removeWhenAffectedDowned: true,
+        return affectedCharacterIds.reduce<{
+          readonly characters: readonly MatchCharacter[];
+          readonly effects: readonly ActionEffect[];
+          readonly expired: readonly ActiveEffect[];
+          readonly applied: readonly ActiveEffect[];
+        }>(
+          (accumulated, targetId) => {
+            const character = accumulated.characters.find(
+              (candidate) => candidate.characterId === targetId,
+            );
+            if (!character)
+              throw new Error("Ability references unknown character.");
+            const resolved = resolveAttackDamageAgainstCharacter({
+              baseDamage,
+              affectedCharacterId: targetId,
+              physicalAttack: ability.interaction === "physical-attack",
+              prevented:
+                protectedIds.has(targetId) ||
+                (ability.interaction === "physical-attack" &&
+                  vanishProtected.has(targetId)),
+              activeEffects: state.activeEffects,
+              sequence,
+            });
+            const hpBefore = character.hp;
+            const hpAfter = Math.max(0, hpBefore - resolved.finalDamage);
+            return {
+              characters: accumulated.characters.map((candidate) =>
+                candidate.characterId === targetId
+                  ? { ...candidate, hp: hpAfter }
+                  : candidate,
+              ),
+              effects: [
+                ...accumulated.effects,
+                {
+                  characterId: targetId,
+                  damage: resolved.finalDamage,
+                  hpBefore,
+                  hpAfter,
+                  downedBefore: hpBefore === 0,
+                  downedAfter: hpAfter === 0,
                 },
-                operations: ["set-movement-cap"],
-                appliedSequence: sequence,
-              });
-            }
-          }
-          // For physical ability, each hit also accounts for its own effect already in pendingAppliedEffects (prohibit)
-          const hpBefore = character.hp;
-          const hpAfter = Math.max(0, hpBefore - finalDamage);
-          const idx = draft.characters.findIndex(
-            (candidate) => candidate.characterId === targetId,
-          );
-          draft.characters[idx] = { ...draft.characters[idx]!, hp: hpAfter };
-          draft.effects.push({
-            characterId: targetId,
-            damage: finalDamage,
-            hpBefore,
-            hpAfter,
-            downedBefore: hpBefore === 0,
-            downedAfter: hpAfter === 0,
-          });
-        }
-        // If damage was 0 due to prevention, do not trigger successful-damage consumption for marks that were not already handled? Already handled.
-      } else {
-        // Non-attack utilities: apply per ability
-        if (
-          abilityName === "Nature's Renewal" ||
-          abilityName === "Inspiring Words" ||
-          abilityName === "Second Wind"
-        ) {
-          for (const targetId of affectedCharacterIds) {
-            healTarget(targetId);
-          }
-        } else if (abilityName === "Lay on Hands") {
-          for (const targetId of affectedCharacterIds) {
-            const targetChar = state.characters.find(
-              (character) => character.characterId === targetId,
-            );
-            if (targetChar?.hp === 0) reviveTarget(targetId);
-            else healTarget(targetId);
-          }
-        } else if (abilityName === "Revivify") {
-          for (const targetId of affectedCharacterIds) reviveTarget(targetId);
-        } else if (abilityName === "Shapeshift") {
-          // change-max-hp to 4 and heal 1
-          for (const targetId of affectedCharacterIds) {
-            const idx = draft.characters.findIndex(
-              (character) => character.characterId === targetId,
-            );
-            const character = draft.characters[idx]!;
-            const before = character.hp;
-            const withMax = {
-              ...character,
-              currentMaxHp: 4,
-              hp: Math.min(4, character.hp + 1),
+              ],
+              expired: [...accumulated.expired, ...resolved.expired],
+              applied: [...accumulated.applied, ...resolved.applied],
             };
-            draft.characters[idx] = withMax;
-            draft.effects.push({
-              characterId: targetId,
-              damage: 0,
-              hpBefore: before,
-              hpAfter: withMax.hp,
-              downedBefore: before === 0,
-              downedAfter: withMax.hp === 0,
-            });
-          }
-        } else if (
-          abilityName === "Vanish" ||
-          abilityName === "Misty Escape" ||
-          abilityName === "Deflecting Palm" ||
-          abilityName === "Divine Shield" ||
-          abilityName === "Shield Wall" ||
-          abilityName === "Mirror Veil"
-        ) {
-          // Vanish handled as effect; others are reactions not direct abilities. No HP change.
-          // Push empty effect per target for audit?
-          for (const targetId of affectedCharacterIds) {
-            const character = draft.characters.find(
-              (candidate) => candidate.characterId === targetId,
-            )!;
-            draft.effects.push({
-              characterId: targetId,
-              damage: 0,
-              hpBefore: character.hp,
-              hpAfter: character.hp,
-              downedBefore: character.hp === 0,
-              downedAfter: character.hp === 0,
-            });
-          }
-        } else if (
-          abilityName === "Frostbind" ||
-          abilityName === "Battle Hymn" ||
-          abilityName === "Blessing of Battle"
-        ) {
-          for (const targetId of affectedCharacterIds) {
-            const character = draft.characters.find(
-              (candidate) => candidate.characterId === targetId,
-            )!;
-            draft.effects.push({
-              characterId: targetId,
-              damage: 0,
-              hpBefore: character.hp,
-              hpAfter: character.hp,
-              downedBefore: character.hp === 0,
-              downedAfter: character.hp === 0,
-            });
-          }
-        } else if (abilityName === "Rage") {
-          for (const targetId of affectedCharacterIds) {
-            const character = draft.characters.find(
-              (candidate) => candidate.characterId === targetId,
-            )!;
-            draft.effects.push({
-              characterId: targetId,
-              damage: 0,
-              hpBefore: character.hp,
-              hpAfter: character.hp,
-              downedBefore: character.hp === 0,
-              downedAfter: character.hp === 0,
-            });
-          }
-        } else if (abilityName === "Hunter's Mark" || abilityName === "Hex") {
-          // Apply mark effect: no immediate HP change but record effect. Need an effects entry for audit.
-          for (const targetId of affectedCharacterIds) {
-            const character = draft.characters.find(
-              (candidate) => candidate.characterId === targetId,
-            )!;
-            draft.effects.push({
-              characterId: targetId,
-              damage: 0,
-              hpBefore: character.hp,
-              hpAfter: character.hp,
-              downedBefore: character.hp === 0,
-              downedAfter: character.hp === 0,
-            });
-          }
-        } else {
-          // Generic: no HP change, just record
-          for (const targetId of affectedCharacterIds) {
-            const character = draft.characters.find(
-              (candidate) => candidate.characterId === targetId,
-            )!;
-            draft.effects.push({
-              characterId: targetId,
-              damage: 0,
-              hpBefore: character.hp,
-              hpAfter: character.hp,
-              downedBefore: character.hp === 0,
-              downedAfter: character.hp === 0,
-            });
-          }
-        }
-      }
+          },
+          {
+            characters: [...state.characters],
+            effects: [],
+            expired: [],
+            applied: [],
+          },
+        );
+      })()
+    : (() => {
+        const utility = applyUtilityAbility({
+          ability,
+          affectedCharacterIds,
+          priorCharacters: state.characters,
+          characters: [...state.characters],
+        });
+        return {
+          ...utility,
+          expired: [] as readonly ActiveEffect[],
+          applied: [] as readonly ActiveEffect[],
+        };
+      })();
 
-      // After HP changes, apply Shapeshift while-condition expiry check: if HP <3, expire shapeshift
-      for (const effect of [...state.activeEffects, ...draft.applied]) {
-        if (effect.kind === "shapeshift") {
-          const affected = draft.characters.find(
-            (character) => character.characterId === effect.affectedCharacterId,
-          );
-          if (affected && (affected.hp < 3 || affected.hp === 0)) {
-            draft.expired.push(castDraft(effect));
-            // Also revert maxHP to 3
-            const idx = draft.characters.findIndex(
-              (character) =>
-                character.characterId === effect.affectedCharacterId,
-            );
-            if (idx >= 0) {
-              const before = draft.characters[idx]!;
-              draft.characters[idx] = {
-                ...before,
-                currentMaxHp: 3,
-                hp: Math.min(before.hp, 3),
-              };
-              // Adjust effects hpAfter if changed? Keep original effects but maxHP change is expiry side effect.
-            }
-          }
+  const shapeshiftExpiry = [...state.activeEffects, ...initialApplied]
+    .filter((effect) => effect.kind === "shapeshift")
+    .reduce<{
+      readonly characters: readonly MatchCharacter[];
+      readonly expired: readonly ActiveEffect[];
+    }>(
+      (accumulated, effect) => {
+        const affected = accumulated.characters.find(
+          (character) => character.characterId === effect.affectedCharacterId,
+        );
+        if (!affected || (affected.hp >= 3 && affected.hp !== 0)) {
+          return accumulated;
         }
-      }
-    },
-  );
+        return {
+          characters: accumulated.characters.map((candidate) =>
+            candidate.characterId === effect.affectedCharacterId
+              ? { ...candidate, currentMaxHp: 3, hp: Math.min(candidate.hp, 3) }
+              : candidate,
+          ),
+          expired: [...accumulated.expired, effect],
+        };
+      },
+      {
+        characters: attackOutcome.characters,
+        expired: [],
+      },
+    );
 
-  const characters = workbench.characters;
-  const effects = workbench.effects;
-  const pendingAppliedEffects: readonly ActiveEffect[] = workbench.applied;
-  const expiredBeforeCleanup: readonly ActiveEffect[] = workbench.expired;
+  const characters = shapeshiftExpiry.characters;
+  const effects: readonly ActionEffect[] = attackOutcome.effects;
+  const pendingAppliedEffects: readonly ActiveEffect[] = [
+    ...initialApplied,
+    ...attackOutcome.applied,
+  ];
+  const expiredBeforeCleanup: readonly ActiveEffect[] = [
+    ...attackOutcome.expired,
+    ...shapeshiftExpiry.expired,
+  ];
 
   // Downed cleanup after HP changes and immediate expiries
   const combinedEffects = [
@@ -538,9 +406,7 @@ export function resolveAbility(
       : null;
 
   // Build attackLegs for event
-  const isAttackInteraction =
-    ability.interaction === "targeted-attack" ||
-    ability.interaction === "physical-attack";
+  const cardRangePaces = isAttackInteraction ? attackRangePaces(ability) : 2;
   const mappedLegs: readonly AttackLeg[] = isAttackInteraction
     ? (attackLegsInput ?? [{ affectedCharacterIds: affectedCharacterIds }]).map(
         (leg, index) => ({
@@ -548,7 +414,7 @@ export function resolveAbility(
           kind: index === 0 ? "initial" : "redirected",
           sourceCharacterId: ability.ownerCharacterId,
           attackId: ability.id,
-          rangePaces: ability.range.includes("6") ? 6 : 2,
+          rangePaces: cardRangePaces,
           redirectedByReactionId:
             index === 0 ? null : (reactions[0]?.reactionId ?? null),
           towardCharacterId:
@@ -566,7 +432,7 @@ export function resolveAbility(
           kind: "initial",
           sourceCharacterId: ability.ownerCharacterId,
           attackId: ability.id,
-          rangePaces: 2,
+          rangePaces: cardRangePaces,
           redirectedByReactionId: null,
           towardCharacterId: null,
           affectedCharacterIds: [...affectedCharacterIds],
@@ -580,7 +446,7 @@ export function resolveAbility(
             kind: "initial",
             sourceCharacterId: ability.ownerCharacterId,
             attackId: ability.id,
-            rangePaces: ability.range.includes("6") ? 6 : 2,
+            rangePaces: cardRangePaces,
             redirectedByReactionId: null,
             towardCharacterId: null,
             affectedCharacterIds: [...affectedCharacterIds],
@@ -598,7 +464,7 @@ export function resolveAbility(
     sourceCharacterId: ability.ownerCharacterId,
     attackId: ability.id,
     attackType: "ability",
-    rangePaces: ability.range.includes("6") ? 6 : 2,
+    rangePaces: cardRangePaces,
     damage: 1,
     rulesSourceAnchor: ability.sourceAnchor,
     attackLegs,
@@ -619,6 +485,7 @@ export function resolveAbility(
     reactions,
     effects,
     majorActionOverride: majorOverride,
+    abilityOverride,
     eliminatedTeams: resultingEliminations,
     abilityId: ability.id,
     targetCharacterIds: affectedCharacterIds,

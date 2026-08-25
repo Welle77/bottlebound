@@ -8,9 +8,15 @@ import {
   type SetupMatchState,
 } from "../domain/match";
 import { RULESET, type PhysicalAttackCheck } from "../domain/ruleset";
+import {
+  abilityDraftPanel,
+  abilityListPanel,
+  attackPreviewRow,
+} from "./ability-draft";
 import { deriveReadinessState } from "../readiness";
 import {
   contextualRulesControl,
+  characterNameHtml,
   decisionBasisLabel,
   escapeHtml,
   modifierLabel,
@@ -36,7 +42,7 @@ export function rosterRows(match: SetupMatchState): string {
           throw new Error("The Match references an unknown character.");
         const tieBreak =
           (totalCounts.get(entry.total) ?? 0) > 1 ? "Digital coin flip" : "—";
-        return `<tr data-initiative-row><td data-label="Slot">${entry.slot}</td><th scope="row">${escapeHtml(character.name)}</th><td data-label="Team">${escapeHtml(character.team)}</td><td data-label="Roll">${entry.roll}</td><td data-label="Modifier">${modifierLabel(entry.modifier)}</td><td data-label="Total"><strong>${entry.total}</strong></td><td data-label="Tie break">${tieBreak}</td></tr>`;
+        return `<tr data-initiative-row><td data-label="Slot">${entry.slot}</td><th scope="row">${characterNameHtml(character, match.displayNames)}</th><td data-label="Team">${escapeHtml(character.team)}</td><td data-label="Roll">${entry.roll}</td><td data-label="Modifier">${modifierLabel(entry.modifier)}</td><td data-label="Total"><strong>${entry.total}</strong></td><td data-label="Tie break">${tieBreak}</td></tr>`;
       })
       .join("");
   }
@@ -47,7 +53,7 @@ export function rosterRows(match: SetupMatchState): string {
       );
       if (!character)
         throw new Error("The Match references an unknown character.");
-      return `<tr data-roster-row><td data-label="Slot">—</td><th scope="row">${escapeHtml(character.name)}</th><td data-label="Team">${escapeHtml(character.team)}</td><td data-label="HP">${entry.hp}/${character.baseHp}</td><td data-label="Modifier">${modifierLabel(character.initiativeModifier)}</td><td data-label="Total">—</td><td data-label="Tie break">—</td></tr>`;
+      return `<tr data-roster-row><td data-label="Slot">—</td><th scope="row">${characterNameHtml(character, match.displayNames)}</th><td data-label="Team">${escapeHtml(character.team)}</td><td data-label="HP">${entry.hp}/${character.baseHp}</td><td data-label="Modifier">${modifierLabel(character.initiativeModifier)}</td><td data-label="Total">—</td><td data-label="Tie break">—</td></tr>`;
     })
     .join("");
 }
@@ -94,8 +100,15 @@ export function activeMatchPanel(
   if (!activeCharacter || !nextCharacter) {
     throw new Error("The Active Match references an unknown character.");
   }
-  if (state.current.actionDraft)
-    return actionDraftPanel(match, activeCharacter.name);
+  if (state.current.actionDraft) {
+    return state.current.actionDraft.kind === "ability"
+      ? abilityDraftPanel(match)
+      : actionDraftPanel(
+          match,
+          characterNameHtml(activeCharacter, match.displayNames),
+        );
+  }
+  if (state.current.abilityPickerOpen) return abilityListPanel(match);
   const hpByCharacter = new Map(
     match.characters.map(({ characterId, hp }) => [characterId, hp]),
   );
@@ -116,7 +129,7 @@ export function activeMatchPanel(
             : entry.slot === nextSlot
               ? "Next"
               : "Waiting";
-      return `<tr data-active-order-row data-turn="${turnLabel.toLowerCase()}"><td data-label="Slot">${entry.slot}</td><th scope="row">${escapeHtml(character.name)}</th><td data-label="Team">${escapeHtml(character.team)}</td><td data-label="HP">${hp}/${character.baseHp}</td><td data-label="Turn">${turnLabel}</td></tr>`;
+      return `<tr data-active-order-row data-turn="${turnLabel.toLowerCase()}"><td data-label="Slot">${entry.slot}</td><th scope="row">${characterNameHtml(character, match.displayNames)}</th><td data-label="Team">${escapeHtml(character.team)}</td><td data-label="HP">${hp}/${character.baseHp}</td><td data-label="Turn">${turnLabel}</td></tr>`;
     })
     .join("");
   const activeHp = hpByCharacter.get(activeEntry.characterId);
@@ -147,7 +160,7 @@ export function activeMatchPanel(
   const commands =
     eliminationPrompt && !eliminationAcknowledged
       ? ""
-      : `<div class="match-actions"><button id="basic-attack" class="secondary-action" type="button" ${state.current.saving || !combatAvailable || activeDowned || match.eliminatedTeams.length === 2 ? "disabled" : ""} ${combatAvailable ? "" : 'aria-describedby="combat-version-status"'}>Basic Attack</button><button id="finish-turn" class="primary-action" type="button" ${state.current.saving || match.eliminatedTeams.length === 2 ? "disabled" : ""}>${state.current.saving ? "Saving…" : "Finish Turn"}</button>${canUndo ? '<button id="request-undo" class="secondary-action" type="button">Undo</button>' : ""}</div>`;
+      : `<div class="match-actions"><button id="basic-attack" class="secondary-action" type="button" ${state.current.saving || !combatAvailable || activeDowned || match.eliminatedTeams.length === 2 ? "disabled" : ""} ${combatAvailable ? "" : 'aria-describedby="combat-version-status"'}>Basic Attack</button><button id="use-ability" class="secondary-action" type="button" ${state.current.saving || !combatAvailable || activeDowned || match.eliminatedTeams.length === 2 ? "disabled" : ""} ${combatAvailable ? "" : 'aria-describedby="combat-version-status"'}>Use Ability</button><button id="finish-turn" class="primary-action" type="button" ${state.current.saving || match.eliminatedTeams.length === 2 ? "disabled" : ""}>${state.current.saving ? "Saving…" : "Finish Turn"}</button>${canUndo ? '<button id="request-undo" class="secondary-action" type="button">Undo</button>' : ""}</div>`;
   const needsSeparateEndGame =
     !eliminationPrompt || eliminationAcknowledged || eliminationPrompt === "";
   const endGameControl =
@@ -158,7 +171,7 @@ export function activeMatchPanel(
   const priorSummary = state.current.summary
     ? priorSummaryCard(state.current.summary)
     : "";
-  return `<section class="match-panel active-match" aria-labelledby="active-heading"><div class="section-heading"><div><p class="eyebrow">Active · Sequence ${match.sequence}</p><h2 id="active-heading">Active Match</h2><p class="turn-position">Round ${match.round} · Slot ${match.activeSlot} of ${match.initiative.length}</p><div class="rules-context-links">${contextualRulesControl("rules-round", "Round rules", "section-5-core-terms")}${contextualRulesControl("rules-turn", "Turn rules", "section-7-turn-structure-movement")}</div></div><span class="readiness-badge" data-state="ready">Saved</span></div>${state.current.matchError ? `<p class="blocking-error" role="alert">${escapeHtml(state.current.matchError)} The last committed Active Match remains visible.</p>` : ""}<div class="turn-cards"><article class="turn-card active-character" data-active-character><p class="eyebrow">Active${activeDowned ? " · Downed" : ""}</p><h3>${escapeHtml(activeCharacter.name)}</h3><dl><div><dt>Team</dt><dd>${escapeHtml(activeCharacter.team)}</dd></div><div><dt>HP</dt><dd>${activeHp}/${activeCharacter.baseHp}</dd></div><div><dt>Slot</dt><dd>${activeEntry.slot}</dd></div></dl></article><article class="turn-card" data-next-character><p class="eyebrow">Next Active</p><h3>${escapeHtml(nextCharacter.name)}</h3><dl><div><dt>Team</dt><dd>${escapeHtml(nextCharacter.team)}</dd></div><div><dt>HP</dt><dd>${nextHp}/${nextCharacter.baseHp}</dd></div><div><dt>Slot</dt><dd>${nextEntry.slot}</dd></div></dl></article></div>${combatStatus}${eliminationPrompt}<div class="table-wrap"><table class="initiative-table active-order"><caption>Complete initiative order</caption><thead><tr><th>Slot</th><th>Character</th><th>Team</th><th>HP</th><th>Turn</th></tr></thead><tbody>${rows}</tbody></table></div>${commands}${endGameControl}${priorSummary}${confirmationPanel()}</section>`;
+  return `<section class="match-panel active-match" aria-labelledby="active-heading"><div class="section-heading"><div><p class="eyebrow">Active · Sequence ${match.sequence}</p><h2 id="active-heading">Active Match</h2><p class="turn-position">Round ${match.round} · Slot ${match.activeSlot} of ${match.initiative.length}</p><div class="rules-context-links">${contextualRulesControl("rules-round", "Round rules", "section-5-core-terms")}${contextualRulesControl("rules-turn", "Turn rules", "section-7-turn-structure-movement")}</div></div><span class="readiness-badge" data-state="ready">Saved</span></div>${state.current.matchError ? `<p class="blocking-error" role="alert">${escapeHtml(state.current.matchError)} The last committed Active Match remains visible.</p>` : ""}<div class="turn-cards"><article class="turn-card active-character" data-active-character><p class="eyebrow">Active${activeDowned ? " · Downed" : ""}</p><h3>${characterNameHtml(activeCharacter, match.displayNames)}</h3><dl><div><dt>Team</dt><dd>${escapeHtml(activeCharacter.team)}</dd></div><div><dt>HP</dt><dd>${activeHp}/${activeCharacter.baseHp}</dd></div><div><dt>Slot</dt><dd>${activeEntry.slot}</dd></div></dl></article><article class="turn-card" data-next-character><p class="eyebrow">Next Active</p><h3>${characterNameHtml(nextCharacter, match.displayNames)}</h3><dl><div><dt>Team</dt><dd>${escapeHtml(nextCharacter.team)}</dd></div><div><dt>HP</dt><dd>${nextHp}/${nextCharacter.baseHp}</dd></div><div><dt>Slot</dt><dd>${nextEntry.slot}</dd></div></dl></article></div>${combatStatus}${eliminationPrompt}<div class="table-wrap"><table class="initiative-table active-order"><caption>Complete initiative order</caption><thead><tr><th>Slot</th><th>Character</th><th>Team</th><th>HP</th><th>Turn</th></tr></thead><tbody>${rows}</tbody></table></div>${commands}${endGameControl}${priorSummary}${confirmationPanel()}</section>`;
 }
 
 export function priorSummaryCard(summary: MatchSummary): string {
@@ -206,7 +219,7 @@ export function endedMatchPanel(
 
 export function actionDraftPanel(
   match: Extract<MatchState, { readonly phase: "active" }>,
-  sourceName: string,
+  sourceNameHtml: string,
 ): string {
   const draft = state.current.actionDraft;
   if (!draft) return "";
@@ -221,37 +234,38 @@ export function actionDraftPanel(
   const characterById = new Map(
     RULESET.characters.map((character) => [character.id, character]),
   );
-  const hpById = new Map(
-    match.characters.map((character) => [character.characterId, character.hp]),
-  );
+  const nameHtmlOf = (characterId: string): string => {
+    const character = characterById.get(characterId);
+    return character
+      ? characterNameHtml(character, match.displayNames)
+      : escapeHtml(characterId);
+  };
+  const primaryNameOf = (character: {
+    readonly id: string;
+    readonly name: string;
+  }): string => match.displayNames?.[character.id] ?? character.name;
   const attackLabel = attack.attackType === "melee" ? "Melee" : "Ranged";
-  const source = `<div class="attack-profile"><p><strong>Source:</strong> ${escapeHtml(sourceName)}</p><p><strong>Type:</strong> ${attackLabel}</p><p><strong>Range:</strong> ${attack.rangePaces} paces</p><p><strong>Damage:</strong> ${attack.damage}</p>${contextualRulesControl("rules-basic-attack", "Basic Attack rules", attack.sourceAnchor)}</div>`;
+  const source = `<div class="attack-profile"><p><strong>Source:</strong> ${sourceNameHtml}</p><p><strong>Type:</strong> ${attackLabel}</p><p><strong>Range:</strong> ${attack.rangePaces} paces</p><p><strong>Damage:</strong> ${attack.damage}</p>${contextualRulesControl("rules-basic-attack", "Basic Attack rules", attack.sourceAnchor)}</div>`;
   const affectedCharacterIds = draftAffectedCharacterIds(draft);
   if (draft.step === "review") {
-    const protectedCharacterIds = new Set(
-      draft.reactions.map(({ protectedCharacterId }) => protectedCharacterId),
-    );
+    // Review rows run through the shared damage pipeline, so a marked,
+    // raged, Vanished, or protected contact shows exactly the finalized
+    // damage and effect consumption that confirming records.
     const rows = draft.attackLegs
       .flatMap((leg, legIndex) =>
-        leg.map((characterId, contactIndex) => {
-          const character = characterById.get(characterId);
-          const hp = hpById.get(characterId);
-          if (!character || hp === undefined)
-            throw new Error(
-              "The Action Draft references an unknown character.",
-            );
-          const damage = protectedCharacterIds.has(characterId)
-            ? 0
-            : attack.damage;
-          const after = Math.max(0, hp - damage);
-          return `<tr data-action-review-hit><td>${legIndex + 1}.${contactIndex + 1}</td><th scope="row">${escapeHtml(character.name)}</th><td>${escapeHtml(character.team)}</td><td>${damage}${damage === 0 ? " (prevented)" : ""}</td><td>${hp} → ${after}</td><td>${hp === 0 ? "Downed → Downed" : after === 0 ? "Active → Downed" : "Active → Active"}</td></tr>`;
-        }),
+        leg.map((characterId, contactIndex) =>
+          attackPreviewRow(
+            { match, draft, baseDamage: attack.damage, physicalAttack: true },
+            characterId,
+            `${legIndex + 1}.${contactIndex + 1}`,
+          ),
+        ),
       )
       .join("");
     const legReview = draft.attackLegs
       .map((leg, index) => {
-        const names = leg.map((id) => characterById.get(id)?.name ?? id);
-        return `<article class="attack-leg-review" data-attack-leg-review><h3>Leg ${index + 1} · ${index === 0 ? "Initial throw" : "Deflecting Palm redirect"}</h3><p>${names.length > 0 ? names.map(escapeHtml).join(" → ") : "No later bottle contacts."}</p>${index === 1 ? `<p>Original source: ${escapeHtml(sourceName)} · ${attackLabel} · hard maximum range ${attack.rangePaces} paces.</p>` : ""}</article>`;
+        const names = leg.map(nameHtmlOf);
+        return `<article class="attack-leg-review" data-attack-leg-review><h3>Leg ${index + 1} · ${index === 0 ? "Initial throw" : "Deflecting Palm redirect"}</h3><p>${names.length > 0 ? names.join(" → ") : "No later bottle contacts."}</p>${index === 1 ? `<p>Original source: ${sourceNameHtml} · ${attackLabel} · hard maximum range ${attack.rangePaces} paces.</p>` : ""}</article>`;
       })
       .join("");
     const reactions = draft.reactions
@@ -277,13 +291,14 @@ export function actionDraftPanel(
             protectedCharacterId === selection.protectedCharacterId,
         );
         const warnings = choice?.warnings ?? [];
+        const sourceCharacter = characterById.get(draft.sourceCharacterId);
         const details = [
-          `Prevents damage and effects for ${protectedCharacter.name}.`,
+          `Prevents damage and effects for ${primaryNameOf(protectedCharacter)}.`,
           reaction.name === "Misty Escape"
-            ? `Move ${owner.name} up to 2 paces immediately. Position remains physical.`
+            ? `Move ${primaryNameOf(owner)} up to 2 paces immediately. Position remains physical.`
             : "",
-          reaction.name === "Deflecting Palm"
-            ? `The same physical attack is redirected toward ${sourceName}; its original source, profile, and hard maximum range remain unchanged.`
+          reaction.name === "Deflecting Palm" && sourceCharacter
+            ? `The same physical attack is redirected toward ${primaryNameOf(sourceCharacter)}; its original source, profile, and hard maximum range remain unchanged.`
             : "",
           ...warnings,
           selection.override ? selection.override : "",
@@ -291,7 +306,7 @@ export function actionDraftPanel(
           .filter(Boolean)
           .map((detail) => `<li>${escapeHtml(detail)}</li>`)
           .join("");
-        return `<article class="reaction-review" data-reaction-review><h3>${escapeHtml(reaction.name)}</h3><p>${escapeHtml(owner.name)} protects ${escapeHtml(protectedCharacter.name)}.</p><ul>${details}</ul></article>`;
+        return `<article class="reaction-review" data-reaction-review><h3>${escapeHtml(reaction.name)}</h3><p>${characterNameHtml(owner, match.displayNames)} protects ${characterNameHtml(protectedCharacter, match.displayNames)}.</p><ul>${details}</ul></article>`;
       })
       .join("");
     const reactionReview = reactions
@@ -308,7 +323,7 @@ export function actionDraftPanel(
     .map((character) => {
       const order = activeLeg.indexOf(character.id);
       const duplicate = closedCharacterIds.has(character.id);
-      return `<label class="contact-control"><input type="checkbox" data-hit-character="${escapeHtml(character.id)}" ${order >= 0 ? "checked" : ""} ${duplicate ? "disabled" : ""}><span>${escapeHtml(character.name)} · ${escapeHtml(character.team)}${duplicate ? ` · Already contacted in Leg ${draft.attackLegs.slice(0, activeLegIndex).findIndex((leg) => leg.includes(character.id)) + 1}` : ""}</span>${order >= 0 ? `<strong>Contact ${order + 1}</strong>` : ""}</label>`;
+      return `<label class="contact-control"><input type="checkbox" data-hit-character="${escapeHtml(character.id)}" ${order >= 0 ? "checked" : ""} ${duplicate ? "disabled" : ""}><span>${characterNameHtml(character, match.displayNames)} · ${escapeHtml(character.team)}${duplicate ? ` · Already contacted in Leg ${draft.attackLegs.slice(0, activeLegIndex).findIndex((leg) => leg.includes(character.id)) + 1}` : ""}</span>${order >= 0 ? `<strong>Contact ${order + 1}</strong>` : ""}</label>`;
     })
     .join("");
   const checkLabels: readonly (readonly [PhysicalAttackCheck, string])[] = [
@@ -323,9 +338,14 @@ export function actionDraftPanel(
         `<label class="check-control"><input type="checkbox" data-physical-check="${key}" ${draft.physicalConfirmations[key] ? "checked" : ""}> ${escapeHtml(label)}</label>`,
     )
     .join("");
+  const requireManualChecks = state.current.requirePhysicalConfirmations;
+  const checksFieldset = requireManualChecks
+    ? `<fieldset><legend>Manual physical confirmations</legend><div class="check-list">${checks}</div></fieldset>`
+    : "";
   const ready =
     affectedCharacterIds.length > 0 &&
-    Object.values(draft.physicalConfirmations).every(Boolean);
+    (!requireManualChecks ||
+      Object.values(draft.physicalConfirmations).every(Boolean));
   const choices = getProtectiveReactionChoices(match, affectedCharacterIds);
   const reactionChoice = (
     choice: (typeof choices)[number],
@@ -345,7 +365,7 @@ export function actionDraftPanel(
         protectedCharacterId === choice.protectedCharacterId,
     );
     const warning = choice.warnings.map(escapeHtml).join(" ");
-    return `<label class="reaction-control${override ? " reaction-override" : ""}"><input type="checkbox" data-reaction-id="${escapeHtml(choice.reactionId)}" data-protected-character="${escapeHtml(choice.protectedCharacterId)}" data-reaction-override="${override}" ${selected ? "checked" : ""}><span><strong>${escapeHtml(reaction.name)}</strong> · ${escapeHtml(owner.name)} protects ${escapeHtml(protectedCharacter.name)}${warning ? `<small>${warning} Override records the referee decision.</small>` : ""}</span></label>`;
+    return `<label class="reaction-control${override ? " reaction-override" : ""}"><input type="checkbox" data-reaction-id="${escapeHtml(choice.reactionId)}" data-protected-character="${escapeHtml(choice.protectedCharacterId)}" data-reaction-override="${override}" ${selected ? "checked" : ""}><span><strong>${escapeHtml(reaction.name)}</strong> · ${characterNameHtml(owner, match.displayNames)} protects ${characterNameHtml(protectedCharacter, match.displayNames)}${warning ? `<small>${warning} Override records the referee decision.</small>` : ""}</span></label>`;
   };
   const eligibleChoices = choices
     .filter(({ eligible }) => eligible)
@@ -360,9 +380,9 @@ export function actionDraftPanel(
     : "";
   const closedLeg =
     activeLegIndex === 1
-      ? `<section class="closed-attack-leg" data-closed-attack-leg><h3>Attack Leg 1 closed</h3><p>${draft.attackLegs[0]!.map((id) => escapeHtml(characterById.get(id)?.name ?? id)).join(" → ")}</p></section><section class="redirect-evidence" data-redirect-evidence><h3>Redirected Attack Leg 2</h3><p>Original source: ${escapeHtml(sourceName)} · ${attackLabel} · hard maximum range ${attack.rangePaces} paces. Record every later legal contact; earlier contacts remain unavailable.</p></section>`
+      ? `<section class="closed-attack-leg" data-closed-attack-leg><h3>Attack Leg 1 closed</h3><p>${draft.attackLegs[0]!.map(nameHtmlOf).join(" → ")}</p></section><section class="redirect-evidence" data-redirect-evidence><h3>Redirected Attack Leg 2</h3><p>Original source: ${sourceNameHtml} · ${attackLabel} · hard maximum range ${attack.rangePaces} paces. Record every later legal contact; earlier contacts remain unavailable.</p></section>`
       : "";
-  return `<section class="match-panel action-draft" aria-labelledby="action-draft-heading"><p class="eyebrow">Action Draft · Physical result</p><h2 id="action-draft-heading">Record Basic Attack</h2><p>This draft stays local until final confirmation.</p>${source}${closedLeg}<fieldset><legend>${activeLegIndex === 0 ? "Ordered bottle contacts" : "Redirected bottle contacts"}</legend><p>Select contacts in their physical order. Allies and the attacker remain valid choices.</p><div class="contact-list">${contacts}</div></fieldset>${reactions}<fieldset><legend>Manual physical confirmations</legend><div class="check-list">${checks}</div></fieldset><div class="match-actions"><button id="review-basic-attack" class="primary-action" type="button" ${ready ? "" : "disabled"}>Review Action Resolution</button><button id="cancel-basic-attack" class="secondary-action" type="button">Cancel draft</button></div></section>`;
+  return `<section class="match-panel action-draft" aria-labelledby="action-draft-heading"><p class="eyebrow">Action Draft · Physical result</p><h2 id="action-draft-heading">Record Basic Attack</h2><p>This draft stays local until final confirmation.</p>${source}${closedLeg}<fieldset><legend>${activeLegIndex === 0 ? "Ordered bottle contacts" : "Redirected bottle contacts"}</legend><p>Select contacts in their physical order. Allies and the attacker remain valid choices.</p><div class="contact-list">${contacts}</div></fieldset>${reactions}${checksFieldset}<div class="match-actions"><button id="review-basic-attack" class="primary-action" type="button" ${ready ? "" : "disabled"}>Review Action Resolution</button><button id="cancel-basic-attack" class="secondary-action" type="button">Cancel draft</button></div></section>`;
 }
 
 export function undoStatePanel(match: MatchState, attribute: string): string {
@@ -377,12 +397,12 @@ export function undoStatePanel(match: MatchState, attribute: string): string {
       if (!character)
         throw new Error("The Match references an unknown character.");
       const initiative = initiativeByCharacter.get(entry.characterId);
-      return `<tr data-state-character><th scope="row">${escapeHtml(character.name)}</th><td data-label="Team">${escapeHtml(character.team)}</td><td data-label="HP">${entry.hp}/${character.baseHp}</td><td data-label="Slot">${initiative?.slot ?? "—"}</td><td data-label="Roll">${initiative?.roll ?? "—"}</td><td data-label="Modifier">${modifierLabel(initiative?.modifier ?? character.initiativeModifier)}</td><td data-label="Total">${initiative?.total ?? "—"}</td></tr>`;
+      return `<tr data-state-character><th scope="row">${characterNameHtml(character, match.displayNames)}</th><td data-label="Team">${escapeHtml(character.team)}</td><td data-label="HP">${entry.hp}/${character.baseHp}</td><td data-label="Slot">${initiative?.slot ?? "—"}</td><td data-label="Roll">${initiative?.roll ?? "—"}</td><td data-label="Modifier">${modifierLabel(initiative?.modifier ?? character.initiativeModifier)}</td><td data-label="Total">${initiative?.total ?? "—"}</td></tr>`;
     })
     .join("");
   const turn =
     match.phase !== "setup"
-      ? `<p class="turn-position">Round ${match.round} · Slot ${match.activeSlot}</p><p>Major Action: ${match.majorActionUsed ? "Used" : "Available"}</p><p>Spent Reactions: ${match.spentReactionIds.length > 0 ? match.spentReactionIds.map((id) => escapeHtml(RULESET.reactions.find((reaction) => reaction.id === id)?.name ?? id)).join(", ") : "None"}</p>`
+      ? `<p class="turn-position">Round ${match.round} · Slot ${match.activeSlot}</p><p>Major Action: ${match.majorActionUsed ? "Used" : "Available"}</p><p>Spent Abilities: ${match.spentAbilityIds.length > 0 ? match.spentAbilityIds.map((id) => escapeHtml(RULESET.abilities.find((ability) => ability.id === id)?.name ?? id)).join(", ") : "None"}</p><p>Spent Reactions: ${match.spentReactionIds.length > 0 ? match.spentReactionIds.map((id) => escapeHtml(RULESET.reactions.find((reaction) => reaction.id === id)?.name ?? id)).join(", ") : "None"}</p>`
       : `<p class="turn-position">${match.initiative ? "Initiative generated" : "No initiative result"}</p>`;
   return `<article class="undo-state" ${attribute}><h4>${attribute === "data-undo-current" ? "Current committed state" : "State after Undo"}</h4><p>Phase: ${match.phase === "active" ? "Active" : match.phase === "ended" ? "Ended" : "Setup"} · Sequence ${match.sequence}</p>${turn}<p>Team Elimination: ${match.eliminatedTeams.length > 0 ? match.eliminatedTeams.join(", ") : "None"} · Acknowledged: ${match.acknowledgedEliminations.length > 0 ? match.acknowledgedEliminations.join(", ") : "None"} · Outcome: ${match.outcome ?? "None"}</p><p>Match ${escapeHtml(match.matchId)} · Rules ${escapeHtml(match.rulesVersion)}</p><div class="table-wrap"><table class="initiative-table"><caption>Complete character state</caption><thead><tr><th>Character</th><th>Team</th><th>HP</th><th>Slot</th><th>Roll</th><th>Modifier</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table></div></article>`;
 }
@@ -394,6 +414,7 @@ export function confirmationPanel(): string {
     const preview = getUndoPreview(state.current.match, state.current.events);
     if (preview === null) return "";
     const targetLabel = {
+      DisplayNamesAssigned: "Assign Display Names",
       InitiativeGenerated: "Generate Initiative",
       InitiativeRerolled: "Reroll Initiative",
       MatchStarted: "Start Match",
@@ -471,6 +492,14 @@ export function confirmationPanel(): string {
   return `<section class="confirmation-panel" role="alertdialog" aria-labelledby="confirmation-heading" aria-describedby="confirmation-detail"><div><p class="eyebrow">Confirmation required</p><h3 id="confirmation-heading">${content[0]}</h3><p id="confirmation-detail">${content[1]}</p></div><div class="button-row"><button id="confirm-action" class="danger-action" type="button">${content[2]}</button><button id="cancel-action" class="secondary-action" type="button">Cancel</button></div></section>`;
 }
 
+export function displayNamesEditor(match: SetupMatchState): string {
+  const fields = RULESET.characters.map((character) => {
+    const displayName = match.displayNames?.[character.id] ?? "";
+    return `<label class="display-name-control"><span>${characterNameHtml(character, match.displayNames)} · ${escapeHtml(character.team)}</span><input type="text" data-display-name-for="${escapeHtml(character.id)}" value="${escapeHtml(displayName)}" placeholder="${escapeHtml(character.name)}" autocomplete="off"></label>`;
+  });
+  return `<details class="display-names-panel" data-display-names><summary>Character Display Names</summary><p>Optionally name each character to match the miniatures on the table. An empty field keeps the Ruleset name. Saving records one reversible event.</p><div class="display-name-list">${fields.join("")}</div><div class="match-actions"><button id="save-display-names" class="secondary-action" type="button" ${state.current.saving ? "disabled" : ""}>${state.current.saving ? "Saving…" : "Save display names"}</button></div></details>`;
+}
+
 export function matchPanel(): string {
   const readiness = deriveReadinessState(state.current);
   if (state.current.matchError && state.current.match === null) {
@@ -508,5 +537,5 @@ export function matchPanel(): string {
   const priorSummary = state.current.summary
     ? priorSummaryCard(state.current.summary)
     : "";
-  return `<section class="match-panel" aria-labelledby="setup-heading"><div class="section-heading"><div><p class="eyebrow">Setup · Sequence ${state.current.match.sequence}</p><h2 id="setup-heading">Initiative Setup</h2><p>${hasInitiative ? "The complete committed order is ready. Exact ties use recorded digital coin flips." : "All characters start at full HP. Generate the complete order when ready."}</p><div class="rules-context-links">${contextLink}</div></div><span class="readiness-badge" data-state="ready">Saved</span></div>${state.current.matchError ? `<p class="blocking-error" role="alert">${state.current.matchError} The last committed Setup remains visible.</p>` : ""}<div class="table-wrap"><table class="initiative-table"><thead><tr><th>Slot</th><th>Character</th><th>Team</th><th>${hasInitiative ? "Roll" : "HP"}</th><th>Modifier</th><th>Total</th><th>Tie break</th></tr></thead><tbody>${rosterRows(state.current.match)}</tbody></table></div><div class="match-actions">${hasInitiative ? '<button id="start-match" class="primary-action" type="button">Start Match</button><button id="request-reroll" class="secondary-action" type="button">Reroll initiative</button>' : '<button id="generate-initiative" class="primary-action" type="button">Generate initiative</button>'}${canUndo ? '<button id="request-undo" class="secondary-action" type="button">Undo</button>' : ""}<button id="request-discard" class="danger-action" type="button">Discard Match</button></div>${priorSummary}${confirmationPanel()}</section>`;
+  return `<section class="match-panel" aria-labelledby="setup-heading"><div class="section-heading"><div><p class="eyebrow">Setup · Sequence ${state.current.match.sequence}</p><h2 id="setup-heading">Initiative Setup</h2><p>${hasInitiative ? "The complete committed order is ready. Exact ties use recorded digital coin flips." : "All characters start at full HP. Generate the complete order when ready."}</p><div class="rules-context-links">${contextLink}</div></div><span class="readiness-badge" data-state="ready">Saved</span></div>${state.current.matchError ? `<p class="blocking-error" role="alert">${state.current.matchError} The last committed Setup remains visible.</p>` : ""}<div class="table-wrap"><table class="initiative-table"><thead><tr><th>Slot</th><th>Character</th><th>Team</th><th>${hasInitiative ? "Roll" : "HP"}</th><th>Modifier</th><th>Total</th><th>Tie break</th></tr></thead><tbody>${rosterRows(state.current.match)}</tbody></table></div>${displayNamesEditor(state.current.match)}<div class="match-actions">${hasInitiative ? '<button id="start-match" class="primary-action" type="button">Start Match</button><button id="request-reroll" class="secondary-action" type="button">Reroll initiative</button>' : '<button id="generate-initiative" class="primary-action" type="button">Generate initiative</button>'}${canUndo ? '<button id="request-undo" class="secondary-action" type="button">Undo</button>' : ""}<button id="request-discard" class="danger-action" type="button">Discard Match</button></div>${priorSummary}${confirmationPanel()}</section>`;
 }

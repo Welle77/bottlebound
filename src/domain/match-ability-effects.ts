@@ -3,6 +3,20 @@ import type { ProtectiveReactionInput } from "./match-types";
 import type { ActiveEffect, ActiveMatchState } from "./match-types";
 import { teamOfCharacter } from "./match-endgame";
 
+/**
+ * Compares an ability against its printed card name while folding the
+ * apostrophe variants (U+2019 versus U+0027). The authoritative rules document
+ * prints typographic apostrophes ("Hunter's Mark", "Nature's Renewal"), so
+ * byte-equality against source-level ASCII strings silently fails.
+ */
+export function isAbilityNamed(
+  ability: { readonly name: string },
+  printedName: string,
+): boolean {
+  const fold = (value: string): string => value.replaceAll(/['’]/g, "");
+  return fold(ability.name) === fold(printedName);
+}
+
 function abilityWarnings(
   state: ActiveMatchState,
   abilityId: string,
@@ -28,17 +42,18 @@ function buildAbilityEffects(
 ): readonly ActiveEffect[] {
   const { affectedIds, sequence, anchorId } = context;
   const name = ability.name;
-  // Hunter's Mark / Hex (add-damage until next scheduled slot)
-  if (name === "Hunter's Mark" || name === "Hex") {
+  // Hunter's Mark / Hex (add-damage until the end of the source's next
+  // scheduled initiative position; rules §15 card durations)
+  if (isAbilityNamed(ability, "Hunter’s Mark") || name === "Hex") {
     return affectedIds.map((targetId) => ({
       effectId: `${ability.id}-${targetId}-${sequence}`,
       abilityId: ability.id,
-      kind: name === "Hunter's Mark" ? "hunters-mark" : "hex",
+      kind: isAbilityNamed(ability, "Hunter’s Mark") ? "hunters-mark" : "hex",
       anchorCharacterId: anchorId,
       affectedCharacterId: targetId,
       duration: {
         kind: "until-trigger-or-boundary",
-        boundaryTrigger: "beginning-of-next-scheduled-slot",
+        boundaryTrigger: "end-of-next-scheduled-slot",
         anchor: "source",
         removeWhenAffectedDowned: true,
       },
@@ -262,6 +277,36 @@ function resolveAffectedCharacterIds(context: {
         throw new Error("Utility ability needs target selection.");
       }
     } else {
+      // Card-level life-state gates with unambiguous rules text (rules §12
+      // and §15): ordinary healing cannot affect a Downed character, Nature's
+      // Renewal and Inspiring Words cannot target one, and Revivify needs a
+      // Downed ally. These absolute card prohibitions are checked before the
+      // overridable policy gates below.
+      if (
+        isAbilityNamed(ability, "Nature’s Renewal") ||
+        ability.name === "Inspiring Words"
+      ) {
+        for (const targetId of targetIds) {
+          const targetChar = state.characters.find(
+            (character) => character.characterId === targetId,
+          );
+          if (targetChar?.hp === 0) {
+            throw new Error(
+              "A Downed character cannot be targeted by this healing ability.",
+            );
+          }
+        }
+      }
+      if (ability.name === "Revivify") {
+        for (const targetId of targetIds) {
+          const targetChar = state.characters.find(
+            (character) => character.characterId === targetId,
+          );
+          if (targetChar && targetChar.hp !== 0) {
+            throw new Error("Revivify needs one Downed ally as its target.");
+          }
+        }
+      }
       // Validate each target relation and lifeState
       for (const targetId of targetIds) {
         const targetChar = state.characters.find(
@@ -296,32 +341,129 @@ function resolveAffectedCharacterIds(context: {
           if (override === null) throw new Error("invalid-target-life-state");
         }
       }
-      return [...targetIds];
-    }
-    // Specific guards: Revivify and Lay on Hands revive blocked when team eliminated
-    if (
-      (ability.name === "Revivify" || ability.name === "Lay on Hands") &&
-      targetIds.some((targetId) => {
-        const targetChar = state.characters.find(
-          (character) => character.characterId === targetId,
-        );
-        return targetChar?.hp === 0;
-      })
-    ) {
-      for (const targetId of targetIds) {
-        const targetChar = state.characters.find(
-          (character) => character.characterId === targetId,
-        );
-        if (targetChar?.hp === 0) {
-          const team = teamOfCharacter(targetId);
-          if (state.eliminatedTeams.includes(team)) {
-            throw new Error("eliminated-team");
+      // Specific guards: Revivify and Lay on Hands revive blocked when the
+      // target's team is eliminated.
+      if (
+        (ability.name === "Revivify" || ability.name === "Lay on Hands") &&
+        targetIds.some((targetId) => {
+          const targetChar = state.characters.find(
+            (character) => character.characterId === targetId,
+          );
+          return targetChar?.hp === 0;
+        })
+      ) {
+        for (const targetId of targetIds) {
+          const targetChar = state.characters.find(
+            (character) => character.characterId === targetId,
+          );
+          if (targetChar?.hp === 0) {
+            const team = teamOfCharacter(targetId);
+            if (state.eliminatedTeams.includes(team)) {
+              throw new Error("eliminated-team");
+            }
           }
         }
       }
+      return [...targetIds];
     }
   }
   return [];
+}
+
+/**
+ * Builds the 1-pace movement restriction that a successfully triggered Hex
+ * attaches to the affected character for that character's next turn.
+ */
+function hexTriggeredMovementCap(
+  hex: ActiveEffect,
+  sequence: number,
+): ActiveEffect {
+  return {
+    effectId: `${hex.abilityId}-hex-movement-${hex.affectedCharacterId}-${sequence}`,
+    abilityId: hex.abilityId,
+    kind: "movement-cap",
+    anchorCharacterId: hex.anchorCharacterId,
+    affectedCharacterId: hex.affectedCharacterId,
+    duration: {
+      kind: "until-boundary",
+      boundaryTrigger: "end-of-next-turn",
+      anchor: "affected",
+      removeWhenAffectedDowned: true,
+    },
+    operations: ["set-movement-cap"],
+    appliedSequence: sequence,
+  };
+}
+
+export interface AttackDamageInput {
+  readonly baseDamage: number;
+  readonly affectedCharacterId: string;
+  /** Physical throws cannot affect a Vanish-protected character. */
+  readonly physicalAttack: boolean;
+  /** A protective Reaction prevented all damage and effects for the character. */
+  readonly prevented: boolean;
+  readonly activeEffects: readonly ActiveEffect[];
+  readonly sequence: number;
+}
+
+export interface AttackDamageResolution {
+  readonly finalDamage: number;
+  readonly expired: readonly ActiveEffect[];
+  readonly applied: readonly ActiveEffect[];
+}
+
+/**
+ * Resolves one attack against one affected character following rules §10(4):
+ * calculate all applicable damage increases first (character-based effects
+ * such as Hunter's Mark or Hex add their written +1 each and stack, §11),
+ * then apply legal Reactions, reductions, and prevention, then finalize.
+ * Rage reduces remaining damage by exactly 1 and is consumed only when it was
+ * actually needed; Hunter's Mark and Hex are consumed by the first successful
+ * damaging attack and survive an attack finalized at 0 damage.
+ */
+function resolveAttackDamageAgainstCharacter(
+  input: AttackDamageInput,
+): AttackDamageResolution {
+  const {
+    baseDamage,
+    affectedCharacterId,
+    physicalAttack,
+    prevented,
+    activeEffects,
+    sequence,
+  } = input;
+  const marks = activeEffects.filter(
+    (effect) =>
+      (effect.kind === "hunters-mark" || effect.kind === "hex") &&
+      effect.affectedCharacterId === affectedCharacterId,
+  );
+  const vanished =
+    !prevented &&
+    physicalAttack &&
+    activeEffects.some(
+      (effect) =>
+        effect.kind === "vanish" &&
+        effect.affectedCharacterId === affectedCharacterId,
+    );
+  const rage = activeEffects.find(
+    (effect) =>
+      effect.kind === "rage" &&
+      effect.affectedCharacterId === affectedCharacterId,
+  );
+  const unmitigated = prevented || vanished ? 0 : baseDamage + marks.length;
+  const finalDamage = rage && unmitigated >= 1 ? unmitigated - 1 : unmitigated;
+  const expiredRage: readonly ActiveEffect[] =
+    rage && unmitigated >= 1 ? [rage] : [];
+  if (finalDamage >= 1) {
+    return {
+      finalDamage,
+      expired: [...expiredRage, ...marks],
+      applied: marks
+        .filter((mark) => mark.kind === "hex")
+        .map((mark) => hexTriggeredMovementCap(mark, sequence)),
+    };
+  }
+  return { finalDamage, expired: expiredRage, applied: [] };
 }
 
 export {
@@ -329,4 +471,5 @@ export {
   getAbilityOrThrow,
   buildAbilityEffects,
   resolveAffectedCharacterIds,
+  resolveAttackDamageAgainstCharacter,
 };

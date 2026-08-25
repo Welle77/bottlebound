@@ -11,6 +11,14 @@ import {
   isRecord,
 } from "./match-store-canonical-state";
 
+/**
+ * Highest finalized per-character attack damage expressible under the locked
+ * Ruleset: a base or ability attack contributes its written 1 damage and both
+ * stacking character effects (Hunter's Mark, Hex) add their written +1 each
+ * (rules §11), for a maximum of 3.
+ */
+const MAX_STACKED_ATTACK_DAMAGE = 3;
+
 export function assertCanonicalEvent(
   value: unknown,
   expectedRulesVersion?: string,
@@ -32,6 +40,22 @@ export function assertCanonicalEvent(
   if (value.type === "SetupCreated") {
     if (value.sequence !== 1) {
       throw new Error("The canonical Setup Event is structurally invalid.");
+    }
+    return;
+  }
+  if (value.type === "DisplayNamesAssigned") {
+    const names = value.displayNames;
+    if (
+      !isRecord(names) ||
+      !Object.keys(names).every(
+        (characterId) =>
+          typeof names[characterId] === "string" &&
+          names[characterId].length > 0 &&
+          names[characterId].trim() === names[characterId] &&
+          RULESET.characters.some(({ id }) => id === characterId),
+      )
+    ) {
+      throw new Error("The canonical Display Name assignment is invalid.");
     }
     return;
   }
@@ -156,7 +180,13 @@ export function assertCanonicalEvent(
       new Set(value.eliminatedTeams).size !== value.eliminatedTeams.length ||
       (value.majorActionOverride !== null &&
         (typeof value.majorActionOverride !== "string" ||
-          value.majorActionOverride.trim().length === 0))
+          value.majorActionOverride.trim().length === 0)) ||
+      // Optional recorded Override for a state-invalid Ability choice; older
+      // persisted events omit the field entirely.
+      (value.abilityOverride !== undefined &&
+        value.abilityOverride !== null &&
+        (typeof value.abilityOverride !== "string" ||
+          value.abilityOverride.trim().length === 0))
     ) {
       throw new Error("The canonical Action Resolution Event is invalid.");
     }
@@ -287,12 +317,24 @@ export function assertCanonicalEvent(
       if (
         !isRecord(effect) ||
         effect.characterId !== affectedCharacterIds[index] ||
-        (effect.damage !== 0 && effect.damage !== 1) ||
+        !Number.isInteger(effect.damage) ||
+        (effect.damage as number) < 0 ||
+        (effect.damage as number) > MAX_STACKED_ATTACK_DAMAGE ||
         !Number.isInteger(effect.hpBefore) ||
         !Number.isInteger(effect.hpAfter) ||
         (effect.hpBefore as number) < 0 ||
-        effect.hpAfter !==
-          Math.max(0, (effect.hpBefore as number) - effect.damage) ||
+        // Damage effects follow the attack ledger; Ability heal and revival
+        // effects raise HP without damage and are admitted for Abilities only.
+        ((effect.hpAfter as number) !==
+          Math.max(
+            0,
+            (effect.hpBefore as number) - (effect.damage as number),
+          ) &&
+          !(
+            value.actionType === "Ability" &&
+            (effect.damage as number) === 0 &&
+            (effect.hpAfter as number) > (effect.hpBefore as number)
+          )) ||
         effect.downedBefore !== (effect.hpBefore === 0) ||
         effect.downedAfter !== (effect.hpAfter === 0)
       ) {
@@ -422,6 +464,7 @@ export function assertCanonicalEvent(
       (value.targetSequence as number) >= (value.sequence as number) ||
       (value.targetType !== "InitiativeGenerated" &&
         value.targetType !== "InitiativeRerolled" &&
+        value.targetType !== "DisplayNamesAssigned" &&
         value.targetType !== "MatchStarted" &&
         value.targetType !== "TurnFinished" &&
         value.targetType !== "ActionResolved" &&

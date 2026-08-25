@@ -201,6 +201,22 @@ export function assertMatchStateStructure(
     ) {
       throw new Error("The canonical active effects are structurally invalid.");
     }
+    // Backwards compat: snapshots from before Display Names may omit the map
+    if (value.displayNames !== undefined) {
+      const names = value.displayNames as Record<string, unknown>;
+      if (
+        !isRecord(names) ||
+        !Object.keys(names).every(
+          (characterId) =>
+            typeof names[characterId] === "string" &&
+            names[characterId].length > 0 &&
+            names[characterId].trim() === names[characterId] &&
+            RULESET.characters.some(({ id }) => id === characterId),
+        )
+      ) {
+        throw new Error("The canonical Match display names are invalid.");
+      }
+    }
     assertStringArray(value.spentReactionIds, "spent Reactions");
     assertStringArray(value.eliminatedTeams, "Team Elimination state");
     assertStringArray(

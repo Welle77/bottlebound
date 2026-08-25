@@ -76,6 +76,12 @@ export interface CoinFlipTieBreakStep {
   readonly selectedIndex: number;
 }
 
+/**
+ * Optional referee-assigned Display Names keyed by Ruleset character id.
+ * Absent keys mean the character keeps its Ruleset name alone.
+ */
+export type DisplayNames = Readonly<Record<string, string>>;
+
 export interface SetupMatchState extends CombatMatchState {
   readonly schemaVersion: typeof MATCH_SCHEMA_VERSION;
   readonly rulesVersion: string;
@@ -84,6 +90,7 @@ export interface SetupMatchState extends CombatMatchState {
   readonly sequence: number;
   readonly characters: readonly MatchCharacter[];
   readonly initiative: readonly InitiativeEntry[] | null;
+  readonly displayNames?: DisplayNames;
 }
 
 export interface ActiveMatchState extends CombatMatchState {
@@ -96,6 +103,7 @@ export interface ActiveMatchState extends CombatMatchState {
   readonly initiative: readonly InitiativeEntry[];
   readonly round: number;
   readonly activeSlot: number;
+  readonly displayNames?: DisplayNames;
 }
 
 export interface EndedMatchState extends CombatMatchState {
@@ -111,6 +119,7 @@ export interface EndedMatchState extends CombatMatchState {
   readonly outcome: Exclude<MatchOutcome, null>;
   readonly endedAt: string;
   readonly endedSequence: number;
+  readonly displayNames?: DisplayNames;
   readonly decisionBasis?: DecisionBasis;
   readonly finalCounts?: FinalTeamCounts;
   readonly finalHpTotals?: FinalTeamCounts;
@@ -148,6 +157,11 @@ interface EventBase {
 
 export interface SetupCreatedEvent extends EventBase {
   readonly type: "SetupCreated";
+}
+
+export interface DisplayNamesAssignedEvent extends EventBase {
+  readonly type: "DisplayNamesAssigned";
+  readonly displayNames: DisplayNames;
 }
 
 export interface InitiativeEvent extends EventBase {
@@ -244,7 +258,8 @@ export interface AttackLeg {
   readonly kind: "initial" | "redirected";
   readonly sourceCharacterId: string;
   readonly attackId: string;
-  readonly rangePaces: 2 | 6;
+  /** Hard maximum range in paces; 8 covers the Deadeye ability card. */
+  readonly rangePaces: 2 | 6 | 8;
   readonly redirectedByReactionId: string | null;
   readonly towardCharacterId: string | null;
   readonly affectedCharacterIds: readonly string[];
@@ -252,7 +267,12 @@ export interface AttackLeg {
 
 export interface ActionEffect {
   readonly characterId: string;
-  readonly damage: 0 | 1;
+  /**
+   * Finalized damage for this affected character. Base attacks contribute 1;
+   * stacked character-based effects such as Hunter's Mark or Hex add their
+   * written +1 each (rules §11), so any non-negative integer can occur.
+   */
+  readonly damage: number;
   readonly hpBefore: number;
   readonly hpAfter: number;
   readonly downedBefore: boolean;
@@ -305,7 +325,7 @@ export interface ActionResolvedEvent extends EventBase {
   readonly sourceCharacterId: string;
   readonly attackId: string;
   readonly attackType: "melee" | "ranged" | "ability";
-  readonly rangePaces: 2 | 6;
+  readonly rangePaces: 2 | 6 | 8;
   readonly damage: 1;
   readonly rulesSourceAnchor: string;
   readonly attackLegs: readonly AttackLeg[];
@@ -319,6 +339,12 @@ export interface ActionResolvedEvent extends EventBase {
   readonly spentAbilityIds?: readonly string[];
   readonly appliedEffects?: readonly ActiveEffect[];
   readonly expiredEffects?: readonly ActiveEffect[];
+  /**
+   * The recorded Override sentence for a state-invalid Ability choice.
+   * Optional so persisted events from before this field replay unchanged;
+   * fresh resolutions always carry it (null when no Override was needed).
+   */
+  readonly abilityOverride?: string | null;
 }
 
 export interface BasicAttackInput {
@@ -338,6 +364,7 @@ export interface BasicAttackInput {
 }
 
 export type ReversibleMatchEvent =
+  | DisplayNamesAssignedEvent
   | InitiativeEvent
   | MatchStartedEvent
   | TurnFinishedEvent
@@ -354,6 +381,7 @@ export interface UndoAppliedEvent extends EventBase {
 
 export type MatchEvent =
   | SetupCreatedEvent
+  | DisplayNamesAssignedEvent
   | InitiativeEvent
   | MatchStartedEvent
   | TurnFinishedEvent

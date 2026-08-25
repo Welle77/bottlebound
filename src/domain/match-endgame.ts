@@ -182,6 +182,9 @@ export function reopenMatch(
     acknowledgedEliminations: state.acknowledgedEliminations,
     outcome: null,
     activeEffects: (state as unknown as ActiveMatchState).activeEffects ?? [],
+    // Display Names live inside the Match record, so a reopened Match keeps
+    // the referee's Setup names (rules glossary; T01 persistence contract).
+    ...(state.displayNames ? { displayNames: state.displayNames } : {}),
   };
   return {
     state: active,

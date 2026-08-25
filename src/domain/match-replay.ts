@@ -169,6 +169,7 @@ function applyHistoricalActionResolution(
 
 function isReversibleEvent(event: MatchEvent): event is ReversibleMatchEvent {
   return (
+    event.type === "DisplayNamesAssigned" ||
     event.type === "InitiativeGenerated" ||
     event.type === "InitiativeRerolled" ||
     event.type === "MatchStarted" ||
@@ -267,6 +268,17 @@ export function restoreStateFromEvents(
             sequence: event.sequence,
             initiative: event.results,
           };
+        } else if (event.type === "DisplayNamesAssigned") {
+          if (current.phase !== "setup") {
+            throw new Error(
+              "The Display Name assignment cannot apply to this Match State.",
+            );
+          }
+          return {
+            ...current,
+            sequence: event.sequence,
+            displayNames: event.displayNames,
+          };
         } else if (event.type === "MatchStarted") {
           if (current.phase !== "setup" || current.initiative === null) {
             throw new Error(
@@ -324,9 +336,15 @@ export function restoreStateFromEvents(
                     }),
                   ),
                   majorActionOverride: event.majorActionOverride,
-                  abilityOverride: event.spentAbilityIds?.length
-                    ? "historical-override"
-                    : null,
+                  // Feed the recorded Override sentence back so the recompute
+                  // matches exactly; events from before the field keep the
+                  // historical fallback that only satisfies the gates.
+                  abilityOverride:
+                    event.abilityOverride !== undefined
+                      ? event.abilityOverride
+                      : event.spentAbilityIds?.length
+                        ? "historical-override"
+                        : null,
                 },
                 event.occurredAt,
               );

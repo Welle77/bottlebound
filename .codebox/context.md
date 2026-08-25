@@ -57,6 +57,12 @@ _Avoid_: Finished game, archived Match
 An ability that a character legally activated during the Match; it stays unavailable for the rest of the Match, including after Revival.
 _Avoid_: Used ability, consumed ability
 
+**Display Name**:
+An optional referee-assigned name for one fixed Ruleset character inside one
+Match. It replaces the Ruleset name in displays while the Ruleset name stays
+authoritative for the rules reference.
+_Avoid_: Nickname, alias, player name
+
 **Ruleset**:
 One immutable version of the complete authoritative BOTTLEBOUND rules, including universal rules, roster data, ability cards, and quick reference.
 _Avoid_: Rules data, rules document version

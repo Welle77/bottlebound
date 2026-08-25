@@ -5,6 +5,8 @@ import type {
   ActiveMatchState,
   CoinFlipTieBreakStep,
   CommandResult,
+  DisplayNames,
+  DisplayNamesAssignedEvent,
   InitiativeEntry,
   InitiativeEvent,
   MatchStartedEvent,
@@ -53,6 +55,57 @@ export function createSetup(
   occurredAt: string,
 ): CommandResult<SetupMatchState, SetupCreatedEvent> {
   return createSetupForRulesVersion(matchId, occurredAt, RULES_VERSION);
+}
+
+/**
+ * Normalizes a requested Display Name batch into the canonical stored form:
+ * every value is trimmed, and values that trim to empty unset the name and
+ * are dropped from the map.
+ */
+export function normalizeDisplayNames(
+  requested: Readonly<Record<string, string>>,
+): DisplayNames {
+  return Object.fromEntries(
+    Object.entries(requested)
+      .filter(([characterId, rawName]) => {
+        if (!RULESET.characters.some(({ id }) => id === characterId)) {
+          throw new Error("The Display Name references an unknown character.");
+        }
+        return rawName.trim().length > 0;
+      })
+      .map(([characterId, rawName]) => [characterId, rawName.trim()]),
+  );
+}
+
+/**
+ * Records one atomic reversible event carrying the complete Display Name map
+ * for the fixed roster. Allowed only during Setup.
+ */
+export function assignDisplayNames(
+  state: SetupMatchState,
+  requested: Readonly<Record<string, string>>,
+  occurredAt: string,
+): CommandResult<SetupMatchState, DisplayNamesAssignedEvent> {
+  if (state.phase !== "setup") {
+    throw new Error("Display Names can only be assigned during Setup.");
+  }
+  const displayNames = normalizeDisplayNames(requested);
+  const sequence = state.sequence + 1;
+  return {
+    state: {
+      ...state,
+      sequence,
+      displayNames,
+    },
+    event: {
+      type: "DisplayNamesAssigned",
+      matchId: state.matchId,
+      sequence,
+      rulesVersion: state.rulesVersion,
+      occurredAt,
+      displayNames,
+    },
+  };
 }
 
 function rollInitiative(
