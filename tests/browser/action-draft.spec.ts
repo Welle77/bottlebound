@@ -18,6 +18,22 @@ async function completePhysicalChecks(page: import("@playwright/test").Page) {
   }
 }
 
+/** Finishes turns until the named class is the Active Character (max one round). */
+async function activateCharacter(
+  page: import("@playwright/test").Page,
+  className: string,
+) {
+  const activeHeading = page.locator("[data-active-character] h3");
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const activeName = (await activeHeading.textContent()) ?? "";
+    if (activeName.trim().startsWith(className)) return;
+    await page.getByRole("button", { name: "Finish Turn" }).click();
+    // The commit re-render is asynchronous; wait for this turn to land.
+    await expect(activeHeading).not.toHaveText(activeName);
+  }
+  throw new Error(`${className} never became the Active Character.`);
+}
+
 test("the referee reviews, commits, restores, and undoes an ordered Basic Attack", async ({
   page,
 }) => {
@@ -83,6 +99,42 @@ test("the referee reviews, commits, restores, and undoes an ordered Basic Attack
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Ranger" }),
   ).toContainText("3/3");
+});
+
+test("a Basic Attack review row shows a marked target's committed effect damage", async ({
+  page,
+}) => {
+  await startMatch(page);
+  await activateCharacter(page, "Ranger");
+
+  // The Ranger marks the Paladin: the first successful damaging attack
+  // against him deals +1 damage and consumes the Mark.
+  await page.getByRole("button", { name: "Use Ability" }).click();
+  await page.getByRole("button", { name: "Use Hunter’s Mark" }).click();
+  await page.getByLabel(/Paladin · Drow/).check();
+  await page.getByRole("button", { name: "Review Action Resolution" }).click();
+  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  await expect(
+    page.locator("[data-active-order-row]", { hasText: "Paladin" }),
+  ).toContainText("5/5");
+  await page.getByRole("button", { name: "Finish Turn" }).click();
+
+  // Whoever holds the next slot attacks the marked Paladin. Review must show
+  // the finalized 2 damage (printed 1 + Hunter's Mark) that confirming
+  // commits — not the effect-blind printed damage.
+  await page.getByRole("button", { name: "Basic Attack" }).click();
+  await page.getByLabel(/Paladin · Drow/).check();
+  await completePhysicalChecks(page);
+  await page.getByRole("button", { name: "Review Action Resolution" }).click();
+  const paladinRow = page.locator("[data-action-review-hit]", {
+    hasText: "Paladin",
+  });
+  await expect(paladinRow).toContainText("5 → 3");
+  await expect(paladinRow).toContainText(/Mark consumed/);
+  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  await expect(
+    page.locator("[data-active-order-row]", { hasText: "Paladin" }),
+  ).toContainText("3/5");
 });
 
 test("cancel, reload, and a failed save discard no committed attack", async ({

@@ -1,12 +1,15 @@
 import {
   acknowledgeElimination,
+  assignDisplayNames,
   createSetup,
   cryptoRandomSource,
   endMatch,
   finishTurn,
   generateInitiative,
+  normalizeDisplayNames,
   rerollInitiative,
   reopenMatch,
+  resolveAbility,
   resolveBasicAttack,
   ruleSimultaneousElimination,
   startMatch,
@@ -18,7 +21,14 @@ import {
 import { RULESET } from "../domain/ruleset";
 import { probeCanonicalStorage } from "../storage/canonical-storage-probe";
 import { render } from "../ui/render";
-import { matchStore, state } from "../ui/shell-state";
+import {
+  appRoot,
+  createPhysicalConfirmations,
+  matchStore,
+  state,
+  type ActionDraft,
+} from "../ui/shell-state";
+import { buildAbilityInput } from "../ui/ability-draft";
 
 export async function commitResult(result: CommandResult): Promise<boolean> {
   state.saving = true;
@@ -76,20 +86,92 @@ export function openBasicAttack(): void {
   const sourceCharacterId =
     state.match.initiative[state.match.activeSlot - 1]?.characterId;
   if (!sourceCharacterId) return;
+  state.abilityPickerOpen = false;
   state.actionDraft = {
+    kind: "basic",
     sourceCharacterId,
     rulesVersion: state.match.rulesVersion,
+    abilityId: null,
+    targets: [],
     step: "contacts",
     attackLegs: [[]],
-    physicalConfirmations: {
-      range: false,
-      "line-of-sight": false,
-      "legal-bottle-contact": false,
-      "terrain-contact": false,
-    },
+    physicalConfirmations: createPhysicalConfirmations(
+      state.requirePhysicalConfirmations,
+    ),
     reactions: [],
+    abilityOverride: false,
+    overrideRequired: null,
     majorActionOverride: false,
   };
+  render();
+}
+
+export function openAbilityPicker(): void {
+  const match = state.match;
+  if (
+    match?.phase !== "active" ||
+    match.rulesVersion !== RULESET.version ||
+    state.actionDraft
+  )
+    return;
+  const activeCharacterId = match.initiative[match.activeSlot - 1]?.characterId;
+  const activeHp =
+    match.characters.find(
+      ({ characterId }) => characterId === activeCharacterId,
+    )?.hp ?? 0;
+  if (activeHp === 0 || match.eliminatedTeams.length === 2) return;
+  state.abilityPickerOpen = true;
+  render();
+}
+
+export function closeAbilityPicker(): void {
+  state.abilityPickerOpen = false;
+  render();
+}
+
+export function openAbilityDraft(abilityId: string): void {
+  const match = state.match;
+  if (match?.phase !== "active" || match.rulesVersion !== RULESET.version)
+    return;
+  const activeCharacterId = match.initiative[match.activeSlot - 1]?.characterId;
+  const ability = RULESET.abilities.find(({ id }) => id === abilityId);
+  if (!ability || !activeCharacterId) return;
+  // Only the active character's unspent, non-Reaction abilities can open a draft.
+  if (
+    ability.ownerCharacterId !== activeCharacterId ||
+    ability.actionType === "reaction" ||
+    match.spentAbilityIds.includes(ability.id)
+  )
+    return;
+  const physical = ability.interaction === "physical-attack";
+  state.abilityPickerOpen = false;
+  state.actionDraft = {
+    kind: "ability",
+    sourceCharacterId: activeCharacterId,
+    rulesVersion: match.rulesVersion,
+    abilityId: ability.id,
+    targets: [],
+    step:
+      ability.interaction === "self"
+        ? "review"
+        : physical
+          ? "contacts"
+          : "select-target",
+    attackLegs: physical ? [[]] : [],
+    physicalConfirmations: createPhysicalConfirmations(
+      state.requirePhysicalConfirmations,
+    ),
+    reactions: [],
+    abilityOverride: false,
+    overrideRequired: null,
+    majorActionOverride: false,
+  };
+  render();
+}
+
+export function setAbilityStep(step: ActionDraft["step"]): void {
+  if (!state.actionDraft || state.actionDraft.kind !== "ability") return;
+  state.actionDraft.step = step;
   render();
 }
 export async function confirmBasicAttack(): Promise<void> {
@@ -122,6 +204,59 @@ export async function confirmBasicAttack(): Promise<void> {
   state.actionDraft = null;
   render();
 }
+
+const OVERRIDEABLE_DOMAIN_ERRORS = new Set([
+  "wrong-active-character",
+  "ability-already-spent",
+  "invalid-target-relation",
+  "invalid-target-life-state",
+]);
+
+export function cancelAbilityDraft(): void {
+  if (!state.actionDraft || state.actionDraft.kind !== "ability") return;
+  state.actionDraft = null;
+  state.abilityPickerOpen = false;
+  render();
+}
+
+/**
+ * Confirms an ability draft through the store's canonical commit path,
+ * mirroring confirmBasicAttack. Domain errors that accept a recorded
+ * Override surface as an explicit Override prompt instead of a dead end.
+ */
+export async function confirmAbility(): Promise<void> {
+  const match = state.match;
+  const draft = state.actionDraft;
+  if (
+    match?.phase !== "active" ||
+    draft?.kind !== "ability" ||
+    draft.step !== "review"
+  )
+    return;
+  let result;
+  try {
+    result = resolveAbility(
+      match,
+      buildAbilityInput(draft),
+      new Date().toISOString(),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (OVERRIDEABLE_DOMAIN_ERRORS.has(message)) {
+      // Surface the domain error as an explicit Override recording prompt.
+      draft.overrideRequired = message;
+    } else {
+      state.matchError = message;
+    }
+    render();
+    return;
+  }
+  await commitResult(result);
+  state.actionDraft = null;
+  state.abilityPickerOpen = false;
+  render();
+}
+
 export async function createMatch(): Promise<void> {
   await commitResult(
     createSetup(crypto.randomUUID(), new Date().toISOString()),
@@ -141,6 +276,26 @@ export async function start(): Promise<void> {
   if (state.match?.phase === "setup") {
     await commitResult(startMatch(state.match, new Date().toISOString()));
   }
+}
+export async function saveDisplayNames(): Promise<void> {
+  const match = state.match;
+  if (match?.phase !== "setup") return;
+  const requested: Record<string, string> = {};
+  appRoot
+    .querySelectorAll<HTMLInputElement>("[data-display-name-for]")
+    .forEach((input) => {
+      const characterId = input.dataset.displayNameFor;
+      if (characterId) requested[characterId] = input.value;
+    });
+  const normalized = normalizeDisplayNames(requested);
+  const current = match.displayNames ?? {};
+  const unchanged =
+    Object.keys(normalized).length === Object.keys(current).length &&
+    Object.entries(normalized).every(([id, name]) => current[id] === name);
+  if (unchanged) return;
+  await commitResult(
+    assignDisplayNames(match, requested, new Date().toISOString()),
+  );
 }
 export async function advanceTurn(): Promise<void> {
   if (state.match?.phase === "active") {

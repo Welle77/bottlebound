@@ -14,8 +14,10 @@ export {
 export { cryptoRandomSource } from "./match-random";
 
 export {
+  assignDisplayNames,
   createSetup,
   generateInitiative,
+  normalizeDisplayNames,
   rerollInitiative,
   startMatch,
 } from "./match-setup";
@@ -61,6 +63,8 @@ export type {
   CommandResult,
   DecisionBasis,
   DigitalCoinFlipResult,
+  DisplayNames,
+  DisplayNamesAssignedEvent,
   EffectDurationKind,
   EliminationContinuedEvent,
   EndedMatchState,
