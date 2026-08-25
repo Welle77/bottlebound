@@ -66,18 +66,41 @@ export function assertCanonicalEvent(
     ) {
       throw new Error("The canonical Finish Turn Event is invalid.");
     }
-    const visited: number[] = [];
-    let slot = value.fromSlot as number;
-    let round = value.fromRound as number;
-    do {
-      if (slot === RULESET.characters.length) {
-        slot = 1;
-        round += 1;
-      } else slot += 1;
-      if (slot !== value.activeSlot || round !== value.round)
-        visited.push(slot);
-      if (visited.length > RULESET.characters.length) break;
-    } while (slot !== value.activeSlot || round !== value.round);
+    const visited = Array.from(
+      { length: RULESET.characters.length + 4 },
+      (_, step) => step,
+    ).reduce<{
+      readonly slot: number;
+      readonly round: number;
+      readonly visited: readonly number[];
+      readonly done: boolean;
+    }>(
+      (position) => {
+        if (position.done) return position;
+        const wraps = position.slot === RULESET.characters.length;
+        const slot = wraps ? 1 : position.slot + 1;
+        const round = wraps ? position.round + 1 : position.round;
+        const nextVisited =
+          slot !== value.activeSlot || round !== value.round
+            ? [...position.visited, slot]
+            : position.visited;
+        if (nextVisited.length > RULESET.characters.length) {
+          return { slot, round, visited: nextVisited, done: true };
+        }
+        return {
+          slot,
+          round,
+          visited: nextVisited,
+          done: slot === value.activeSlot && round === value.round,
+        };
+      },
+      {
+        slot: value.fromSlot as number,
+        round: value.fromRound as number,
+        visited: [],
+        done: false,
+      },
+    ).visited;
     if (
       visited.length > RULESET.characters.length ||
       value.skippedSlots.length !== visited.length ||
@@ -137,47 +160,50 @@ export function assertCanonicalEvent(
     ) {
       throw new Error("The canonical Action Resolution Event is invalid.");
     }
-    const affectedCharacterIds: string[] = [];
-    value.attackLegs.forEach((leg, index) => {
-      if (
-        !isRecord(leg) ||
-        leg.sequence !== index + 1 ||
-        leg.kind !== (index === 0 ? "initial" : "redirected") ||
-        leg.sourceCharacterId !== value.sourceCharacterId ||
-        leg.attackId !== value.attackId ||
-        leg.rangePaces !== value.rangePaces ||
-        (index === 0 && leg.redirectedByReactionId !== null) ||
-        (index === 1 &&
-          (typeof leg.redirectedByReactionId !== "string" ||
-            leg.redirectedByReactionId.length === 0 ||
-            (!historicalRuleset &&
-              leg.redirectedByReactionId !==
-                "duergar-monk-deflecting-palm"))) ||
-        leg.towardCharacterId !==
-          (index === 0 ? null : value.sourceCharacterId) ||
-        !Array.isArray(leg.affectedCharacterIds) ||
-        (index === 0 && leg.affectedCharacterIds.length === 0) ||
-        !leg.affectedCharacterIds.every(
-          (characterId) =>
-            typeof characterId === "string" &&
-            RULESET.characters.some(({ id }) => id === characterId),
-        )
-      ) {
-        throw new Error("The canonical Attack Leg is invalid.");
-      }
-      affectedCharacterIds.push(...leg.affectedCharacterIds);
-    });
+    const affectedCharacterIds = value.attackLegs.flatMap(
+      (leg: Record<string, unknown>, index: number): readonly string[] => {
+        if (
+          !isRecord(leg) ||
+          leg.sequence !== index + 1 ||
+          leg.kind !== (index === 0 ? "initial" : "redirected") ||
+          leg.sourceCharacterId !== value.sourceCharacterId ||
+          leg.attackId !== value.attackId ||
+          leg.rangePaces !== value.rangePaces ||
+          (index === 0 && leg.redirectedByReactionId !== null) ||
+          (index === 1 &&
+            (typeof leg.redirectedByReactionId !== "string" ||
+              leg.redirectedByReactionId.length === 0 ||
+              (!historicalRuleset &&
+                leg.redirectedByReactionId !==
+                  "duergar-monk-deflecting-palm"))) ||
+          leg.towardCharacterId !==
+            (index === 0 ? null : value.sourceCharacterId) ||
+          !Array.isArray(leg.affectedCharacterIds) ||
+          (index === 0 && leg.affectedCharacterIds.length === 0) ||
+          !leg.affectedCharacterIds.every(
+            (characterId) =>
+              typeof characterId === "string" &&
+              RULESET.characters.some(({ id }) => id === characterId),
+          )
+        ) {
+          throw new Error("The canonical Attack Leg is invalid.");
+        }
+        // Every entry was validated above as a known rules character id.
+        return leg.affectedCharacterIds as readonly string[];
+      },
+    );
     if (
       new Set(affectedCharacterIds).size !== affectedCharacterIds.length ||
       value.effects.length !== affectedCharacterIds.length
     ) {
       throw new Error("The canonical Action Resolution contacts are invalid.");
     }
-    const reactionOwners = new Set<string>();
-    value.reactions.forEach((reactionResolution) => {
-      if (!isRecord(reactionResolution)) {
+    const reactionList: readonly unknown[] = value.reactions;
+    reactionList.reduce<ReadonlySet<string>>((seenOwners, rawResolution) => {
+      if (!isRecord(rawResolution)) {
         throw new Error("The canonical Action Resolution Reaction is invalid.");
       }
+      const reactionResolution = rawResolution;
       const reaction = historicalRuleset
         ? null
         : RULESET.reactions.find(
@@ -198,7 +224,7 @@ export function assertCanonicalEvent(
         !affectedCharacterIds.includes(
           reactionResolution.protectedCharacterId,
         ) ||
-        reactionOwners.has(owner) ||
+        seenOwners.has(owner) ||
         !Array.isArray(reactionResolution.warnings) ||
         !reactionResolution.warnings.every(
           (warning) => typeof warning === "string" && warning.length > 0,
@@ -224,28 +250,31 @@ export function assertCanonicalEvent(
       ) {
         throw new Error("The canonical Action Resolution Reaction is invalid.");
       }
-      reactionOwners.add(owner);
-    });
-    let redirectOwnerId: string | null = null;
-    for (const reactionResolution of value.reactions) {
-      if (
-        isRecord(reactionResolution) &&
-        typeof reactionResolution.ownerCharacterId === "string" &&
-        Array.isArray(reactionResolution.operations) &&
-        reactionResolution.operations.some(
-          (operation) =>
-            isRecord(operation) &&
-            operation.type === "redirect-physical-attack",
-        )
-      ) {
-        redirectOwnerId = reactionResolution.ownerCharacterId;
-        break;
-      }
-    }
-    const firstLeg = value.attackLegs[0];
+      return new Set([...seenOwners, owner]);
+    }, new Set<string>());
+    const redirectOwner = reactionList.find(
+      (rawResolution): rawResolution is Record<string, unknown> => {
+        if (!isRecord(rawResolution)) return false;
+        return (
+          typeof rawResolution.ownerCharacterId === "string" &&
+          Array.isArray(rawResolution.operations) &&
+          rawResolution.operations.some(
+            (operation) =>
+              isRecord(operation) &&
+              operation.type === "redirect-physical-attack",
+          )
+        );
+      },
+    );
+    const redirectOwnerId: string | null =
+      redirectOwner === undefined ||
+      typeof redirectOwner.ownerCharacterId !== "string"
+        ? null
+        : redirectOwner.ownerCharacterId;
+    const firstLeg: unknown = value.attackLegs[0];
     const initialAffectedCharacterIds =
       isRecord(firstLeg) && Array.isArray(firstLeg.affectedCharacterIds)
-        ? firstLeg.affectedCharacterIds
+        ? (firstLeg.affectedCharacterIds as readonly unknown[])
         : [];
     if (
       (value.attackLegs.length === 2) !== Boolean(redirectOwnerId) ||
@@ -334,25 +363,15 @@ export function assertCanonicalEvent(
         value.finalCounts !== undefined ||
         value.finalHpTotals !== undefined) &&
       (!isRecord(value.finalCounts) ||
-        !Number.isInteger(
-          (value.finalCounts as Record<string, unknown>).Drow as number,
-        ) ||
-        !Number.isInteger(
-          (value.finalCounts as Record<string, unknown>).Duergar as number,
-        ) ||
-        ((value.finalCounts as Record<string, unknown>).Drow as number) < 0 ||
-        ((value.finalCounts as Record<string, unknown>).Duergar as number) <
-          0 ||
+        !Number.isInteger(value.finalCounts.Drow) ||
+        !Number.isInteger(value.finalCounts.Duergar) ||
+        (value.finalCounts.Drow as number) < 0 ||
+        (value.finalCounts.Duergar as number) < 0 ||
         !isRecord(value.finalHpTotals) ||
-        !Number.isInteger(
-          (value.finalHpTotals as Record<string, unknown>).Drow as number,
-        ) ||
-        !Number.isInteger(
-          (value.finalHpTotals as Record<string, unknown>).Duergar as number,
-        ) ||
-        ((value.finalHpTotals as Record<string, unknown>).Drow as number) < 0 ||
-        ((value.finalHpTotals as Record<string, unknown>).Duergar as number) <
-          0)
+        !Number.isInteger(value.finalHpTotals.Drow) ||
+        !Number.isInteger(value.finalHpTotals.Duergar) ||
+        (value.finalHpTotals.Drow as number) < 0 ||
+        (value.finalHpTotals.Duergar as number) < 0)
     ) {
       throw new Error("The canonical End Game Event is invalid.");
     }
@@ -422,7 +441,7 @@ export function assertCanonicalEvent(
   ) {
     throw new Error("The canonical Match Event is structurally invalid.");
   }
-  const results: unknown[] = value.results;
+  const results: readonly unknown[] = value.results;
   assertCanonicalState({
     schemaVersion: MATCH_SCHEMA_VERSION,
     rulesVersion: value.rulesVersion,

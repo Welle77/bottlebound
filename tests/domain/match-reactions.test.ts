@@ -7,8 +7,8 @@ import {
   resolveBasicAttack,
   restoreStateFromEvents,
   startMatch,
-} from "./match";
-import { RULESET } from "./ruleset";
+} from "../../src/domain/match";
+import { RULESET } from "../../src/domain/ruleset";
 import { queuedRandom } from "./match-test-support";
 
 describe("Active Match commands", () => {

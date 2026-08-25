@@ -9,14 +9,26 @@ import {
   type ActiveMatchState,
   type MatchEvent,
   type MatchState,
-} from "../domain/match";
+} from "../../src/domain/match";
 
-export function randomQueue(values: number[]) {
-  let index = 0;
+class QueueCursor {
+  private readonly values: readonly number[];
+  #position = 0;
+  constructor(values: readonly number[]) {
+    this.values = values;
+  }
+  take(): number | undefined {
+    const value = this.values[this.#position];
+    this.#position += 1;
+    return value;
+  }
+}
+
+export function randomQueue(values: readonly number[]) {
+  const cursor = new QueueCursor(values);
   return {
     nextUint32: () => {
-      const value = values[index];
-      index += 1;
+      const value = cursor.take();
       if (value === undefined) throw new Error("Missing test random value.");
       return value;
     },
@@ -30,7 +42,12 @@ export function overwriteStoredEvent(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const open = factory.open(databaseName);
-    open.addEventListener("error", () => reject(open.error), { once: true });
+    open.addEventListener(
+      "error",
+      () =>
+        reject(open.error ?? new Error("The Match database could not open.")),
+      { once: true },
+    );
     open.addEventListener(
       "success",
       () => {
@@ -39,9 +56,15 @@ export function overwriteStoredEvent(
         transaction.addEventListener("complete", () => resolve(), {
           once: true,
         });
-        transaction.addEventListener("error", () => reject(transaction.error), {
-          once: true,
-        });
+        transaction.addEventListener(
+          "error",
+          () =>
+            reject(
+              transaction.error ??
+                new Error("The IndexedDB transaction failed."),
+            ),
+          { once: true },
+        );
       },
       { once: true },
     );
@@ -55,7 +78,12 @@ export function rewriteStoredRulesVersion(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const open = factory.open(databaseName);
-    open.addEventListener("error", () => reject(open.error), { once: true });
+    open.addEventListener(
+      "error",
+      () =>
+        reject(open.error ?? new Error("The Match database could not open.")),
+      { once: true },
+    );
     open.addEventListener(
       "success",
       () => {
@@ -68,7 +96,7 @@ export function rewriteStoredRulesVersion(
           const store = transaction.objectStore(storeName);
           const request = store.getAll();
           request.addEventListener("success", () => {
-            for (const value of request.result as Array<
+            for (const value of request.result as ReadonlyArray<
               Record<string, unknown>
             >) {
               const rewritten = { ...value, rulesVersion };
@@ -86,9 +114,15 @@ export function rewriteStoredRulesVersion(
         transaction.addEventListener("complete", () => resolve(), {
           once: true,
         });
-        transaction.addEventListener("error", () => reject(transaction.error), {
-          once: true,
-        });
+        transaction.addEventListener(
+          "error",
+          () =>
+            reject(
+              transaction.error ??
+                new Error("The IndexedDB transaction failed."),
+            ),
+          { once: true },
+        );
       },
       { once: true },
     );
@@ -98,11 +132,18 @@ export function rewriteStoredRulesVersion(
 export function rewriteCurrentSnapshotAsLegacy(
   factory: IDBFactory,
   databaseName: string,
-  mutate: (snapshot: Record<string, unknown>) => void = () => undefined,
+  transform: (snapshot: Record<string, unknown>) => Record<string, unknown> = (
+    snapshot,
+  ) => snapshot,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const open = factory.open(databaseName);
-    open.addEventListener("error", () => reject(open.error), { once: true });
+    open.addEventListener(
+      "error",
+      () =>
+        reject(open.error ?? new Error("The Match database could not open.")),
+      { once: true },
+    );
     open.addEventListener(
       "success",
       () => {
@@ -121,25 +162,40 @@ export function rewriteCurrentSnapshotAsLegacy(
         const snapshots = transaction.objectStore("snapshots");
         const snapshotRequest = snapshots.getAll();
         snapshotRequest.addEventListener("success", () => {
-          const snapshot = { ...snapshotRequest.result[0], schemaVersion: 2 };
-          for (const key of [
+          const rawSnapshot: unknown = snapshotRequest.result[0];
+          const snapshot: Record<string, unknown> = {
+            ...(rawSnapshot as Record<string, unknown>),
+            schemaVersion: 2,
+          };
+          const legacyKeys = [
             "spentReactionIds",
             "majorActionUsed",
             "eliminatedTeams",
             "acknowledgedEliminations",
             "outcome",
-          ]) {
-            delete snapshot[key];
-          }
-          mutate(snapshot);
-          snapshots.put(snapshot);
+          ];
+          snapshots.put(
+            transform(
+              Object.fromEntries(
+                Object.entries(snapshot).filter(
+                  ([key]) => !legacyKeys.includes(key),
+                ),
+              ),
+            ),
+          );
         });
         transaction.addEventListener("complete", () => resolve(), {
           once: true,
         });
-        transaction.addEventListener("error", () => reject(transaction.error), {
-          once: true,
-        });
+        transaction.addEventListener(
+          "error",
+          () =>
+            reject(
+              transaction.error ??
+                new Error("The IndexedDB transaction failed."),
+            ),
+          { once: true },
+        );
       },
       { once: true },
     );
@@ -149,10 +205,15 @@ export function rewriteCurrentSnapshotAsLegacy(
 export function readRawMatch(
   factory: IDBFactory,
   databaseName: string,
-): Promise<unknown[]> {
+): Promise<readonly unknown[]> {
   return new Promise((resolve, reject) => {
     const open = factory.open(databaseName);
-    open.addEventListener("error", () => reject(open.error), { once: true });
+    open.addEventListener(
+      "error",
+      () =>
+        reject(open.error ?? new Error("The Match database could not open.")),
+      { once: true },
+    );
     open.addEventListener(
       "success",
       () => {
@@ -167,12 +228,21 @@ export function readRawMatch(
         ];
         transaction.addEventListener(
           "complete",
-          () => resolve(requests.map(({ result }) => result)),
+          () => {
+            const results = requests.map(({ result }): unknown => result);
+            resolve(results);
+          },
           { once: true },
         );
-        transaction.addEventListener("error", () => reject(transaction.error), {
-          once: true,
-        });
+        transaction.addEventListener(
+          "error",
+          () =>
+            reject(
+              transaction.error ??
+                new Error("The IndexedDB transaction failed."),
+            ),
+          { once: true },
+        );
       },
       { once: true },
     );
@@ -180,8 +250,11 @@ export function readRawMatch(
 }
 
 export function simultaneousEliminationRun(matchId: string): {
-  results: Array<{ event: MatchEvent; state: MatchState }>;
-  finalState: ActiveMatchState;
+  readonly results: ReadonlyArray<{
+    readonly event: MatchEvent;
+    readonly state: MatchState;
+  }>;
+  readonly finalState: ActiveMatchState;
 } {
   const setup = createSetup(matchId, "2026-08-22T14:00:00.000Z");
   const generated = generateInitiative(
@@ -217,33 +290,39 @@ export function simultaneousEliminationRun(matchId: string): {
     ["drow-rogue", "drow-druid", "duergar-fighter", "drow-paladin"],
     ["drow-paladin", "duergar-monk", "duergar-barbarian"],
   ];
-  const results: Array<{ event: MatchEvent; state: MatchState }> = [
-    setup,
-    generated,
-    started,
-  ];
-  let current = started.state;
-  affectedLists.forEach((affectedCharacterIds, index) => {
-    const attacked = resolveBasicAttack(
-      current,
-      {
-        sourceCharacterId: sources[index]!,
-        affectedCharacterIds,
-        physicalConfirmations: confirmations,
-        majorActionOverride: null,
-      },
-      `2026-08-22T14:${String(3 + index * 2).padStart(2, "0")}:00.000Z`,
-    );
-    results.push(attacked);
-    current = attacked.state;
-    if (index < affectedLists.length - 1) {
-      const turned = finishTurn(
-        current,
-        `2026-08-22T14:${String(4 + index * 2).padStart(2, "0")}:00.000Z`,
+  const initialResults: ReadonlyArray<{
+    readonly event: MatchEvent;
+    readonly state: MatchState;
+  }> = [setup, generated, started];
+  const { results, current } = affectedLists.reduce<{
+    readonly results: ReadonlyArray<{
+      readonly event: MatchEvent;
+      readonly state: MatchState;
+    }>;
+    readonly current: ActiveMatchState;
+  }>(
+    (progress, affectedCharacterIds, index) => {
+      const attacked = resolveBasicAttack(
+        progress.current,
+        {
+          sourceCharacterId: sources[index]!,
+          affectedCharacterIds,
+          physicalConfirmations: confirmations,
+          majorActionOverride: null,
+        },
+        `2026-08-22T14:${String(3 + index * 2).padStart(2, "0")}:00.000Z`,
       );
-      results.push(turned);
-      current = turned.state;
-    }
-  });
+      const attackedResults = [...progress.results, attacked];
+      if (index < affectedLists.length - 1) {
+        const turned = finishTurn(
+          attacked.state,
+          `2026-08-22T14:${String(4 + index * 2).padStart(2, "0")}:00.000Z`,
+        );
+        return { results: [...attackedResults, turned], current: turned.state };
+      }
+      return { results: attackedResults, current: attacked.state };
+    },
+    { results: initialResults, current: started.state },
+  );
   return { results, finalState: current };
 }

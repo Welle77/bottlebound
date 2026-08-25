@@ -3,8 +3,11 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, test } from "vitest";
 
 import { buildRulesReference } from "../../build/rules-reference";
-import type { RulesReferenceRecord } from "./types";
-import { normalizeRulesQuery, searchRules } from "./rules-search";
+import type { RulesReferenceRecord } from "../../src/rules-reference/types";
+import {
+  normalizeRulesQuery,
+  searchRules,
+} from "../../src/rules-reference/rules-search";
 
 const sourcePath = new URL("../../bottlebound_rules_final.md", import.meta.url);
 

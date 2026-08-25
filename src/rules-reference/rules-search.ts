@@ -30,45 +30,63 @@ const EXCERPT_CONTEXT = 48;
 const MAX_COMPLETE_EXCERPT = 180;
 
 function normalizeWithSourceMap(source: string): NormalizedText {
-  const characters: string[] = [];
-  const sourceStarts: number[] = [];
-  const sourceEnds: number[] = [];
+  const scanned = [...source].reduce<{
+    readonly characters: readonly string[];
+    readonly sourceStarts: readonly number[];
+    readonly sourceEnds: readonly number[];
+    readonly index: number;
+  }>(
+    (acc, sourceCharacter) => {
+      const sourceEnd = acc.index + sourceCharacter.length;
+      const normalizedCharacter = sourceCharacter
+        .normalize("NFKD")
+        .toLowerCase();
+      const written = [...normalizedCharacter].reduce<typeof acc>(
+        (inner, character) => {
+          if (/\p{M}/u.test(character)) return inner;
+          if (/[\p{L}\p{N}]/u.test(character)) {
+            return {
+              ...inner,
+              characters: [...inner.characters, character],
+              sourceStarts: [...inner.sourceStarts, inner.index],
+              sourceEnds: [...inner.sourceEnds, sourceEnd],
+            };
+          }
+          return inner;
+        },
+        acc,
+      );
+      const wroteWordCharacter =
+        written.characters.length > acc.characters.length;
+      const joinsWord = /['’‘ʼ]/u.test(sourceCharacter);
+      const spaced =
+        !wroteWordCharacter && !joinsWord && written.characters.at(-1) !== " "
+          ? {
+              ...written,
+              characters: [...written.characters, " "],
+              sourceStarts: [...written.sourceStarts, acc.index],
+              sourceEnds: [...written.sourceEnds, sourceEnd],
+            }
+          : written;
+      return { ...spaced, index: sourceEnd };
+    },
+    { characters: [], sourceStarts: [], sourceEnds: [], index: 0 },
+  );
 
-  let sourceIndex = 0;
-  for (const sourceCharacter of source) {
-    const sourceEnd = sourceIndex + sourceCharacter.length;
-    const normalizedCharacter = sourceCharacter.normalize("NFKD").toLowerCase();
-    let wroteWordCharacter = false;
-
-    for (const character of normalizedCharacter) {
-      if (/\p{M}/u.test(character)) continue;
-      if (/[\p{L}\p{N}]/u.test(character)) {
-        characters.push(character);
-        sourceStarts.push(sourceIndex);
-        sourceEnds.push(sourceEnd);
-        wroteWordCharacter = true;
-      }
-    }
-
-    const joinsWord = /['’‘ʼ]/u.test(sourceCharacter);
-    if (!wroteWordCharacter && !joinsWord && characters.at(-1) !== " ") {
-      characters.push(" ");
-      sourceStarts.push(sourceIndex);
-      sourceEnds.push(sourceEnd);
-    }
-    sourceIndex = sourceEnd;
-  }
-
-  while (characters.at(-1) === " ") {
-    characters.pop();
-    sourceStarts.pop();
-    sourceEnds.pop();
-  }
-  if (characters[0] === " ") {
-    characters.shift();
-    sourceStarts.shift();
-    sourceEnds.shift();
-  }
+  // Drop all trailing separator spaces.
+  const contentIndices = scanned.characters.flatMap((character, position) =>
+    character === " " ? [] : [position],
+  );
+  const keepLength =
+    contentIndices.length === 0 ? 0 : contentIndices.at(-1)! + 1;
+  const trimmedCharacters = scanned.characters.slice(0, keepLength);
+  const trimmedStarts = scanned.sourceStarts.slice(0, keepLength);
+  const trimmedEnds = scanned.sourceEnds.slice(0, keepLength);
+  // Remove one leading separator space when present.
+  const leading = trimmedCharacters[0] === " ";
+  const characters = leading ? trimmedCharacters.slice(1) : trimmedCharacters;
+  const sourceStarts = leading ? trimmedStarts.slice(1) : trimmedStarts;
+  const sourceEnds = leading ? trimmedEnds.slice(1) : trimmedEnds;
 
   return { value: characters.join(""), sourceStarts, sourceEnds };
 }
@@ -78,36 +96,66 @@ export function normalizeRulesQuery(query: string): readonly string[] {
   return [...new Set(terms)];
 }
 
+function insertSorted(
+  ranges: readonly SourceRange[],
+  range: SourceRange,
+): readonly SourceRange[] {
+  const compare = (left: SourceRange, right: SourceRange): number =>
+    left.start - right.start || left.end - right.end;
+  const index = ranges.findIndex((existing) => compare(existing, range) > 0);
+  if (index < 0) return [...ranges, range];
+  return [...ranges.slice(0, index), range, ...ranges.slice(index)];
+}
+
 function matchingRanges(
   normalized: NormalizedText,
   terms: readonly string[],
 ): readonly SourceRange[] | null {
-  const ranges: SourceRange[] = [];
-  for (const term of terms) {
-    let position = normalized.value.indexOf(term);
-    if (position < 0) return null;
-    while (position >= 0) {
-      const start = normalized.sourceStarts[position];
-      const end = normalized.sourceEnds[position + term.length - 1];
-      if (start !== undefined && end !== undefined) ranges.push({ start, end });
-      position = normalized.value.indexOf(term, position + term.length);
-    }
-  }
-  const sorted = ranges.sort(
-    (left, right) => left.start - right.start || left.end - right.end,
+  if (terms.some((term) => !normalized.value.includes(term))) return null;
+  const sorted = terms
+    .flatMap((term) => {
+      // Non-overlapping left-to-right occurrences, matching the previous
+      // indexOf(term, position + term.length) walk.
+      const parts = normalized.value.split(term);
+      return parts.slice(0, -1).reduce<{
+        readonly cursor: number;
+        readonly ranges: readonly SourceRange[];
+      }>(
+        (acc, part) => {
+          // Each separator (the matched term) begins right after its
+          // preceding part in the reconstructed string.
+          const position = acc.cursor + part.length;
+          const sourceStart = normalized.sourceStarts[position];
+          const sourceEnd = normalized.sourceEnds[position + term.length - 1];
+          const matched =
+            sourceStart !== undefined && sourceEnd !== undefined
+              ? [...acc.ranges, { start: sourceStart, end: sourceEnd }]
+              : acc.ranges;
+          return {
+            cursor: position + term.length,
+            ranges: matched,
+          };
+        },
+        { cursor: 0, ranges: [] as readonly SourceRange[] },
+      ).ranges;
+    })
+    .reduce(insertSorted, [] as readonly SourceRange[]);
+  const merged = sorted.reduce<readonly SourceRange[]>(
+    (mergedRanges, range) => {
+      const previous = mergedRanges.at(-1);
+      if (previous && range.start < previous.end) {
+        return [
+          ...mergedRanges.slice(0, -1),
+          {
+            start: previous.start,
+            end: Math.max(previous.end, range.end),
+          },
+        ];
+      }
+      return [...mergedRanges, { ...range }];
+    },
+    [],
   );
-  const merged: SourceRange[] = [];
-  for (const range of sorted) {
-    const previous = merged.at(-1);
-    if (previous && range.start < previous.end) {
-      merged[merged.length - 1] = {
-        start: previous.start,
-        end: Math.max(previous.end, range.end),
-      };
-    } else {
-      merged.push({ ...range });
-    }
-  }
   return merged;
 }
 
@@ -155,6 +203,33 @@ export function searchRules(
   if (terms.length === 0) return [];
   const normalizedQuery = terms.join(" ");
 
+  const compareResults = (
+    left: { readonly result: RulesSearchResult; readonly exactTitle: boolean },
+    right: { readonly result: RulesSearchResult; readonly exactTitle: boolean },
+  ): number => {
+    if (left.exactTitle !== right.exactTitle) return left.exactTitle ? -1 : 1;
+    const leftAbility = left.result.kind === "ability";
+    const rightAbility = right.result.kind === "ability";
+    if (leftAbility !== rightAbility) return leftAbility ? -1 : 1;
+    return left.result.sourceOrder - right.result.sourceOrder;
+  };
+  const insertRanked = (
+    sorted: readonly {
+      readonly result: RulesSearchResult;
+      readonly exactTitle: boolean;
+    }[],
+    entry: { readonly result: RulesSearchResult; readonly exactTitle: boolean },
+  ): readonly {
+    readonly result: RulesSearchResult;
+    readonly exactTitle: boolean;
+  }[] => {
+    const index = sorted.findIndex(
+      (existing) => compareResults(existing, entry) > 0,
+    );
+    if (index < 0) return [...sorted, entry];
+    return [...sorted.slice(0, index), entry, ...sorted.slice(index)];
+  };
+
   return records
     .flatMap((record) => {
       const normalizedText = normalizeWithSourceMap(record.text);
@@ -164,12 +239,12 @@ export function searchRules(
         normalizeWithSourceMap(record.title).value === normalizedQuery;
       return [{ result: resultFor(record, ranges), exactTitle }];
     })
-    .sort((left, right) => {
-      if (left.exactTitle !== right.exactTitle) return left.exactTitle ? -1 : 1;
-      const leftAbility = left.result.kind === "ability";
-      const rightAbility = right.result.kind === "ability";
-      if (leftAbility !== rightAbility) return leftAbility ? -1 : 1;
-      return left.result.sourceOrder - right.result.sourceOrder;
-    })
+    .reduce(
+      insertRanked,
+      [] as readonly {
+        readonly result: RulesSearchResult;
+        readonly exactTitle: boolean;
+      }[],
+    )
     .map(({ result }) => result);
 }

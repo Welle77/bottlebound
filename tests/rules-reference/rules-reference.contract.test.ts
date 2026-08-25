@@ -3,10 +3,13 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, test } from "vitest";
 
 import { buildRulesReference } from "../../build/rules-reference";
-import { RULESET } from "../domain/ruleset";
+import { RULESET } from "../../src/domain/ruleset";
 import { RULES_REFERENCE } from "virtual:rules-reference";
-import { resolveRulesReference, resolveRulesSurface } from "./rules-reference";
-import type { RulesReference } from "./types";
+import {
+  resolveRulesReference,
+  resolveRulesSurface,
+} from "../../src/rules-reference/rules-reference";
+import type { RulesReference } from "../../src/rules-reference/types";
 
 const sourcePath = new URL("../../bottlebound_rules_final.md", import.meta.url);
 
@@ -66,18 +69,6 @@ function assertStructuredRulesetMatchesReference(
       }
     }
   }
-}
-
-interface MutableRulesetFixture {
-  referenceCharacters: Array<{
-    role: string;
-    basicAttack: string;
-    abilities: Array<{ effect: string }>;
-  }>;
-}
-
-function mutableRuleset(): MutableRulesetFixture {
-  return structuredClone(RULESET) as unknown as MutableRulesetFixture;
 }
 
 describe("Ruleset reference contract", () => {
@@ -198,8 +189,12 @@ describe("Ruleset reference contract", () => {
       ballRequired: "Yes",
       duration: "Until the end of each affected character’s next turn.",
     });
+    // Freeze-contract check: an attempted mutation of the frozen Ruleset
+    // must throw. Object.assign performs the write onto the frozen target,
+    // which fails closed in strict mode.
+    expect(rogue?.abilities).toBeDefined();
     expect(() => {
-      (rogue?.abilities as unknown[]).push({});
+      Object.assign(rogue?.abilities as object, { 0: {} });
     }).toThrow();
   });
 
@@ -310,8 +305,12 @@ describe("Ruleset reference contract", () => {
     const source = await readFile(sourcePath, "utf8");
     const reference = buildRulesReference(source, RULESET.version);
     assertStructuredRulesetMatchesReference(reference, RULESET);
-    const drifted = mutableRuleset();
-    drifted.referenceCharacters[0]!.role = "Controller";
+    const drifted = {
+      referenceCharacters: RULESET.referenceCharacters.map(
+        (character, index) =>
+          index === 0 ? { ...character, role: "Controller" } : character,
+      ),
+    };
 
     expect(() =>
       assertStructuredRulesetMatchesReference(
@@ -326,8 +325,14 @@ describe("Ruleset reference contract", () => {
   test("rejects induced Basic Attack drift from the authoritative Markdown", async () => {
     const source = await readFile(sourcePath, "utf8");
     const reference = buildRulesReference(source, RULESET.version);
-    const drifted = mutableRuleset();
-    drifted.referenceCharacters[0]!.basicAttack = "Ranged — 99 paces";
+    const drifted = {
+      referenceCharacters: RULESET.referenceCharacters.map(
+        (character, index) =>
+          index === 0
+            ? { ...character, basicAttack: "Ranged — 99 paces" }
+            : character,
+      ),
+    };
 
     expect(() =>
       assertStructuredRulesetMatchesReference(
@@ -342,8 +347,21 @@ describe("Ruleset reference contract", () => {
   test("rejects induced ability-card field drift from the authoritative Markdown", async () => {
     const source = await readFile(sourcePath, "utf8");
     const reference = buildRulesReference(source, RULESET.version);
-    const drifted = mutableRuleset();
-    drifted.referenceCharacters[0]!.abilities[0]!.effect = "No effect.";
+    const drifted = {
+      referenceCharacters: RULESET.referenceCharacters.map(
+        (character, index) =>
+          index === 0
+            ? {
+                ...character,
+                abilities: character.abilities.map((ability, abilityIndex) =>
+                  abilityIndex === 0
+                    ? { ...ability, effect: "No effect." }
+                    : ability,
+                ),
+              }
+            : character,
+      ),
+    };
 
     expect(() =>
       assertStructuredRulesetMatchesReference(

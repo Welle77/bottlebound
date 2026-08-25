@@ -14,8 +14,9 @@ import {
   undoLastEvent,
   type MatchEvent,
   type MatchState,
-} from "../domain/match";
-import { IndexedDbMatchStore } from "./match-store";
+  type ActiveMatchState,
+} from "../../src/domain/match";
+import { IndexedDbMatchStore } from "../../src/storage/match-store";
 import {
   randomQueue,
   simultaneousEliminationRun,
@@ -68,34 +69,46 @@ describe("IndexedDbMatchStore", () => {
       "2026-08-22T14:01:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
-    const results: Array<{ event: MatchEvent; state: MatchState }> = [
-      setup,
-      generated,
-      started,
-    ];
-    let current = started.state;
-    for (let attackIndex = 0; attackIndex < 5; attackIndex += 1) {
-      const attack = resolveBasicAttack(
-        current,
-        {
-          sourceCharacterId: started.state.initiative[0]!.characterId,
-          affectedCharacterIds: started.state.characters
-            .filter(({ characterId }) => characterId.startsWith("duergar-"))
-            .map(({ characterId }) => characterId),
-          physicalConfirmations: {
-            range: true,
-            lineOfSight: true,
-            legalBottleContact: true,
-            terrainContact: true,
+    const initialResults: ReadonlyArray<{
+      readonly event: MatchEvent;
+      readonly state: MatchState;
+    }> = [setup, generated, started];
+    const { results, current } = Array.from(
+      { length: 5 },
+      (_, attackIndex) => attackIndex,
+    ).reduce<{
+      readonly results: ReadonlyArray<{
+        readonly event: MatchEvent;
+        readonly state: MatchState;
+      }>;
+      readonly current: ActiveMatchState;
+    }>(
+      (progress, attackIndex) => {
+        const attack = resolveBasicAttack(
+          progress.current,
+          {
+            sourceCharacterId: started.state.initiative[0]!.characterId,
+            affectedCharacterIds: started.state.characters
+              .filter(({ characterId }) => characterId.startsWith("duergar-"))
+              .map(({ characterId }) => characterId),
+            physicalConfirmations: {
+              range: true,
+              lineOfSight: true,
+              legalBottleContact: true,
+              terrainContact: true,
+            },
+            majorActionOverride:
+              attackIndex === 0 ? null : "Referee confirmed repeated attack.",
           },
-          majorActionOverride:
-            attackIndex === 0 ? null : "Referee confirmed repeated attack.",
-        },
-        `2026-08-22T14:0${attackIndex + 3}:00.000Z`,
-      );
-      current = attack.state;
-      results.push(attack);
-    }
+          `2026-08-22T14:0${attackIndex + 3}:00.000Z`,
+        );
+        return {
+          results: [...progress.results, attack],
+          current: attack.state,
+        };
+      },
+      { results: initialResults, current: started.state },
+    );
     for (const result of results)
       await store.commit(result.event, result.state);
 
@@ -141,7 +154,7 @@ describe("IndexedDbMatchStore", () => {
       summary: expect.objectContaining({
         outcome: "Drow",
         decisionBasis: "elimination",
-      }),
+      }) as unknown,
     });
     await store.deleteMatch(endedAgain.state.matchId, true);
     await expect(store.restore()).resolves.toBeNull();
@@ -198,7 +211,7 @@ describe("IndexedDbMatchStore", () => {
         summary: expect.objectContaining({
           outcome,
           decisionBasis: "elimination",
-        }),
+        }) as unknown,
       });
     },
   );

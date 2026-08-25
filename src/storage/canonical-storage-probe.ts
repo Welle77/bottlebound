@@ -1,5 +1,6 @@
 export type CanonicalStorageProbeResult =
-  { status: "ready" } | { status: "failed"; reason: string };
+  | { readonly status: "ready" }
+  | { readonly status: "failed"; readonly reason: string };
 
 const PROBE_DATABASE = "bottlebound-canonical-storage-probe";
 const PROBE_STORE = "probe";

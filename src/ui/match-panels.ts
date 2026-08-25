@@ -20,9 +20,12 @@ import { draftAffectedCharacterIds, state } from "./shell-state";
 
 export function rosterRows(match: SetupMatchState): string {
   if (match.initiative) {
-    const totalCounts = new Map<number, number>();
-    match.initiative.forEach(({ total }) =>
-      totalCounts.set(total, (totalCounts.get(total) ?? 0) + 1),
+    const initiative = match.initiative;
+    const totalCounts = new Map<number, number>(
+      [...new Set(initiative.map(({ total }) => total))].map((total) => [
+        total,
+        initiative.filter((entry) => entry.total === total).length,
+      ]),
     );
     return match.initiative
       .map((entry) => {
@@ -50,26 +53,34 @@ export function rosterRows(match: SetupMatchState): string {
 }
 
 export function activeMatchPanel(
-  match: Extract<MatchState, { phase: "active" }>,
+  match: Extract<MatchState, { readonly phase: "active" }>,
 ): string {
   const activeEntry = match.initiative[match.activeSlot - 1];
-  let nextSlot = match.activeSlot;
-  for (let checked = 0; checked < match.initiative.length; checked += 1) {
-    nextSlot = nextSlot === match.initiative.length ? 1 : nextSlot + 1;
-    const candidate = match.initiative[nextSlot - 1];
-    const candidateRules = RULESET.characters.find(
-      ({ id }) => id === candidate?.characterId,
-    );
-    const candidateState = match.characters.find(
-      ({ characterId }) => characterId === candidate?.characterId,
-    );
-    if (
-      candidateRules &&
-      candidateState?.hp !== 0 &&
-      !match.eliminatedTeams.includes(candidateRules.team)
-    )
-      break;
-  }
+  const nextSlot = match.initiative.reduce<{
+    readonly nextSlot: number;
+    readonly found: boolean;
+  }>(
+    (scan) => {
+      if (scan.found) return scan;
+      const candidateSlot =
+        scan.nextSlot === match.initiative.length ? 1 : scan.nextSlot + 1;
+      const candidate = match.initiative[candidateSlot - 1];
+      const candidateRules = RULESET.characters.find(
+        ({ id }) => id === candidate?.characterId,
+      );
+      const candidateState = match.characters.find(
+        ({ characterId }) => characterId === candidate?.characterId,
+      );
+      const usable =
+        candidateRules &&
+        candidateState?.hp !== 0 &&
+        !match.eliminatedTeams.includes(candidateRules.team);
+      return usable
+        ? { nextSlot: candidateSlot, found: true }
+        : { nextSlot: candidateSlot, found: false };
+    },
+    { nextSlot: match.activeSlot, found: false },
+  ).nextSlot;
   const nextEntry = match.initiative[nextSlot - 1];
   if (!activeEntry || !nextEntry) {
     throw new Error("The Active Match initiative order is incomplete.");
@@ -83,7 +94,8 @@ export function activeMatchPanel(
   if (!activeCharacter || !nextCharacter) {
     throw new Error("The Active Match references an unknown character.");
   }
-  if (state.actionDraft) return actionDraftPanel(match, activeCharacter.name);
+  if (state.current.actionDraft)
+    return actionDraftPanel(match, activeCharacter.name);
   const hpByCharacter = new Map(
     match.characters.map(({ characterId, hp }) => [characterId, hp]),
   );
@@ -109,7 +121,9 @@ export function activeMatchPanel(
     .join("");
   const activeHp = hpByCharacter.get(activeEntry.characterId);
   const nextHp = hpByCharacter.get(nextEntry.characterId);
-  const canUndo = !state.saving && getUndoPreview(match, state.events) !== null;
+  const canUndo =
+    !state.current.saving &&
+    getUndoPreview(match, state.current.events) !== null;
   const combatAvailable = match.rulesVersion === RULESET.version;
   const activeDowned = activeHp === 0;
   const normalElimination =
@@ -119,7 +133,7 @@ export function activeMatchPanel(
     match.acknowledgedEliminations.includes(match.eliminatedTeams[0]!);
   const eliminationPrompt =
     normalElimination && !eliminationAcknowledged
-      ? `<section class="elimination-result" role="alert" aria-labelledby="elimination-heading"><p class="eyebrow">Team Elimination</p><h3 id="elimination-heading">${escapeHtml(match.outcome!)} wins</h3><p>All six ${escapeHtml(match.eliminatedTeams[0]!)} characters are Downed. Choose how this Match proceeds.</p><div class="match-actions"><button id="request-end-game" class="primary-action" type="button">End Game</button>${canUndo ? '<button id="request-undo" class="secondary-action" type="button">Undo</button>' : ""}<button id="continue-match" class="secondary-action" type="button">Continue</button></div></section>`
+      ? `<section class="elimination-result" role="alert" aria-labelledby="elimination-heading"><p class="eyebrow">Team Elimination</p><h3 id="elimination-heading">${escapeHtml(match.outcome)} wins</h3><p>All six ${escapeHtml(match.eliminatedTeams[0]!)} characters are Downed. Choose how this Match proceeds.</p><div class="match-actions"><button id="request-end-game" class="primary-action" type="button">End Game</button>${canUndo ? '<button id="request-undo" class="secondary-action" type="button">Undo</button>' : ""}<button id="continue-match" class="secondary-action" type="button">Continue</button></div></section>`
       : eliminationAcknowledged
         ? `<p class="elimination-acknowledged" role="status">${escapeHtml(match.eliminatedTeams[0]!)} remains eliminated. Continue was acknowledged; its initiative slots are skipped.</p>`
         : match.eliminatedTeams.length === 2 && match.outcome === null
@@ -133,7 +147,7 @@ export function activeMatchPanel(
   const commands =
     eliminationPrompt && !eliminationAcknowledged
       ? ""
-      : `<div class="match-actions"><button id="basic-attack" class="secondary-action" type="button" ${state.saving || !combatAvailable || activeDowned || match.eliminatedTeams.length === 2 ? "disabled" : ""} ${combatAvailable ? "" : 'aria-describedby="combat-version-status"'}>Basic Attack</button><button id="finish-turn" class="primary-action" type="button" ${state.saving || match.eliminatedTeams.length === 2 ? "disabled" : ""}>${state.saving ? "Saving…" : "Finish Turn"}</button>${canUndo ? '<button id="request-undo" class="secondary-action" type="button">Undo</button>' : ""}</div>`;
+      : `<div class="match-actions"><button id="basic-attack" class="secondary-action" type="button" ${state.current.saving || !combatAvailable || activeDowned || match.eliminatedTeams.length === 2 ? "disabled" : ""} ${combatAvailable ? "" : 'aria-describedby="combat-version-status"'}>Basic Attack</button><button id="finish-turn" class="primary-action" type="button" ${state.current.saving || match.eliminatedTeams.length === 2 ? "disabled" : ""}>${state.current.saving ? "Saving…" : "Finish Turn"}</button>${canUndo ? '<button id="request-undo" class="secondary-action" type="button">Undo</button>' : ""}</div>`;
   const needsSeparateEndGame =
     !eliminationPrompt || eliminationAcknowledged || eliminationPrompt === "";
   const endGameControl =
@@ -141,8 +155,10 @@ export function activeMatchPanel(
     !(match.eliminatedTeams.length === 2 && match.outcome === null)
       ? `<section class="end-game-control" aria-labelledby="end-game-heading"><h3 id="end-game-heading">End Game</h3><p>Close the Match with the calculated winner and Decision Basis.</p><button id="request-end-game" class="secondary-action" type="button">End Game</button></section>`
       : "";
-  const priorSummary = state.summary ? priorSummaryCard(state.summary) : "";
-  return `<section class="match-panel active-match" aria-labelledby="active-heading"><div class="section-heading"><div><p class="eyebrow">Active · Sequence ${match.sequence}</p><h2 id="active-heading">Active Match</h2><p class="turn-position">Round ${match.round} · Slot ${match.activeSlot} of ${match.initiative.length}</p><div class="rules-context-links">${contextualRulesControl("rules-round", "Round rules", "section-5-core-terms")}${contextualRulesControl("rules-turn", "Turn rules", "section-7-turn-structure-movement")}</div></div><span class="readiness-badge" data-state="ready">Saved</span></div>${state.matchError ? `<p class="blocking-error" role="alert">${escapeHtml(state.matchError)} The last committed Active Match remains visible.</p>` : ""}<div class="turn-cards"><article class="turn-card active-character" data-active-character><p class="eyebrow">Active${activeDowned ? " · Downed" : ""}</p><h3>${escapeHtml(activeCharacter.name)}</h3><dl><div><dt>Team</dt><dd>${escapeHtml(activeCharacter.team)}</dd></div><div><dt>HP</dt><dd>${activeHp}/${activeCharacter.baseHp}</dd></div><div><dt>Slot</dt><dd>${activeEntry.slot}</dd></div></dl></article><article class="turn-card" data-next-character><p class="eyebrow">Next Active</p><h3>${escapeHtml(nextCharacter.name)}</h3><dl><div><dt>Team</dt><dd>${escapeHtml(nextCharacter.team)}</dd></div><div><dt>HP</dt><dd>${nextHp}/${nextCharacter.baseHp}</dd></div><div><dt>Slot</dt><dd>${nextEntry.slot}</dd></div></dl></article></div>${combatStatus}${eliminationPrompt}<div class="table-wrap"><table class="initiative-table active-order"><caption>Complete initiative order</caption><thead><tr><th>Slot</th><th>Character</th><th>Team</th><th>HP</th><th>Turn</th></tr></thead><tbody>${rows}</tbody></table></div>${commands}${endGameControl}${priorSummary}${confirmationPanel()}</section>`;
+  const priorSummary = state.current.summary
+    ? priorSummaryCard(state.current.summary)
+    : "";
+  return `<section class="match-panel active-match" aria-labelledby="active-heading"><div class="section-heading"><div><p class="eyebrow">Active · Sequence ${match.sequence}</p><h2 id="active-heading">Active Match</h2><p class="turn-position">Round ${match.round} · Slot ${match.activeSlot} of ${match.initiative.length}</p><div class="rules-context-links">${contextualRulesControl("rules-round", "Round rules", "section-5-core-terms")}${contextualRulesControl("rules-turn", "Turn rules", "section-7-turn-structure-movement")}</div></div><span class="readiness-badge" data-state="ready">Saved</span></div>${state.current.matchError ? `<p class="blocking-error" role="alert">${escapeHtml(state.current.matchError)} The last committed Active Match remains visible.</p>` : ""}<div class="turn-cards"><article class="turn-card active-character" data-active-character><p class="eyebrow">Active${activeDowned ? " · Downed" : ""}</p><h3>${escapeHtml(activeCharacter.name)}</h3><dl><div><dt>Team</dt><dd>${escapeHtml(activeCharacter.team)}</dd></div><div><dt>HP</dt><dd>${activeHp}/${activeCharacter.baseHp}</dd></div><div><dt>Slot</dt><dd>${activeEntry.slot}</dd></div></dl></article><article class="turn-card" data-next-character><p class="eyebrow">Next Active</p><h3>${escapeHtml(nextCharacter.name)}</h3><dl><div><dt>Team</dt><dd>${escapeHtml(nextCharacter.team)}</dd></div><div><dt>HP</dt><dd>${nextHp}/${nextCharacter.baseHp}</dd></div><div><dt>Slot</dt><dd>${nextEntry.slot}</dd></div></dl></article></div>${combatStatus}${eliminationPrompt}<div class="table-wrap"><table class="initiative-table active-order"><caption>Complete initiative order</caption><thead><tr><th>Slot</th><th>Character</th><th>Team</th><th>HP</th><th>Turn</th></tr></thead><tbody>${rows}</tbody></table></div>${commands}${endGameControl}${priorSummary}${confirmationPanel()}</section>`;
 }
 
 export function priorSummaryCard(summary: MatchSummary): string {
@@ -152,18 +168,30 @@ export function priorSummaryCard(summary: MatchSummary): string {
 }
 
 export function endedMatchPanel(
-  match: Extract<MatchState, { phase: "ended" }>,
+  match: Extract<MatchState, { readonly phase: "ended" }>,
 ): string {
   const eliminated = match.eliminatedTeams.join(" and ");
   const result = outcomeLabel(match.outcome);
-  const decisionBasis = (match as { decisionBasis?: string }).decisionBasis;
+  const decisionBasis = (match as { readonly decisionBasis?: string })
+    .decisionBasis;
   const finalCounts = (
-    match as { finalCounts?: { Drow: number; Duergar: number } }
+    match as {
+      readonly finalCounts?: {
+        readonly Drow: number;
+        readonly Duergar: number;
+      };
+    }
   ).finalCounts;
   const finalHpTotals = (
-    match as { finalHpTotals?: { Drow: number; Duergar: number } }
+    match as {
+      readonly finalHpTotals?: {
+        readonly Drow: number;
+        readonly Duergar: number;
+      };
+    }
   ).finalHpTotals;
-  const coinFlipResult = (match as { coinFlipResult?: string }).coinFlipResult;
+  const coinFlipResult = (match as { readonly coinFlipResult?: string })
+    .coinFlipResult;
   const basisLine = decisionBasis
     ? `<div><dt>Decision Basis</dt><dd>${escapeHtml(decisionBasisLabel(decisionBasis))}${coinFlipResult ? ` · ${escapeHtml(coinFlipResult)}` : ""}</dd></div>`
     : "";
@@ -173,14 +201,14 @@ export function endedMatchPanel(
   const hpLine = finalHpTotals
     ? `<div><dt>Active HP totals</dt><dd>Drow ${finalHpTotals.Drow} · Duergar ${finalHpTotals.Duergar}</dd></div>`
     : "";
-  return `<section class="match-panel ended-match" aria-labelledby="ended-heading"><div class="section-heading"><div><p class="eyebrow">Ended · Sequence ${match.sequence}</p><h2 id="ended-heading">Ended Match</h2><p>${escapeHtml(result)}${eliminated ? ` · ${escapeHtml(eliminated)} eliminated` : ""}</p></div><span class="readiness-badge" data-state="ready">Read-only</span></div>${state.matchError ? `<p class="blocking-error" role="alert">${escapeHtml(state.matchError)} The Ended Match remains saved.</p>` : ""}<dl class="ended-result"><div><dt>Result</dt><dd>${escapeHtml(result)}</dd></div>${basisLine}${countsLine}${hpLine}<div><dt>Ended</dt><dd>${escapeHtml(match.endedAt)}</dd></div><div><dt>Final round</dt><dd>${match.round}</dd></div><div><dt>Ruleset</dt><dd>${escapeHtml(match.rulesVersion)}</dd></div></dl><p>This Match is read-only. Reopen it to make corrections, or remove its complete local history.</p><div class="match-actions"><button id="reopen-match" class="primary-action" type="button">Reopen Match</button><button id="request-start-new-match" class="secondary-action" type="button">Start new Match</button><button id="request-remove-match" class="danger-action" type="button">Remove Match</button></div>${confirmationPanel()}</section>`;
+  return `<section class="match-panel ended-match" aria-labelledby="ended-heading"><div class="section-heading"><div><p class="eyebrow">Ended · Sequence ${match.sequence}</p><h2 id="ended-heading">Ended Match</h2><p>${escapeHtml(result)}${eliminated ? ` · ${escapeHtml(eliminated)} eliminated` : ""}</p></div><span class="readiness-badge" data-state="ready">Read-only</span></div>${state.current.matchError ? `<p class="blocking-error" role="alert">${escapeHtml(state.current.matchError)} The Ended Match remains saved.</p>` : ""}<dl class="ended-result"><div><dt>Result</dt><dd>${escapeHtml(result)}</dd></div>${basisLine}${countsLine}${hpLine}<div><dt>Ended</dt><dd>${escapeHtml(match.endedAt)}</dd></div><div><dt>Final round</dt><dd>${match.round}</dd></div><div><dt>Ruleset</dt><dd>${escapeHtml(match.rulesVersion)}</dd></div></dl><p>This Match is read-only. Reopen it to make corrections, or remove its complete local history.</p><div class="match-actions"><button id="reopen-match" class="primary-action" type="button">Reopen Match</button><button id="request-start-new-match" class="secondary-action" type="button">Start new Match</button><button id="request-remove-match" class="danger-action" type="button">Remove Match</button></div>${confirmationPanel()}</section>`;
 }
 
 export function actionDraftPanel(
-  match: Extract<MatchState, { phase: "active" }>,
+  match: Extract<MatchState, { readonly phase: "active" }>,
   sourceName: string,
 ): string {
-  const draft = state.actionDraft;
+  const draft = state.current.actionDraft;
   if (!draft) return "";
   const attack = RULESET.basicAttacks.find(
     ({ characterId }) => characterId === draft.sourceCharacterId,
@@ -269,7 +297,7 @@ export function actionDraftPanel(
     const reactionReview = reactions
       ? `<section aria-labelledby="reaction-review-heading"><h3 id="reaction-review-heading">Reactions and objective operations</h3><div class="reaction-review-list">${reactions}</div></section>`
       : "<p>No Reactions apply in this resolution.</p>";
-    return `<section class="match-panel action-draft" aria-labelledby="action-draft-heading"><p class="eyebrow">Action Draft · Review</p><h2 id="action-draft-heading">Review Basic Attack</h2>${source}<p>All four physical facts are referee-confirmed.</p><section aria-labelledby="attack-legs-heading"><h3 id="attack-legs-heading">Ordered Attack Legs</h3><div class="attack-leg-review-list">${legReview}</div></section>${reactionReview}<div class="table-wrap"><table class="initiative-table"><caption>Ordered hits and final changes</caption><thead><tr><th>Contact</th><th>Character</th><th>Team</th><th>Damage</th><th>HP</th><th>Downed</th></tr></thead><tbody>${rows}</tbody></table></div>${match.majorActionUsed ? `<label class="override-control"><input id="major-action-override" type="checkbox" ${draft.majorActionOverride ? "checked" : ""}> Record referee override for a second Basic Attack this turn</label>` : ""}<div class="match-actions"><button id="confirm-basic-attack" class="primary-action" type="button" ${match.majorActionUsed && !draft.majorActionOverride ? "disabled" : ""}>${state.saving ? "Saving…" : "Confirm Action Resolution"}</button><button id="back-to-contacts" class="secondary-action" type="button">Back</button><button id="cancel-basic-attack" class="secondary-action" type="button">Cancel draft</button></div></section>`;
+    return `<section class="match-panel action-draft" aria-labelledby="action-draft-heading"><p class="eyebrow">Action Draft · Review</p><h2 id="action-draft-heading">Review Basic Attack</h2>${source}<p>All four physical facts are referee-confirmed.</p><section aria-labelledby="attack-legs-heading"><h3 id="attack-legs-heading">Ordered Attack Legs</h3><div class="attack-leg-review-list">${legReview}</div></section>${reactionReview}<div class="table-wrap"><table class="initiative-table"><caption>Ordered hits and final changes</caption><thead><tr><th>Contact</th><th>Character</th><th>Team</th><th>Damage</th><th>HP</th><th>Downed</th></tr></thead><tbody>${rows}</tbody></table></div>${match.majorActionUsed ? `<label class="override-control"><input id="major-action-override" type="checkbox" ${draft.majorActionOverride ? "checked" : ""}> Record referee override for a second Basic Attack this turn</label>` : ""}<div class="match-actions"><button id="confirm-basic-attack" class="primary-action" type="button" ${match.majorActionUsed && !draft.majorActionOverride ? "disabled" : ""}>${state.current.saving ? "Saving…" : "Confirm Action Resolution"}</button><button id="back-to-contacts" class="secondary-action" type="button">Back</button><button id="cancel-basic-attack" class="secondary-action" type="button">Cancel draft</button></div></section>`;
   }
   const activeLegIndex = draft.attackLegs.length - 1;
   const activeLeg = draft.attackLegs[activeLegIndex]!;
@@ -283,7 +311,7 @@ export function actionDraftPanel(
       return `<label class="contact-control"><input type="checkbox" data-hit-character="${escapeHtml(character.id)}" ${order >= 0 ? "checked" : ""} ${duplicate ? "disabled" : ""}><span>${escapeHtml(character.name)} · ${escapeHtml(character.team)}${duplicate ? ` · Already contacted in Leg ${draft.attackLegs.slice(0, activeLegIndex).findIndex((leg) => leg.includes(character.id)) + 1}` : ""}</span>${order >= 0 ? `<strong>Contact ${order + 1}</strong>` : ""}</label>`;
     })
     .join("");
-  const checkLabels: readonly [PhysicalAttackCheck, string][] = [
+  const checkLabels: readonly (readonly [PhysicalAttackCheck, string])[] = [
     ["range", "Range is legal"],
     ["line-of-sight", "Line of Sight is legal"],
     ["legal-bottle-contact", "Every selected bottle was physically hit"],
@@ -360,10 +388,10 @@ export function undoStatePanel(match: MatchState, attribute: string): string {
 }
 
 export function confirmationPanel(): string {
-  if (state.confirmation === null) return "";
-  if (state.confirmation === "undo") {
-    if (state.match === null) return "";
-    const preview = getUndoPreview(state.match, state.events);
+  if (state.current.confirmation === null) return "";
+  if (state.current.confirmation === "undo") {
+    if (state.current.match === null) return "";
+    const preview = getUndoPreview(state.current.match, state.current.events);
     if (preview === null) return "";
     const targetLabel = {
       InitiativeGenerated: "Generate Initiative",
@@ -383,20 +411,26 @@ export function confirmationPanel(): string {
         : "section-6-initiative-game-clock";
     return `<section class="confirmation-panel undo-confirmation" role="alertdialog" aria-labelledby="confirmation-heading" aria-describedby="confirmation-detail"><div><p class="eyebrow">Confirmation required</p><h3 id="confirmation-heading">Undo ${targetLabel}?</h3><p id="confirmation-detail">Check the complete committed state and the complete state that Undo will restore.</p>${contextualRulesControl("rules-undo", "Undo rules", sourceAnchor)}</div><div class="undo-comparison">${undoStatePanel(preview.currentState, "data-undo-current")}${undoStatePanel(preview.restoredState, "data-undo-restored")}</div><div class="button-row"><button id="confirm-action" class="danger-action" type="button">Confirm Undo</button><button id="cancel-action" class="secondary-action" type="button">Cancel</button></div></section>`;
   }
-  if (state.confirmation === "end" && state.match?.phase === "active") {
-    const storedPreview = state.endGamePreview;
+  if (
+    state.current.confirmation === "end" &&
+    state.current.match?.phase === "active"
+  ) {
+    const storedPreview = state.current.endGamePreview;
     if (storedPreview) {
       const result =
         storedPreview.outcome === "draw"
           ? "Draw"
           : `${storedPreview.outcome} wins`;
-      return `<section class="confirmation-panel end-game-preview" role="alertdialog" aria-labelledby="confirmation-heading" aria-describedby="confirmation-detail"><div><p class="eyebrow">End Game preview</p><h3 id="confirmation-heading">End this Match?</h3><p id="confirmation-detail">Review the calculated winner and Decision Basis before confirming. This becomes read-only until reopened.</p></div><dl class="ended-result"><div><dt>Winner</dt><dd>${escapeHtml(result)}</dd></div><div><dt>Decision Basis</dt><dd>${escapeHtml(decisionBasisLabel(storedPreview.decisionBasis))}${storedPreview.coinFlipResult ? ` · ${escapeHtml(storedPreview.coinFlipResult)}` : ""}</dd></div><div><dt>Active counts</dt><dd>Drow ${storedPreview.finalCounts.Drow} · Duergar ${storedPreview.finalCounts.Duergar}</dd></div><div><dt>Active HP totals</dt><dd>Drow ${storedPreview.finalHpTotals.Drow} · Duergar ${storedPreview.finalHpTotals.Duergar}</dd></div><div><dt>Ruleset</dt><dd>${escapeHtml(state.match.rulesVersion)}</dd></div></dl><div class="button-row"><button id="confirm-action" class="danger-action" type="button">Confirm End Game</button><button id="cancel-action" class="secondary-action" type="button">Cancel</button></div></section>`;
+      return `<section class="confirmation-panel end-game-preview" role="alertdialog" aria-labelledby="confirmation-heading" aria-describedby="confirmation-detail"><div><p class="eyebrow">End Game preview</p><h3 id="confirmation-heading">End this Match?</h3><p id="confirmation-detail">Review the calculated winner and Decision Basis before confirming. This becomes read-only until reopened.</p></div><dl class="ended-result"><div><dt>Winner</dt><dd>${escapeHtml(result)}</dd></div><div><dt>Decision Basis</dt><dd>${escapeHtml(decisionBasisLabel(storedPreview.decisionBasis))}${storedPreview.coinFlipResult ? ` · ${escapeHtml(storedPreview.coinFlipResult)}` : ""}</dd></div><div><dt>Active counts</dt><dd>Drow ${storedPreview.finalCounts.Drow} · Duergar ${storedPreview.finalCounts.Duergar}</dd></div><div><dt>Active HP totals</dt><dd>Drow ${storedPreview.finalHpTotals.Drow} · Duergar ${storedPreview.finalHpTotals.Duergar}</dd></div><div><dt>Ruleset</dt><dd>${escapeHtml(state.current.match.rulesVersion)}</dd></div></dl><div class="button-row"><button id="confirm-action" class="danger-action" type="button">Confirm End Game</button><button id="cancel-action" class="secondary-action" type="button">Cancel</button></div></section>`;
     }
     try {
-      const preview = getEndGamePreview(state.match, cryptoRandomSource);
+      const preview = getEndGamePreview(
+        state.current.match,
+        cryptoRandomSource,
+      );
       const result =
         preview.outcome === "draw" ? "Draw" : `${preview.outcome} wins`;
-      return `<section class="confirmation-panel end-game-preview" role="alertdialog" aria-labelledby="confirmation-heading" aria-describedby="confirmation-detail"><div><p class="eyebrow">End Game preview</p><h3 id="confirmation-heading">End this Match?</h3><p id="confirmation-detail">Review the calculated winner and Decision Basis before confirming. This becomes read-only until reopened.</p></div><dl class="ended-result"><div><dt>Winner</dt><dd>${escapeHtml(result)}</dd></div><div><dt>Decision Basis</dt><dd>${escapeHtml(decisionBasisLabel(preview.decisionBasis))}${preview.coinFlipResult ? ` · ${escapeHtml(preview.coinFlipResult)}` : ""}</dd></div><div><dt>Active counts</dt><dd>Drow ${preview.finalCounts.Drow} · Duergar ${preview.finalCounts.Duergar}</dd></div><div><dt>Active HP totals</dt><dd>Drow ${preview.finalHpTotals.Drow} · Duergar ${preview.finalHpTotals.Duergar}</dd></div><div><dt>Ruleset</dt><dd>${escapeHtml(state.match.rulesVersion)}</dd></div></dl><div class="button-row"><button id="confirm-action" class="danger-action" type="button">Confirm End Game</button><button id="cancel-action" class="secondary-action" type="button">Cancel</button></div></section>`;
+      return `<section class="confirmation-panel end-game-preview" role="alertdialog" aria-labelledby="confirmation-heading" aria-describedby="confirmation-detail"><div><p class="eyebrow">End Game preview</p><h3 id="confirmation-heading">End this Match?</h3><p id="confirmation-detail">Review the calculated winner and Decision Basis before confirming. This becomes read-only until reopened.</p></div><dl class="ended-result"><div><dt>Winner</dt><dd>${escapeHtml(result)}</dd></div><div><dt>Decision Basis</dt><dd>${escapeHtml(decisionBasisLabel(preview.decisionBasis))}${preview.coinFlipResult ? ` · ${escapeHtml(preview.coinFlipResult)}` : ""}</dd></div><div><dt>Active counts</dt><dd>Drow ${preview.finalCounts.Drow} · Duergar ${preview.finalCounts.Duergar}</dd></div><div><dt>Active HP totals</dt><dd>Drow ${preview.finalHpTotals.Drow} · Duergar ${preview.finalHpTotals.Duergar}</dd></div><div><dt>Ruleset</dt><dd>${escapeHtml(state.current.match.rulesVersion)}</dd></div></dl><div class="button-row"><button id="confirm-action" class="danger-action" type="button">Confirm End Game</button><button id="cancel-action" class="secondary-action" type="button">Cancel</button></div></section>`;
     } catch {
       // fall back to generic panel if preview cannot be computed (e.g., simultaneous unruled)
     }
@@ -432,33 +466,34 @@ export function confirmationPanel(): string {
       "This clears the Ended Match history but keeps its summary as prior result.",
       "Confirm start",
     ],
-  }[state.confirmation];
+  }[state.current.confirmation];
   if (!content) return "";
   return `<section class="confirmation-panel" role="alertdialog" aria-labelledby="confirmation-heading" aria-describedby="confirmation-detail"><div><p class="eyebrow">Confirmation required</p><h3 id="confirmation-heading">${content[0]}</h3><p id="confirmation-detail">${content[1]}</p></div><div class="button-row"><button id="confirm-action" class="danger-action" type="button">${content[2]}</button><button id="cancel-action" class="secondary-action" type="button">Cancel</button></div></section>`;
 }
 
 export function matchPanel(): string {
-  const readiness = deriveReadinessState(state);
-  if (state.matchError && state.match === null) {
-    return `<section class="action-panel error-panel" role="alert" aria-labelledby="recovery-heading"><div><p class="eyebrow">Recovery stopped</p><h2 id="recovery-heading">Saved Match needs recovery</h2><p>${state.matchError}</p><p>The console did not create replacement Match data.</p></div></section>`;
+  const readiness = deriveReadinessState(state.current);
+  if (state.current.matchError && state.current.match === null) {
+    return `<section class="action-panel error-panel" role="alert" aria-labelledby="recovery-heading"><div><p class="eyebrow">Recovery stopped</p><h2 id="recovery-heading">Saved Match needs recovery</h2><p>${state.current.matchError}</p><p>The console did not create replacement Match data.</p></div></section>`;
   }
-  if (state.match === null) {
+  if (state.current.match === null) {
     const blocked =
       readiness.matchCreation === "blocked" ||
-      !state.matchLoaded ||
-      state.saving ||
-      state.matchError !== null;
-    return `<section class="action-panel" aria-labelledby="match-heading"><div><p class="eyebrow">Match control</p><h2 id="match-heading">Create a Match</h2><p id="match-guidance">${readiness.blockingReason ?? (state.matchLoaded ? "Create the fixed 12-character Setup at full HP." : "Checking for a saved Match.")}</p></div><button id="create-match" class="primary-action" type="button" ${blocked ? "disabled" : ""} aria-describedby="match-guidance">${state.saving ? "Saving…" : "Create Match"}</button>${readiness.canonicalStorage === "failed" ? '<button id="retry-storage" class="secondary-action" type="button">Retry storage check</button>' : ""}</section>`;
+      !state.current.matchLoaded ||
+      state.current.saving ||
+      state.current.matchError !== null;
+    return `<section class="action-panel" aria-labelledby="match-heading"><div><p class="eyebrow">Match control</p><h2 id="match-heading">Create a Match</h2><p id="match-guidance">${readiness.blockingReason ?? (state.current.matchLoaded ? "Create the fixed 12-character Setup at full HP." : "Checking for a saved Match.")}</p></div><button id="create-match" class="primary-action" type="button" ${blocked ? "disabled" : ""} aria-describedby="match-guidance">${state.current.saving ? "Saving…" : "Create Match"}</button>${readiness.canonicalStorage === "failed" ? '<button id="retry-storage" class="secondary-action" type="button">Retry storage check</button>' : ""}</section>`;
   }
-  if (state.match.phase === "active") {
-    return activeMatchPanel(state.match);
+  if (state.current.match.phase === "active") {
+    return activeMatchPanel(state.current.match);
   }
-  if (state.match.phase === "ended") {
-    return endedMatchPanel(state.match);
+  if (state.current.match.phase === "ended") {
+    return endedMatchPanel(state.current.match);
   }
-  const hasInitiative = state.match.initiative !== null;
+  const hasInitiative = state.current.match.initiative !== null;
   const canUndo =
-    !state.saving && getUndoPreview(state.match, state.events) !== null;
+    !state.current.saving &&
+    getUndoPreview(state.current.match, state.current.events) !== null;
   const contextLink = hasInitiative
     ? contextualRulesControl(
         "rules-tie-break",
@@ -470,6 +505,8 @@ export function matchPanel(): string {
         "Initiative rules",
         "section-6-initiative-game-clock",
       );
-  const priorSummary = state.summary ? priorSummaryCard(state.summary) : "";
-  return `<section class="match-panel" aria-labelledby="setup-heading"><div class="section-heading"><div><p class="eyebrow">Setup · Sequence ${state.match.sequence}</p><h2 id="setup-heading">Initiative Setup</h2><p>${hasInitiative ? "The complete committed order is ready. Exact ties use recorded digital coin flips." : "All characters start at full HP. Generate the complete order when ready."}</p><div class="rules-context-links">${contextLink}</div></div><span class="readiness-badge" data-state="ready">Saved</span></div>${state.matchError ? `<p class="blocking-error" role="alert">${state.matchError} The last committed Setup remains visible.</p>` : ""}<div class="table-wrap"><table class="initiative-table"><thead><tr><th>Slot</th><th>Character</th><th>Team</th><th>${hasInitiative ? "Roll" : "HP"}</th><th>Modifier</th><th>Total</th><th>Tie break</th></tr></thead><tbody>${rosterRows(state.match)}</tbody></table></div><div class="match-actions">${hasInitiative ? '<button id="start-match" class="primary-action" type="button">Start Match</button><button id="request-reroll" class="secondary-action" type="button">Reroll initiative</button>' : '<button id="generate-initiative" class="primary-action" type="button">Generate initiative</button>'}${canUndo ? '<button id="request-undo" class="secondary-action" type="button">Undo</button>' : ""}<button id="request-discard" class="danger-action" type="button">Discard Match</button></div>${priorSummary}${confirmationPanel()}</section>`;
+  const priorSummary = state.current.summary
+    ? priorSummaryCard(state.current.summary)
+    : "";
+  return `<section class="match-panel" aria-labelledby="setup-heading"><div class="section-heading"><div><p class="eyebrow">Setup · Sequence ${state.current.match.sequence}</p><h2 id="setup-heading">Initiative Setup</h2><p>${hasInitiative ? "The complete committed order is ready. Exact ties use recorded digital coin flips." : "All characters start at full HP. Generate the complete order when ready."}</p><div class="rules-context-links">${contextLink}</div></div><span class="readiness-badge" data-state="ready">Saved</span></div>${state.current.matchError ? `<p class="blocking-error" role="alert">${state.current.matchError} The last committed Setup remains visible.</p>` : ""}<div class="table-wrap"><table class="initiative-table"><thead><tr><th>Slot</th><th>Character</th><th>Team</th><th>${hasInitiative ? "Roll" : "HP"}</th><th>Modifier</th><th>Total</th><th>Tie break</th></tr></thead><tbody>${rosterRows(state.current.match)}</tbody></table></div><div class="match-actions">${hasInitiative ? '<button id="start-match" class="primary-action" type="button">Start Match</button><button id="request-reroll" class="secondary-action" type="button">Reroll initiative</button>' : '<button id="generate-initiative" class="primary-action" type="button">Generate initiative</button>'}${canUndo ? '<button id="request-undo" class="secondary-action" type="button">Undo</button>' : ""}<button id="request-discard" class="danger-action" type="button">Discard Match</button></div>${priorSummary}${confirmationPanel()}</section>`;
 }

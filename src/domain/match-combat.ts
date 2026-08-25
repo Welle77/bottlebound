@@ -24,34 +24,32 @@ export function protectiveReactionWarnings(
   state: ActiveMatchState,
   reactionId: string,
   protectedCharacterId: string,
-): string[] {
+): readonly string[] {
   const reaction = RULESET.reactions.find(({ id }) => id === reactionId);
   if (!reaction || !AUTOMATED_REACTION_NAMES.has(reaction.name)) {
     throw new Error("The Action Draft references an unsupported Reaction.");
   }
-  const warnings: string[] = [];
-  if (state.spentReactionIds.includes(reaction.id)) {
-    warnings.push(`${reaction.name} is already spent.`);
-  }
   const owner = state.characters.find(
     ({ characterId }) => characterId === reaction.ownerCharacterId,
   );
-  if (!owner || owner.hp === 0) {
-    warnings.push(`${reaction.name}'s owner is Downed.`);
-  }
-  if (
-    (reaction.name === "Misty Escape" || reaction.name === "Mirror Veil") &&
+  return [
+    ...(state.spentReactionIds.includes(reaction.id)
+      ? [`${reaction.name} is already spent.`]
+      : []),
+    ...(!owner || owner.hp === 0
+      ? [`${reaction.name}'s owner is Downed.`]
+      : []),
+    ...((reaction.name === "Misty Escape" || reaction.name === "Mirror Veil") &&
     protectedCharacterId !== reaction.ownerCharacterId
-  ) {
-    warnings.push(`${reaction.name} can protect only its owner.`);
-  }
-  return warnings;
+      ? [`${reaction.name} can protect only its owner.`]
+      : []),
+  ];
 }
 
 export function getProtectiveReactionChoices(
   state: ActiveMatchState,
   affectedCharacterIds: readonly string[],
-): ProtectiveReactionChoice[] {
+): readonly ProtectiveReactionChoice[] {
   return RULESET.reactions
     .filter(({ name }) => AUTOMATED_REACTION_NAMES.has(name))
     .flatMap((reaction) =>
@@ -149,73 +147,83 @@ export function resolveBasicAttack(
     throw new Error("A second Basic Attack needs a recorded referee override.");
   }
   const selectedReactions = input.reactions ?? [];
-  const reactionOwners = new Set<string>();
-  const reactions = selectedReactions.map((selection) => {
-    const reaction = RULESET.reactions.find(
-      ({ id }) => id === selection.reactionId,
-    );
-    if (!reaction || !AUTOMATED_REACTION_NAMES.has(reaction.name)) {
-      throw new Error("The Action Draft references an unsupported Reaction.");
-    }
-    if (!affectedCharacterIds.includes(selection.protectedCharacterId)) {
-      throw new Error("A Reaction can protect only an affected character.");
-    }
-    if (reactionOwners.has(reaction.ownerCharacterId)) {
-      throw new Error(
-        "One character cannot use two Reactions against one attack.",
+  const reactions = selectedReactions.reduce<{
+    readonly seen: ReadonlySet<string>;
+    readonly results: readonly ProtectiveReactionResolution[];
+  }>(
+    (accumulated, selection) => {
+      const reaction = RULESET.reactions.find(
+        ({ id }) => id === selection.reactionId,
       );
-    }
-    reactionOwners.add(reaction.ownerCharacterId);
-    const warnings = protectiveReactionWarnings(
-      state,
-      reaction.id,
-      selection.protectedCharacterId,
-    );
-    const reactionOverride = selection.override?.trim() || null;
-    if (warnings.length > 0 && reactionOverride === null) {
-      throw new Error("A state-invalid Reaction needs a recorded Override.");
-    }
-    const operations = reaction.operations.flatMap(
-      (operation): ProtectiveReactionOperation[] => {
-        if (operation.type === "prevent-damage-and-effects") {
-          return [
-            {
-              type: operation.type,
-              characterId: selection.protectedCharacterId,
-            },
-          ];
-        }
-        if (operation.type === "manual-movement") {
-          return [
-            {
-              type: operation.type,
-              characterId: reaction.ownerCharacterId,
-              maxPaces: operation.maxPaces,
-              instruction: `Move ${reaction.name}'s owner up to ${operation.maxPaces} paces immediately.`,
-            },
-          ];
-        }
-        if (operation.type === "redirect-physical-attack") {
-          return [
-            {
-              type: operation.type,
-              fromCharacterId: reaction.ownerCharacterId,
-              towardCharacterId: input.sourceCharacterId,
-            },
-          ];
-        }
-        return [];
-      },
-    );
-    return {
-      reactionId: reaction.id,
-      ownerCharacterId: reaction.ownerCharacterId,
-      protectedCharacterId: selection.protectedCharacterId,
-      warnings,
-      override: reactionOverride,
-      operations,
-    } satisfies ProtectiveReactionResolution;
-  });
+      if (!reaction || !AUTOMATED_REACTION_NAMES.has(reaction.name)) {
+        throw new Error("The Action Draft references an unsupported Reaction.");
+      }
+      if (!affectedCharacterIds.includes(selection.protectedCharacterId)) {
+        throw new Error("A Reaction can protect only an affected character.");
+      }
+      if (accumulated.seen.has(reaction.ownerCharacterId)) {
+        throw new Error(
+          "One character cannot use two Reactions against one attack.",
+        );
+      }
+      const warnings = protectiveReactionWarnings(
+        state,
+        reaction.id,
+        selection.protectedCharacterId,
+      );
+      const reactionOverride = selection.override?.trim() || null;
+      if (warnings.length > 0 && reactionOverride === null) {
+        throw new Error("A state-invalid Reaction needs a recorded Override.");
+      }
+      const operations = reaction.operations.flatMap(
+        (operation): readonly ProtectiveReactionOperation[] => {
+          if (operation.type === "prevent-damage-and-effects") {
+            return [
+              {
+                type: operation.type,
+                characterId: selection.protectedCharacterId,
+              },
+            ];
+          }
+          if (operation.type === "manual-movement") {
+            return [
+              {
+                type: operation.type,
+                characterId: reaction.ownerCharacterId,
+                maxPaces: operation.maxPaces,
+                instruction: `Move ${reaction.name}'s owner up to ${operation.maxPaces} paces immediately.`,
+              },
+            ];
+          }
+          if (operation.type === "redirect-physical-attack") {
+            return [
+              {
+                type: operation.type,
+                fromCharacterId: reaction.ownerCharacterId,
+                towardCharacterId: input.sourceCharacterId,
+              },
+            ];
+          }
+          return [];
+        },
+      );
+      return {
+        seen: new Set([...accumulated.seen, reaction.ownerCharacterId]),
+        results: [
+          ...accumulated.results,
+          {
+            reactionId: reaction.id,
+            ownerCharacterId: reaction.ownerCharacterId,
+            protectedCharacterId: selection.protectedCharacterId,
+            warnings,
+            override: reactionOverride,
+            operations,
+          } satisfies ProtectiveReactionResolution,
+        ],
+      };
+    },
+    { seen: new Set<string>(), results: [] },
+  ).results;
   const redirectReaction = reactions.find(({ operations }) =>
     operations.some(({ type }) => type === "redirect-physical-attack"),
   );
@@ -276,7 +284,7 @@ export function resolveBasicAttack(
             ?.hp === 0,
       ),
   );
-  const resultingEliminations: ("Drow" | "Duergar")[] = [
+  const resultingEliminations: readonly ("Drow" | "Duergar")[] = [
     ...new Set([...state.eliminatedTeams, ...eliminatedTeams]),
   ];
   const outcome: MatchOutcome =

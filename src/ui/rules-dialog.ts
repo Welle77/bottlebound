@@ -8,7 +8,7 @@ import { retainRulesVersion } from "../rules-reference/rules-ui-state";
 import type { RulesReference } from "../rules-reference/types";
 import { render } from "./render";
 import { escapeHtml, highlightedExcerpt, searchResultKind } from "./format";
-import { appRoot, replaceRulesUi, rulesUi, state } from "./shell-state";
+import { appRoot, Ref, rulesUi, state } from "./shell-state";
 
 export function updateRulesSearch(
   reference: RulesReference,
@@ -42,8 +42,8 @@ export function updateRulesSearch(
 }
 
 export function rulesModal(): string {
-  if (!rulesUi.open) return "";
-  const version = state.match?.rulesVersion ?? RULESET.version;
+  if (!rulesUi.current.open) return "";
+  const version = state.current.match?.rulesVersion ?? RULESET.version;
   const surface = resolveRulesSurface(version);
   if (surface.status === "unavailable") {
     return `<div class="rules-backdrop"><section class="rules-dialog rules-error" role="dialog" aria-modal="true" aria-labelledby="rules-heading"><header class="rules-dialog-header"><div><p class="eyebrow">Rules unavailable</p><h2 id="rules-heading">BOTTLEBOUND Rules</h2><p>Ruleset ${escapeHtml(surface.version)}</p></div><button id="close-rules" class="secondary-action" type="button" aria-label="Close Rules">Close</button></header><p role="alert">${escapeHtml(surface.message)}</p></section></div>`;
@@ -55,40 +55,42 @@ export function rulesModal(): string {
         `<li><a href="#${escapeHtml(anchor)}">${escapeHtml(title)}</a></li>`,
     )
     .join("");
-  return `<div class="rules-backdrop"><section class="rules-dialog" role="dialog" aria-modal="true" aria-labelledby="rules-heading"><header class="rules-dialog-header"><div><p class="eyebrow">Ruleset ${escapeHtml(reference.version)}</p><h2 id="rules-heading">BOTTLEBOUND Rules</h2></div><button id="close-rules" class="secondary-action" type="button" aria-label="Close Rules">Close</button></header><div class="rules-scroll"><form class="rules-search" role="search"><label for="rules-search">Search rules</label><input id="rules-search" type="search" autocomplete="off" spellcheck="false" value="${escapeHtml(rulesUi.query)}"></form><section class="rules-results" aria-labelledby="rules-results-heading" aria-live="polite" data-rules-results hidden></section><nav class="rules-contents" aria-labelledby="rules-contents-heading" data-rules-contents><h3 id="rules-contents-heading">Contents</h3><ul class="rules-direct-links"><li><a href="#section-2-teams-roles-hp-basic-attacks" data-rules-source>Roster</a></li><li><a href="#section-15-character-ability-cards" data-rules-source>Abilities</a></li><li><a href="#section-5-core-terms" data-rules-source>Universal rules</a></li><li><a href="#section-16-referee-quick-reference" data-rules-source>Quick reference</a></li></ul><ol>${contents}</ol></nav><article class="rules-document" data-rules-document>${reference.html}</article></div></section></div>`;
+  return `<div class="rules-backdrop"><section class="rules-dialog" role="dialog" aria-modal="true" aria-labelledby="rules-heading"><header class="rules-dialog-header"><div><p class="eyebrow">Ruleset ${escapeHtml(reference.version)}</p><h2 id="rules-heading">BOTTLEBOUND Rules</h2></div><button id="close-rules" class="secondary-action" type="button" aria-label="Close Rules">Close</button></header><div class="rules-scroll"><form class="rules-search" role="search"><label for="rules-search">Search rules</label><input id="rules-search" type="search" autocomplete="off" spellcheck="false" value="${escapeHtml(rulesUi.current.query)}"></form><section class="rules-results" aria-labelledby="rules-results-heading" aria-live="polite" data-rules-results hidden></section><nav class="rules-contents" aria-labelledby="rules-contents-heading" data-rules-contents><h3 id="rules-contents-heading">Contents</h3><ul class="rules-direct-links"><li><a href="#section-2-teams-roles-hp-basic-attacks" data-rules-source>Roster</a></li><li><a href="#section-15-character-ability-cards" data-rules-source>Abilities</a></li><li><a href="#section-5-core-terms" data-rules-source>Universal rules</a></li><li><a href="#section-16-referee-quick-reference" data-rules-source>Quick reference</a></li></ul><ol>${contents}</ol></nav><article class="rules-document" data-rules-document>${reference.html}</article></div></section></div>`;
 }
 
-let focusRulesAfterRender = false;
-let revealRulesAnchorAfterRender: string | null = null;
+const focusRulesAfterRender = new Ref(false);
+const revealRulesAnchorAfterRender = new Ref<string | null>(null);
 
 export function captureRulesView(): void {
   const search = appRoot.querySelector<HTMLInputElement>("#rules-search");
   const scroll = appRoot.querySelector<HTMLElement>(".rules-scroll");
-  if (search) rulesUi.query = search.value;
-  if (scroll) rulesUi.scrollTop = scroll.scrollTop;
+  if (search) rulesUi.set({ ...rulesUi.current, query: search.value });
+  if (scroll) rulesUi.set({ ...rulesUi.current, scrollTop: scroll.scrollTop });
 }
 
 export function openRules(
   opener: HTMLElement,
   anchor: string | null = null,
 ): void {
-  const version = state.match?.rulesVersion ?? RULESET.version;
-  replaceRulesUi(retainRulesVersion(rulesUi, version));
-  rulesUi.open = true;
-  rulesUi.openerId = opener.id;
+  const version = state.current.match?.rulesVersion ?? RULESET.version;
+  const retained = retainRulesVersion(rulesUi.current, version);
+  rulesUi.set({ ...retained, open: true, openerId: opener.id });
   if (anchor) {
-    rulesUi.selectedAnchor = anchor;
-    rulesUi.scrollTop = 0;
-    revealRulesAnchorAfterRender = anchor;
+    rulesUi.set({
+      ...rulesUi.current,
+      selectedAnchor: anchor,
+      scrollTop: 0,
+    });
+    revealRulesAnchorAfterRender.set(anchor);
   }
-  focusRulesAfterRender = true;
+  focusRulesAfterRender.set(true);
   render();
 }
 
 export function closeRules(): void {
   captureRulesView();
-  const openerId = rulesUi.openerId;
-  rulesUi.open = false;
+  const openerId = rulesUi.current.openerId;
+  rulesUi.set({ ...rulesUi.current, open: false });
   render();
   if (openerId) document.getElementById(openerId)?.focus();
 }
@@ -98,29 +100,29 @@ export function restoreRulesView(reference: RulesReference): void {
   const scroll = appRoot.querySelector<HTMLElement>(".rules-scroll");
   if (!search || !scroll) return;
 
-  updateRulesSearch(reference, rulesUi.query);
-  if (rulesUi.selectedAnchor) {
+  updateRulesSearch(reference, rulesUi.current.query);
+  if (rulesUi.current.selectedAnchor) {
     document
-      .getElementById(rulesUi.selectedAnchor)
+      .getElementById(rulesUi.current.selectedAnchor)
       ?.setAttribute("data-rules-selected", "");
   }
-  if (revealRulesAnchorAfterRender) {
+  if (revealRulesAnchorAfterRender.current !== null) {
     document
-      .getElementById(revealRulesAnchorAfterRender)
+      .getElementById(revealRulesAnchorAfterRender.current)
       ?.scrollIntoView({ block: "start" });
-    rulesUi.scrollTop = scroll.scrollTop;
-    revealRulesAnchorAfterRender = null;
+    rulesUi.set({ ...rulesUi.current, scrollTop: scroll.scrollTop });
+    revealRulesAnchorAfterRender.set(null);
   } else {
-    scroll.scrollTop = rulesUi.scrollTop;
+    scroll.scrollTop = rulesUi.current.scrollTop;
   }
-  if (focusRulesAfterRender) {
+  if (focusRulesAfterRender.current) {
     appRoot.querySelector<HTMLElement>("#close-rules")?.focus();
-    focusRulesAfterRender = false;
+    focusRulesAfterRender.set(false);
   }
 }
 
 export function keepFocusInsideRules(event: KeyboardEvent): void {
-  if (!rulesUi.open) return;
+  if (!rulesUi.current.open) return;
   if (event.key === "Escape") {
     event.preventDefault();
     closeRules();
@@ -147,7 +149,7 @@ export function keepFocusInsideRules(event: KeyboardEvent): void {
 }
 
 export function settleRulesPostRenderFocus(): void {
-  if (!rulesUi.open || !focusRulesAfterRender) return;
+  if (!rulesUi.current.open || !focusRulesAfterRender.current) return;
   appRoot.querySelector<HTMLElement>("#close-rules")?.focus();
-  focusRulesAfterRender = false;
+  focusRulesAfterRender.set(false);
 }

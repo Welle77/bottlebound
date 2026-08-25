@@ -9,7 +9,7 @@ import {
   restoreStateFromEvents,
   startMatch,
   undoLastEvent,
-} from "./match";
+} from "../../src/domain/match";
 import { queuedRandom } from "./match-test-support";
 
 describe("Undo commands", () => {

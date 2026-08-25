@@ -22,6 +22,7 @@ import type {
   CommandResult,
   EndedMatchState,
   EndGamePreview,
+  MatchEndedEvent,
   MatchEvent,
   MatchOutcome,
   MatchState,
@@ -50,14 +51,12 @@ function applyHistoricalActionResolution(
   if (state.majorActionUsed && event.majorActionOverride === null) {
     throw new Error("A second Basic Attack needs a recorded referee override.");
   }
-  const affected = new Set<string>();
-  for (const leg of event.attackLegs) {
-    for (const characterId of leg.affectedCharacterIds) {
-      if (affected.has(characterId)) {
-        throw new Error("The Action Resolution contacts must be unique.");
-      }
-      affected.add(characterId);
-    }
+  const contactIds = event.attackLegs.flatMap((leg) => [
+    ...leg.affectedCharacterIds,
+  ]);
+  const affected = new Set(contactIds);
+  if (affected.size !== contactIds.length) {
+    throw new Error("The Action Resolution contacts must be unique.");
   }
   for (const effect of event.effects) {
     if (!affected.has(effect.characterId)) {
@@ -91,35 +90,46 @@ function applyHistoricalActionResolution(
     throw new Error("The Action Resolution eliminations are invalid.");
   }
   // Derive characters with hp and possibly maxHp changes (Shapeshift)
-  let characters = state.characters.map((character) => {
+  const withAppliedHp = state.characters.map((character) => {
     const effect = event.effects.find(
       ({ characterId }) => characterId === character.characterId,
     );
     return effect ? { ...character, hp: effect.hpAfter } : character;
   });
   // Apply maxHp changes inferred from applied/expired effects (Shapeshift)
-  if (event.actionType === "Ability" && event.appliedEffects) {
-    for (const applied of event.appliedEffects) {
-      if (applied.kind === "shapeshift") {
-        characters = characters.map((character) =>
-          character.characterId === applied.affectedCharacterId
+  const shapeshiftAdjustments = [
+    ...(event.actionType === "Ability" && event.appliedEffects
+      ? event.appliedEffects
+          .filter((applied) => applied.kind === "shapeshift")
+          .map((applied) => ({
+            characterId: applied.affectedCharacterId,
+            toMaxHp: 4 as const,
+          }))
+      : []),
+    ...(event.actionType === "Ability" && event.expiredEffects
+      ? event.expiredEffects
+          .filter((expired) => expired.kind === "shapeshift")
+          .map((expired) => ({
+            characterId: expired.affectedCharacterId,
+            toMaxHp: 3 as const,
+          }))
+      : []),
+  ];
+  const characters = shapeshiftAdjustments.reduce<typeof withAppliedHp>(
+    (updated, adjustment) =>
+      updated.map((character) =>
+        character.characterId === adjustment.characterId
+          ? adjustment.toMaxHp === 4
             ? { ...character, currentMaxHp: 4 }
-            : character,
-        );
-      }
-    }
-  }
-  if (event.actionType === "Ability" && event.expiredEffects) {
-    for (const expired of event.expiredEffects) {
-      if (expired.kind === "shapeshift") {
-        characters = characters.map((character) =>
-          character.characterId === expired.affectedCharacterId
-            ? { ...character, currentMaxHp: 3, hp: Math.min(character.hp, 3) }
-            : character,
-        );
-      }
-    }
-  }
+            : {
+                ...character,
+                currentMaxHp: 3,
+                hp: Math.min(character.hp, 3),
+              }
+          : character,
+      ),
+    withAppliedHp,
+  );
   const spentAbilityIds =
     event.actionType === "Ability" && event.spentAbilityIds
       ? [...new Set([...state.spentAbilityIds, ...event.spentAbilityIds])]
@@ -180,13 +190,26 @@ function findUndoTarget(
       )
       .map(({ targetSequence }) => targetSequence),
   );
-  for (let index = events.length - 1; index >= 0; index -= 1) {
+  for (const index of [...events.keys()].reverse()) {
     const event = events[index];
     if (event && isReversibleEvent(event) && !ineffective.has(event.sequence)) {
       return event;
     }
   }
   return null;
+}
+
+function coinFlipEndGamePreviewOrThrow(
+  current: ActiveMatchState,
+  event: MatchEndedEvent,
+): EndGamePreview {
+  if (event.coinFlipResult !== "Drow" && event.coinFlipResult !== "Duergar") {
+    throw new Error("End Game does not follow Match State.");
+  }
+  const deterministicRandom: RandomSource = {
+    nextUint32: () => (event.coinFlipResult === "Drow" ? 0 : 1),
+  };
+  return getEndGamePreview(current, deterministicRandom);
 }
 
 export function restoreStateFromEvents(
@@ -196,335 +219,339 @@ export function restoreStateFromEvents(
   if (!first || first.type !== "SetupCreated") {
     throw new Error("Undo needs a complete Match Event history.");
   }
-  let current: MatchState = createSetupForRulesVersion(
+  const initial: MatchState = createSetupForRulesVersion(
     first.matchId,
     first.occurredAt,
     first.rulesVersion,
   ).state;
-  for (const [offset, event] of events.slice(1).entries()) {
-    const eventIndex = offset + 1;
-    if (event.sequence !== eventIndex + 1) {
-      throw new Error("Undo needs a complete Match Event sequence.");
-    }
-    if (event.matchId !== current.matchId) {
-      throw new Error("Undo needs one complete Match Event history.");
-    }
-    if (event.type === "InitiativeGenerated") {
-      if (current.phase !== "setup") {
-        throw new Error(
-          "The initiative event cannot apply to this Match State.",
-        );
-      }
-      if (current.initiative !== null) {
-        throw new Error(
-          "Initiative Generate needs an empty initiative result.",
-        );
-      }
-      current = {
-        ...current,
-        sequence: event.sequence,
-        initiative: event.results,
-      };
-    } else if (event.type === "InitiativeRerolled") {
-      if (current.phase !== "setup") {
-        throw new Error(
-          "The initiative event cannot apply to this Match State.",
-        );
-      }
-      if (current.initiative === null) {
-        throw new Error(
-          "Initiative Reroll needs an existing initiative result.",
-        );
-      }
-      current = {
-        ...current,
-        sequence: event.sequence,
-        initiative: event.results,
-      };
-    } else if (event.type === "MatchStarted") {
-      if (current.phase !== "setup" || current.initiative === null) {
-        throw new Error(
-          "The Start Match Event cannot apply to this Match State.",
-        );
-      }
-      current = {
-        ...current,
-        phase: "active",
-        sequence: event.sequence,
-        initiative: current.initiative,
-        round: event.round,
-        activeSlot: event.activeSlot,
-      };
-    } else if (event.type === "TurnFinished") {
-      if (current.phase !== "active") {
-        throw new Error(
-          "The Finish Turn Event cannot apply to this Match State.",
-        );
-      }
-      const expected = finishTurn(current, event.occurredAt);
-      if (!canonicalMatchRecordsEqual(expected.event, event)) {
-        throw new Error("The Finish Turn Event does not follow Match State.");
-      }
-      current = expected.state;
-    } else if (event.type === "ActionResolved") {
-      if (current.phase !== "active") {
-        throw new Error(
-          "The Action Resolution cannot apply to this Match State.",
-        );
-      }
-      const activeState: ActiveMatchState = current;
-      if (activeState.rulesVersion === RULESET.version) {
-        let expected: CommandResult<ActiveMatchState, ActionResolvedEvent>;
-        if (event.actionType === "Ability") {
-          expected = resolveAbility(
-            activeState,
-            {
-              abilityId: event.abilityId ?? event.attackId,
-              targetCharacterIds:
-                event.targetCharacterIds ??
-                event.attackLegs.flatMap((leg) => leg.affectedCharacterIds),
-              attackLegs: event.attackLegs.map(({ affectedCharacterIds }) => ({
-                affectedCharacterIds: [...affectedCharacterIds],
-              })),
-              physicalConfirmations: event.physicalConfirmations,
-              reactions: event.reactions.map(
-                ({ reactionId, protectedCharacterId, override }) => ({
-                  reactionId,
-                  protectedCharacterId,
-                  override,
-                }),
-              ),
-              majorActionOverride: event.majorActionOverride,
-              abilityOverride: event.spentAbilityIds?.length
-                ? "historical-override"
-                : null,
-            },
-            event.occurredAt,
-          );
-          // For replay, we cannot rely on spent check; allow any spent override
-          // Instead, compare via canonical equality; if mismatch due to override, fallback to historical
-          if (!canonicalMatchRecordsEqual(expected.event, event)) {
-            current = applyHistoricalActionResolution(activeState, event);
-          } else {
-            current = expected.state;
-          }
-        } else {
-          expected = resolveBasicAttack(
-            activeState,
-            {
-              sourceCharacterId: event.sourceCharacterId,
-              attackLegs: event.attackLegs.map(({ affectedCharacterIds }) => ({
-                affectedCharacterIds,
-              })),
-              physicalConfirmations: event.physicalConfirmations,
-              reactions: event.reactions.map(
-                ({ reactionId, protectedCharacterId, override }) => ({
-                  reactionId,
-                  protectedCharacterId,
-                  override,
-                }),
-              ),
-              majorActionOverride: event.majorActionOverride,
-            },
-            event.occurredAt,
-          );
-          if (!canonicalMatchRecordsEqual(expected.event, event)) {
+  const current: MatchState = events
+    .slice(1)
+    .reduce(
+      (current: MatchState, event: MatchEvent, offset: number): MatchState => {
+        const eventIndex = offset + 1;
+        if (event.sequence !== eventIndex + 1) {
+          throw new Error("Undo needs a complete Match Event sequence.");
+        }
+        if (event.matchId !== current.matchId) {
+          throw new Error("Undo needs one complete Match Event history.");
+        }
+        if (event.type === "InitiativeGenerated") {
+          if (current.phase !== "setup") {
             throw new Error(
-              "The Action Resolution does not follow Match State.",
+              "The initiative event cannot apply to this Match State.",
             );
           }
-          current = expected.state;
-        }
-      } else {
-        current = applyHistoricalActionResolution(activeState, event);
-      }
-    } else if (event.type === "EliminationContinued") {
-      if (current.phase !== "active") {
-        throw new Error("Continue cannot apply to this Match State.");
-      }
-      const expected = acknowledgeElimination(
-        current,
-        event.eliminatedTeam,
-        event.occurredAt,
-      );
-      if (!canonicalMatchRecordsEqual(expected.event, event)) {
-        throw new Error("Continue does not follow Match State.");
-      }
-      current = expected.state;
-    } else if (event.type === "SimultaneousEliminationRuled") {
-      if (current.phase !== "active") {
-        throw new Error(
-          "A simultaneous-elimination ruling cannot apply to this Match State.",
-        );
-      }
-      const expected = ruleSimultaneousElimination(current, event.outcome, {
-        overrideEvidence: event.overrideEvidence,
-        occurredAt: event.occurredAt,
-      });
-      if (!canonicalMatchRecordsEqual(expected.event, event)) {
-        throw new Error(
-          "The simultaneous-elimination ruling does not follow Match State.",
-        );
-      }
-      current = expected.state;
-    } else if (event.type === "MatchEnded") {
-      if (current.phase !== "active") {
-        throw new Error("End Game cannot apply to this Match State.");
-      }
-      if (event.decisionBasis === undefined) {
-        if (
-          event.outcome === "draw"
-            ? event.eliminatedTeams.length !== 2
-            : event.eliminatedTeams.length === 0
-        ) {
-          throw new Error("End Game does not follow Match State.");
-        }
-        const expectedLegacy = (() => {
-          if (current.eliminatedTeams.length === 1) {
-            const expectedOutcome =
-              current.eliminatedTeams[0] === "Drow" ? "Duergar" : "Drow";
-            if (
-              event.outcome !== expectedOutcome ||
-              !canonicalMatchRecordsEqual(
-                [...current.eliminatedTeams],
-                event.eliminatedTeams,
-              )
-            ) {
-              throw new Error("End Game does not follow Match State.");
-            }
-            return {
-              outcome: expectedOutcome,
-              eliminatedTeams: [...current.eliminatedTeams] as (
-                "Drow" | "Duergar"
-              )[],
-            };
+          if (current.initiative !== null) {
+            throw new Error(
+              "Initiative Generate needs an empty initiative result.",
+            );
           }
-          if (current.eliminatedTeams.length === 2) {
-            if (
-              current.outcome === null ||
-              event.outcome !== current.outcome ||
-              !canonicalMatchRecordsEqual(
-                [...current.eliminatedTeams],
-                event.eliminatedTeams,
-              )
-            ) {
-              throw new Error("End Game does not follow Match State.");
-            }
-            return {
-              outcome: current.outcome as Exclude<MatchOutcome, null>,
-              eliminatedTeams: [...current.eliminatedTeams] as (
-                "Drow" | "Duergar"
-              )[],
-            };
-          }
-          throw new Error("End Game does not follow Match State.");
-        })();
-        if (
-          event.outcome !== expectedLegacy.outcome ||
-          !canonicalMatchRecordsEqual(
-            [...event.eliminatedTeams],
-            expectedLegacy.eliminatedTeams,
-          )
-        ) {
-          throw new Error("End Game does not follow Match State.");
-        }
-        current = {
-          ...current,
-          phase: "ended",
-          sequence: event.sequence,
-          outcome: event.outcome,
-          endedAt: event.occurredAt,
-          endedSequence: event.sequence,
-        } as EndedMatchState;
-      } else {
-        let preview: EndGamePreview;
-        if (event.decisionBasis === "coinFlip") {
-          if (
-            event.coinFlipResult !== "Drow" &&
-            event.coinFlipResult !== "Duergar"
-          ) {
-            throw new Error("End Game does not follow Match State.");
-          }
-          const deterministicRandom: RandomSource = {
-            nextUint32: () => (event.coinFlipResult === "Drow" ? 0 : 1),
+          return {
+            ...current,
+            sequence: event.sequence,
+            initiative: event.results,
           };
-          preview = getEndGamePreview(current, deterministicRandom);
+        } else if (event.type === "InitiativeRerolled") {
+          if (current.phase !== "setup") {
+            throw new Error(
+              "The initiative event cannot apply to this Match State.",
+            );
+          }
+          if (current.initiative === null) {
+            throw new Error(
+              "Initiative Reroll needs an existing initiative result.",
+            );
+          }
+          return {
+            ...current,
+            sequence: event.sequence,
+            initiative: event.results,
+          };
+        } else if (event.type === "MatchStarted") {
+          if (current.phase !== "setup" || current.initiative === null) {
+            throw new Error(
+              "The Start Match Event cannot apply to this Match State.",
+            );
+          }
+          return {
+            ...current,
+            phase: "active",
+            sequence: event.sequence,
+            initiative: current.initiative,
+            round: event.round,
+            activeSlot: event.activeSlot,
+          };
+        } else if (event.type === "TurnFinished") {
+          if (current.phase !== "active") {
+            throw new Error(
+              "The Finish Turn Event cannot apply to this Match State.",
+            );
+          }
+          const expected = finishTurn(current, event.occurredAt);
+          if (!canonicalMatchRecordsEqual(expected.event, event)) {
+            throw new Error(
+              "The Finish Turn Event does not follow Match State.",
+            );
+          }
+          return expected.state;
+        } else if (event.type === "ActionResolved") {
+          if (current.phase !== "active") {
+            throw new Error(
+              "The Action Resolution cannot apply to this Match State.",
+            );
+          }
+          const activeState: ActiveMatchState = current;
+          if (activeState.rulesVersion === RULESET.version) {
+            if (event.actionType === "Ability") {
+              const expected = resolveAbility(
+                activeState,
+                {
+                  abilityId: event.abilityId ?? event.attackId,
+                  targetCharacterIds:
+                    event.targetCharacterIds ??
+                    event.attackLegs.flatMap((leg) => leg.affectedCharacterIds),
+                  attackLegs: event.attackLegs.map(
+                    ({ affectedCharacterIds }) => ({
+                      affectedCharacterIds: [...affectedCharacterIds],
+                    }),
+                  ),
+                  physicalConfirmations: event.physicalConfirmations,
+                  reactions: event.reactions.map(
+                    ({ reactionId, protectedCharacterId, override }) => ({
+                      reactionId,
+                      protectedCharacterId,
+                      override,
+                    }),
+                  ),
+                  majorActionOverride: event.majorActionOverride,
+                  abilityOverride: event.spentAbilityIds?.length
+                    ? "historical-override"
+                    : null,
+                },
+                event.occurredAt,
+              );
+              // For replay, we cannot rely on spent check; allow any spent override
+              // Instead, compare via canonical equality; if mismatch due to override, fallback to historical
+              if (!canonicalMatchRecordsEqual(expected.event, event)) {
+                return applyHistoricalActionResolution(activeState, event);
+              }
+              return expected.state;
+            }
+            const expected = resolveBasicAttack(
+              activeState,
+              {
+                sourceCharacterId: event.sourceCharacterId,
+                attackLegs: event.attackLegs.map(
+                  ({ affectedCharacterIds }) => ({
+                    affectedCharacterIds,
+                  }),
+                ),
+                physicalConfirmations: event.physicalConfirmations,
+                reactions: event.reactions.map(
+                  ({ reactionId, protectedCharacterId, override }) => ({
+                    reactionId,
+                    protectedCharacterId,
+                    override,
+                  }),
+                ),
+                majorActionOverride: event.majorActionOverride,
+              },
+              event.occurredAt,
+            );
+            if (!canonicalMatchRecordsEqual(expected.event, event)) {
+              throw new Error(
+                "The Action Resolution does not follow Match State.",
+              );
+            }
+            return expected.state;
+          }
+          return applyHistoricalActionResolution(activeState, event);
+        } else if (event.type === "EliminationContinued") {
+          if (current.phase !== "active") {
+            throw new Error("Continue cannot apply to this Match State.");
+          }
+          const expected = acknowledgeElimination(
+            current,
+            event.eliminatedTeam,
+            event.occurredAt,
+          );
+          if (!canonicalMatchRecordsEqual(expected.event, event)) {
+            throw new Error("Continue does not follow Match State.");
+          }
+          return expected.state;
+        } else if (event.type === "SimultaneousEliminationRuled") {
+          if (current.phase !== "active") {
+            throw new Error(
+              "A simultaneous-elimination ruling cannot apply to this Match State.",
+            );
+          }
+          const expected = ruleSimultaneousElimination(current, event.outcome, {
+            overrideEvidence: event.overrideEvidence,
+            occurredAt: event.occurredAt,
+          });
+          if (!canonicalMatchRecordsEqual(expected.event, event)) {
+            throw new Error(
+              "The simultaneous-elimination ruling does not follow Match State.",
+            );
+          }
+          return expected.state;
+        } else if (event.type === "MatchEnded") {
+          if (current.phase !== "active") {
+            throw new Error("End Game cannot apply to this Match State.");
+          }
+          if (event.decisionBasis === undefined) {
+            if (
+              event.outcome === "draw"
+                ? event.eliminatedTeams.length !== 2
+                : event.eliminatedTeams.length === 0
+            ) {
+              throw new Error("End Game does not follow Match State.");
+            }
+            const expectedLegacy: {
+              readonly outcome: Exclude<MatchOutcome, null>;
+              readonly eliminatedTeams: readonly ("Drow" | "Duergar")[];
+            } = (() => {
+              if (current.eliminatedTeams.length === 1) {
+                const expectedOutcome: Exclude<MatchOutcome, null> =
+                  current.eliminatedTeams[0] === "Drow" ? "Duergar" : "Drow";
+                if (
+                  event.outcome !== expectedOutcome ||
+                  !canonicalMatchRecordsEqual(
+                    [...current.eliminatedTeams],
+                    event.eliminatedTeams,
+                  )
+                ) {
+                  throw new Error("End Game does not follow Match State.");
+                }
+                return {
+                  outcome: expectedOutcome,
+                  eliminatedTeams: [...current.eliminatedTeams] as readonly (
+                    "Drow" | "Duergar"
+                  )[],
+                };
+              }
+              if (current.eliminatedTeams.length === 2) {
+                if (
+                  current.outcome === null ||
+                  event.outcome !== current.outcome ||
+                  !canonicalMatchRecordsEqual(
+                    [...current.eliminatedTeams],
+                    event.eliminatedTeams,
+                  )
+                ) {
+                  throw new Error("End Game does not follow Match State.");
+                }
+                return {
+                  outcome: current.outcome,
+                  eliminatedTeams: [...current.eliminatedTeams] as readonly (
+                    "Drow" | "Duergar"
+                  )[],
+                };
+              }
+              throw new Error("End Game does not follow Match State.");
+            })();
+            if (
+              event.outcome !== expectedLegacy.outcome ||
+              !canonicalMatchRecordsEqual(
+                [...event.eliminatedTeams],
+                expectedLegacy.eliminatedTeams,
+              )
+            ) {
+              throw new Error("End Game does not follow Match State.");
+            }
+            const legacyEndedState: EndedMatchState = {
+              ...current,
+              phase: "ended",
+              sequence: event.sequence,
+              outcome: event.outcome,
+              endedAt: event.occurredAt,
+              endedSequence: event.sequence,
+            };
+            return legacyEndedState;
+          } else {
+            const preview =
+              event.decisionBasis === "coinFlip"
+                ? coinFlipEndGamePreviewOrThrow(current, event)
+                : getEndGamePreview(current);
+            if (
+              preview.outcome !== event.outcome ||
+              preview.decisionBasis !== event.decisionBasis ||
+              !canonicalMatchRecordsEqual(
+                preview.finalCounts,
+                event.finalCounts,
+              ) ||
+              !canonicalMatchRecordsEqual(
+                preview.finalHpTotals,
+                event.finalHpTotals,
+              ) ||
+              preview.coinFlipResult !== event.coinFlipResult ||
+              !canonicalMatchRecordsEqual(
+                [...current.eliminatedTeams],
+                event.eliminatedTeams,
+              )
+            ) {
+              throw new Error("End Game does not follow Match State.");
+            }
+            const decidedEndedState: EndedMatchState = {
+              ...current,
+              phase: "ended",
+              sequence: event.sequence,
+              outcome: preview.outcome,
+              endedAt: event.occurredAt,
+              endedSequence: event.sequence,
+              decisionBasis: preview.decisionBasis,
+              finalCounts: preview.finalCounts,
+              finalHpTotals: preview.finalHpTotals,
+              ...(preview.coinFlipResult
+                ? { coinFlipResult: preview.coinFlipResult }
+                : {}),
+            };
+            return decidedEndedState;
+          }
+        } else if (event.type === "MatchReopened") {
+          if (current.phase !== "ended") {
+            throw new Error("Reopen Match cannot apply to this Match State.");
+          }
+          const expected = reopenMatch(current, event.occurredAt);
+          if (!canonicalMatchRecordsEqual(expected.event, event)) {
+            throw new Error("Reopen Match does not follow Match State.");
+          }
+          return expected.state;
+        } else if (event.type === "UndoApplied") {
+          const expectedTarget = findUndoTarget(events.slice(0, eventIndex));
+          if (
+            expectedTarget === null ||
+            expectedTarget.sequence !== event.targetSequence ||
+            expectedTarget.type !== event.targetType
+          ) {
+            throw new Error(
+              "The Undo Event does not reference the newest effective event.",
+            );
+          }
+          const targetIndex = events.findIndex(
+            ({ sequence }) => sequence === event.targetSequence,
+          );
+          if (targetIndex < 1 || targetIndex >= event.sequence - 1) {
+            throw new Error("The Undo Event target is invalid.");
+          }
+          return {
+            ...restoreStateFromEvents(events.slice(0, targetIndex)),
+            sequence: event.sequence,
+          };
+        } else if (event.type === "MatchMigrated") {
+          if (
+            event.fromSchemaVersion !== LEGACY_MATCH_SCHEMA_VERSION ||
+            event.toSchemaVersion !== MATCH_SCHEMA_VERSION
+          ) {
+            throw new Error("The Match Migration Event is incompatible.");
+          }
+          return { ...current, sequence: event.sequence };
         } else {
-          preview = getEndGamePreview(current);
+          throw new Error("Setup creation can only be the first Match Event.");
         }
-        if (
-          preview.outcome !== event.outcome ||
-          preview.decisionBasis !== event.decisionBasis ||
-          !canonicalMatchRecordsEqual(preview.finalCounts, event.finalCounts) ||
-          !canonicalMatchRecordsEqual(
-            preview.finalHpTotals,
-            event.finalHpTotals,
-          ) ||
-          preview.coinFlipResult !== event.coinFlipResult ||
-          !canonicalMatchRecordsEqual(
-            [...current.eliminatedTeams],
-            event.eliminatedTeams,
-          )
-        ) {
-          throw new Error("End Game does not follow Match State.");
-        }
-        current = {
-          ...current,
-          phase: "ended",
-          sequence: event.sequence,
-          outcome: preview.outcome,
-          endedAt: event.occurredAt,
-          endedSequence: event.sequence,
-          decisionBasis: preview.decisionBasis,
-          finalCounts: preview.finalCounts,
-          finalHpTotals: preview.finalHpTotals,
-          ...(preview.coinFlipResult
-            ? { coinFlipResult: preview.coinFlipResult }
-            : {}),
-        } as EndedMatchState;
-      }
-    } else if (event.type === "MatchReopened") {
-      if (current.phase !== "ended") {
-        throw new Error("Reopen Match cannot apply to this Match State.");
-      }
-      const expected = reopenMatch(current, event.occurredAt);
-      if (!canonicalMatchRecordsEqual(expected.event, event)) {
-        throw new Error("Reopen Match does not follow Match State.");
-      }
-      current = expected.state;
-    } else if (event.type === "UndoApplied") {
-      const expectedTarget = findUndoTarget(events.slice(0, eventIndex));
-      if (
-        expectedTarget === null ||
-        expectedTarget.sequence !== event.targetSequence ||
-        expectedTarget.type !== event.targetType
-      ) {
-        throw new Error(
-          "The Undo Event does not reference the newest effective event.",
-        );
-      }
-      const targetIndex = events.findIndex(
-        ({ sequence }) => sequence === event.targetSequence,
-      );
-      if (targetIndex < 1 || targetIndex >= event.sequence - 1) {
-        throw new Error("The Undo Event target is invalid.");
-      }
-      current = {
-        ...restoreStateFromEvents(events.slice(0, targetIndex)),
-        sequence: event.sequence,
-      } as MatchState;
-    } else if (event.type === "MatchMigrated") {
-      if (
-        event.fromSchemaVersion !== LEGACY_MATCH_SCHEMA_VERSION ||
-        event.toSchemaVersion !== MATCH_SCHEMA_VERSION
-      ) {
-        throw new Error("The Match Migration Event is incompatible.");
-      }
-      current = { ...current, sequence: event.sequence } as MatchState;
-    } else {
-      throw new Error("Setup creation can only be the first Match Event.");
-    }
-  }
+      },
+      initial,
+    );
   assertMatchStateStructure(current);
   return current;
 }
@@ -556,7 +583,7 @@ export function getUndoPreview(
 export function undoLastEvent(
   state: MatchState,
   events: readonly MatchEvent[],
-  command: { occurredAt: string; confirmed: boolean },
+  command: { readonly occurredAt: string; readonly confirmed: boolean },
 ): CommandResult<MatchState, UndoAppliedEvent> {
   const { occurredAt, confirmed } = command;
   if (!confirmed) throw new Error("Undo confirmation is required.");

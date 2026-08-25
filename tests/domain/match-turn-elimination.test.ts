@@ -12,9 +12,10 @@ import {
   ruleSimultaneousElimination,
   startMatch,
   undoLastEvent,
+  type ActiveMatchState,
   type MatchEvent,
-} from "./match";
-import { RULESET } from "./ruleset";
+} from "../../src/domain/match";
+import { RULESET } from "../../src/domain/ruleset";
 import { queuedRandom, simultaneousEliminationRun } from "./match-test-support";
 
 describe("Active Match commands", () => {
@@ -70,29 +71,32 @@ describe("Active Match commands", () => {
       queuedRandom(19, 19, 18, 18, 17, 14, 12, 11, 12, 11, 11, 10),
       "2026-08-22T14:01:00.000Z",
     );
-    let currentState = startMatch(
-      generated.state,
-      "2026-08-22T14:02:00.000Z",
-    ).state;
-
-    for (let expectedSlot = 2; expectedSlot <= 12; expectedSlot += 1) {
-      const result = finishTurn(
-        currentState,
-        `2026-08-22T14:${String(expectedSlot + 1).padStart(2, "0")}:00.000Z`,
-      );
-      expect(result.state).toMatchObject({
-        round: 1,
-        activeSlot: expectedSlot,
-      });
-      expect(result.event).toMatchObject({
-        type: "TurnFinished",
-        fromRound: 1,
-        fromSlot: expectedSlot - 1,
-        round: 1,
-        activeSlot: expectedSlot,
-      });
-      currentState = result.state;
-    }
+    const statesAfterTurns = Array.from(
+      { length: 11 },
+      (_, step) => step,
+    ).reduce<readonly ActiveMatchState[]>(
+      (states, step) => {
+        const expectedSlot = step + 2;
+        const result = finishTurn(
+          states.at(-1)!,
+          `2026-08-22T14:${String(expectedSlot + 1).padStart(2, "0")}:00.000Z`,
+        );
+        expect(result.state).toMatchObject({
+          round: 1,
+          activeSlot: expectedSlot,
+        });
+        expect(result.event).toMatchObject({
+          type: "TurnFinished",
+          fromRound: 1,
+          fromSlot: expectedSlot - 1,
+          round: 1,
+          activeSlot: expectedSlot,
+        });
+        return [...states, result.state];
+      },
+      [startMatch(generated.state, "2026-08-22T14:02:00.000Z").state],
+    );
+    const currentState = statesAfterTurns.at(-1)!;
 
     const wrapped = finishTurn(currentState, "2026-08-22T14:14:00.000Z");
     expect(wrapped.state).toMatchObject({ round: 2, activeSlot: 1 });
@@ -260,30 +264,45 @@ describe("Active Match commands", () => {
     );
     const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
     const sourceCharacterId = started.state.initiative[0]!.characterId;
-    const history: MatchEvent[] = [setup.event, generated.event, started.event];
-    let current = started.state;
-    for (let attackIndex = 0; attackIndex < 5; attackIndex += 1) {
-      const attack = resolveBasicAttack(
-        current,
-        {
-          sourceCharacterId,
-          affectedCharacterIds: RULESET.characters
-            .filter(({ team }) => team === "Duergar")
-            .map(({ id }) => id),
-          physicalConfirmations: {
-            range: true,
-            lineOfSight: true,
-            legalBottleContact: true,
-            terrainContact: true,
+    const baseHistory: readonly MatchEvent[] = [
+      setup.event,
+      generated.event,
+      started.event,
+    ];
+    const afterAttacks = Array.from(
+      { length: 5 },
+      (_, attackIndex) => attackIndex,
+    ).reduce<{
+      readonly history: readonly MatchEvent[];
+      readonly current: ActiveMatchState;
+    }>(
+      (progress, attackIndex) => {
+        const attack = resolveBasicAttack(
+          progress.current,
+          {
+            sourceCharacterId,
+            affectedCharacterIds: RULESET.characters
+              .filter(({ team }) => team === "Duergar")
+              .map(({ id }) => id),
+            physicalConfirmations: {
+              range: true,
+              lineOfSight: true,
+              legalBottleContact: true,
+              terrainContact: true,
+            },
+            majorActionOverride:
+              attackIndex === 0 ? null : "Referee confirmed repeated attack.",
           },
-          majorActionOverride:
-            attackIndex === 0 ? null : "Referee confirmed repeated attack.",
-        },
-        `2026-08-22T14:0${attackIndex + 3}:00.000Z`,
-      );
-      current = attack.state;
-      history.push(attack.event);
-    }
+          `2026-08-22T14:0${attackIndex + 3}:00.000Z`,
+        );
+        return {
+          history: [...progress.history, attack.event],
+          current: attack.state,
+        };
+      },
+      { history: baseHistory, current: started.state },
+    );
+    const current = afterAttacks.current;
     expect(current).toMatchObject({
       eliminatedTeams: ["Duergar"],
       outcome: "Drow",
@@ -294,22 +313,27 @@ describe("Active Match commands", () => {
       "Duergar",
       "2026-08-22T14:08:00.000Z",
     );
-    history.push(continued.event);
-    expect(restoreStateFromEvents(history)).toEqual(continued.state);
-    const undoContinue = undoLastEvent(continued.state, history, {
+    const historyAfterContinued = [...afterAttacks.history, continued.event];
+    expect(restoreStateFromEvents(historyAfterContinued)).toEqual(
+      continued.state,
+    );
+    const undoContinue = undoLastEvent(continued.state, historyAfterContinued, {
       occurredAt: "2026-08-22T14:09:00.000Z",
       confirmed: true,
     });
-    history.push(undoContinue.event);
+    const historyAfterUndoContinue = [
+      ...historyAfterContinued,
+      undoContinue.event,
+    ];
     expect(undoContinue.state).toEqual({ ...current, sequence: 10 });
 
     const ended = endMatch(undoContinue.state as typeof current, {
       occurredAt: "2026-08-22T14:10:00.000Z",
       confirmed: true,
     });
-    history.push(ended.event);
+    const historyAfterEnded = [...historyAfterUndoContinue, ended.event];
     const reopened = reopenMatch(ended.state, "2026-08-22T14:11:00.000Z");
-    history.push(reopened.event);
+    const history = [...historyAfterEnded, reopened.event];
     expect(restoreStateFromEvents(history)).toEqual(reopened.state);
     const undoReopen = undoLastEvent(reopened.state, history, {
       occurredAt: "2026-08-22T14:12:00.000Z",
@@ -446,7 +470,7 @@ describe("Active Match commands", () => {
         outcome: null,
       });
 
-      const history: MatchEvent[] = [
+      const history: readonly MatchEvent[] = [
         ...steps.map(({ event }) => event),
         ruled.event,
       ];
@@ -455,15 +479,19 @@ describe("Active Match commands", () => {
         occurredAt: "2026-08-22T14:23:00.000Z",
         confirmed: true,
       });
-      history.push(undoRuling.event);
+      const historyAfterUndoRuling = [...history, undoRuling.event];
       expect(undoRuling.state).toEqual({
         ...finalState,
         sequence: ruled.state.sequence + 1,
       });
-      const undoAttack = undoLastEvent(undoRuling.state, history, {
-        occurredAt: "2026-08-22T14:24:00.000Z",
-        confirmed: true,
-      });
+      const undoAttack = undoLastEvent(
+        undoRuling.state,
+        historyAfterUndoRuling,
+        {
+          occurredAt: "2026-08-22T14:24:00.000Z",
+          confirmed: true,
+        },
+      );
       expect(undoAttack.state).toMatchObject({
         phase: "active",
         eliminatedTeams: [],

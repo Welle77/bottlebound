@@ -319,51 +319,55 @@ function inferAbilityStructure(
         : "one";
   const lifeState: StructuredAbility["targetPolicy"]["lifeState"] =
     ability.effect.toLowerCase().includes("downed") ? "either" : "active";
-  const manualChecks: string[] = [];
-  if (ability.range !== "Self" && ability.range !== "N/A")
-    manualChecks.push("range");
-  if (ability.lineOfSight === "Yes") manualChecks.push("lineOfSight");
-  if (ability.ballRequired === "Yes")
-    manualChecks.push("legalBottleContact", "terrainContact");
-  const operations: string[] = [];
+  const manualChecks: readonly string[] = [
+    ...(ability.range !== "Self" && ability.range !== "N/A" ? ["range"] : []),
+    ...(ability.lineOfSight === "Yes" ? ["lineOfSight"] : []),
+    ...(ability.ballRequired === "Yes"
+      ? ["legalBottleContact", "terrainContact"]
+      : []),
+  ];
   const effectLower = ability.effect.toLowerCase();
-  if (
-    effectLower.includes("takes 1 damage") ||
-    effectLower.includes("takes 1 damage")
-  )
-    operations.push("deal-damage");
-  if (
-    effectLower.includes("+1 damage") ||
+  const operationsBeforeFallback: readonly string[] = [
+    ...(effectLower.includes("takes 1 damage") ? ["deal-damage"] : []),
+    ...(effectLower.includes("+1 damage") ||
     effectLower.includes("add-damage") ||
     ability.name === "Hunter's Mark" ||
     ability.name === "Hex"
-  )
-    operations.push("add-damage");
-  if (effectLower.includes("prevent all damage"))
-    operations.push("prevent-damage-and-effects");
-  if (effectLower.includes("reduce"))
-    operations.push("reduce-remaining-damage");
-  if (effectLower.includes("restores 1 hp") || effectLower.includes("heal"))
-    operations.push("heal");
-  if (
-    effectLower.includes("revive") ||
+      ? ["add-damage"]
+      : []),
+    ...(effectLower.includes("prevent all damage")
+      ? ["prevent-damage-and-effects"]
+      : []),
+    ...(effectLower.includes("reduce") ? ["reduce-remaining-damage"] : []),
+    ...(effectLower.includes("restores 1 hp") || effectLower.includes("heal")
+      ? ["heal"]
+      : []),
+    ...(effectLower.includes("revive") ||
     effectLower.includes("restore a downed")
-  )
-    operations.push("revive");
-  if (effectLower.includes("maximum hp")) operations.push("change-max-hp");
-  if (effectLower.includes("movement") && effectLower.includes("maximum of 1"))
-    operations.push("set-movement-cap");
-  if (effectLower.includes("movement") && effectLower.includes("3 paces"))
-    operations.push("set-movement-cap");
-  if (effectLower.includes("cannot use a powerful ability"))
-    operations.push("prohibit-action-type");
-  if (effectLower.includes("cannot be affected by physically"))
-    operations.push("ignore-physical-attack");
-  if (effectLower.includes("redirect"))
-    operations.push("redirect-physical-attack");
-  if (effectLower.includes("move") && effectLower.includes("paces"))
-    operations.push("manual-movement-instruction");
-  if (operations.length === 0) operations.push("apply-effect");
+      ? ["revive"]
+      : []),
+    ...(effectLower.includes("maximum hp") ? ["change-max-hp"] : []),
+    ...(effectLower.includes("movement") && effectLower.includes("maximum of 1")
+      ? ["set-movement-cap"]
+      : []),
+    ...(effectLower.includes("movement") && effectLower.includes("3 paces")
+      ? ["set-movement-cap"]
+      : []),
+    ...(effectLower.includes("cannot use a powerful ability")
+      ? ["prohibit-action-type"]
+      : []),
+    ...(effectLower.includes("cannot be affected by physically")
+      ? ["ignore-physical-attack"]
+      : []),
+    ...(effectLower.includes("redirect") ? ["redirect-physical-attack"] : []),
+    ...(effectLower.includes("move") && effectLower.includes("paces")
+      ? ["manual-movement-instruction"]
+      : []),
+  ];
+  const operations: readonly string[] =
+    operationsBeforeFallback.length === 0
+      ? ["apply-effect"]
+      : operationsBeforeFallback;
   return Object.freeze({
     id: `${characterId}-${slugAbility(ability.name)}`,
     name: ability.name,

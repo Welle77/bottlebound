@@ -6,6 +6,10 @@ settings:
 
 importers:
   .:
+    dependencies:
+      immer:
+        specifier: ^11.1.18
+        version: 11.1.18
     devDependencies:
       "@eslint/js":
         specifier: 10.0.1
@@ -28,6 +32,9 @@ importers:
       eslint:
         specifier: 10.9.0
         version: 10.9.0(supports-color@10.2.2)
+      eslint-plugin-functional:
+        specifier: ^10.0.0
+        version: 10.0.0(@typescript/typescript6@6.0.2)(eslint@10.9.0(supports-color@10.2.2))(supports-color@10.2.2)
       fake-indexeddb:
         specifier: 6.2.5
         version: 6.2.5
@@ -1405,6 +1412,13 @@ packages:
         integrity: sha512-oIPzksmTg4/MriiaYGO+okXDT7ztn/w3Eptv/+gSIdMdKsJo0u4CfYNFJPy+4SKMuCqGw2wxnA+URMg3t8a/bQ==,
       }
 
+  deepmerge-ts@7.1.6:
+    resolution:
+      {
+        integrity: sha512-gQhL1ksGBLQbHeAo47YU6cs2ahd3Pv+8PFYoWogNZbQnNwQyOh9Ad5kbeHFiWwbKdeWQJ5Z7Y7mwb9ew2hXBLw==,
+      }
+    engines: { node: ">=16.0.0" }
+
   deepmerge@4.3.1:
     resolution:
       {
@@ -1519,6 +1533,26 @@ packages:
         integrity: sha512-TtpcNJ3XAzx3Gq8sWRzJaVajRs0uVxA2YAkdb1jm2YkPz4G6egUFAyA3n5vtEIZefPk5Wa4UXbKuS5fKkJWdgA==,
       }
     engines: { node: ">=10" }
+
+  escape-string-regexp@5.0.0:
+    resolution:
+      {
+        integrity: sha512-/veY75JbMK4j1yjvuUxuVsiS/hr/4iHs9FTT6cgTexxdE0Ly/glccBAkloH/DofkjRbZU3bnoj38mOmhkZ0lHw==,
+      }
+    engines: { node: ">=12" }
+
+  eslint-plugin-functional@10.0.0:
+    resolution:
+      {
+        integrity: sha512-D/BWdGUvPz5uIC+kZM1BWrELhjHpDiYxIYjzF7a6TZ62KINajjKgOiSYGbGv4fpMT1enEC9yG+0kOaIRTZzpTg==,
+      }
+    engines: { node: ">=v20.0.0" }
+    peerDependencies:
+      eslint: ^9.0.0 || ^10.0.0
+      typescript: ">=4.7.4"
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   eslint-scope@9.1.2:
     resolution:
@@ -1723,6 +1757,12 @@ packages:
       }
     engines: { node: ">= 4" }
 
+  immer@11.1.18:
+    resolution:
+      {
+        integrity: sha512-EQyQtLiYW029lyoczMl/Hh4Xu7cDecSc58JRYpHyL4tIAu3eqd1yJzQX04d2BZHDkzFFvm6qJEJWOtfDSWAXbQ==,
+      }
+
   imurmurhash@0.1.4:
     resolution:
       {
@@ -1743,6 +1783,15 @@ packages:
         integrity: sha512-xelSayHH36ZgE7ZWhli7pW34hNbNl8Ojv5KVmkJD4hBdD3th8Tfk9vYasLM+mXWOZhFkgZfxhLSnrwRr4elSSg==,
       }
     engines: { node: ">=0.10.0" }
+
+  is-immutable-type@5.0.4:
+    resolution:
+      {
+        integrity: sha512-tDf0vB9dJJt/1USS2nvHJb8UsIAhs+pF6z8UZLNdhrzB+PKMrdcN45je9jhuFpaJOjJpoRhueFmFrRs5g/TNMA==,
+      }
+    peerDependencies:
+      eslint: "*"
+      typescript: ">=4.7.4"
 
   is-plain-object@5.1.0:
     resolution:
@@ -2211,6 +2260,14 @@ packages:
     engines: { node: ">=18.12" }
     peerDependencies:
       typescript: ">=4.8.4"
+
+  ts-declaration-location@1.0.7:
+    resolution:
+      {
+        integrity: sha512-EDyGAwH1gO0Ausm9gV6T2nUvBgXT5kGoCMJPllOaooZ+4VvJiKBdZE7wK18N1deEowhcUptS+5GXZK8U/fvpwA==,
+      }
+    peerDependencies:
+      typescript: ">=4.0.0"
 
   tslib@2.8.1:
     resolution:
@@ -3058,6 +3115,8 @@ snapshots:
 
   deep-is@0.1.4: {}
 
+  deepmerge-ts@7.1.6: {}
+
   deepmerge@4.3.1: {}
 
   detect-libc@2.1.2: {}
@@ -3138,6 +3197,22 @@ snapshots:
       "@esbuild/win32-x64": 0.28.1
 
   escape-string-regexp@4.0.0: {}
+
+  escape-string-regexp@5.0.0: {}
+
+  eslint-plugin-functional@10.0.0(@typescript/typescript6@6.0.2)(eslint@10.9.0(supports-color@10.2.2))(supports-color@10.2.2):
+    dependencies:
+      "@typescript-eslint/utils": 8.67.0(@typescript/typescript6@6.0.2)(eslint@10.9.0(supports-color@10.2.2))(supports-color@10.2.2)
+      deepmerge-ts: 7.1.6
+      escape-string-regexp: 5.0.0
+      eslint: 10.9.0(supports-color@10.2.2)
+      is-immutable-type: 5.0.4(@typescript/typescript6@6.0.2)(eslint@10.9.0(supports-color@10.2.2))(supports-color@10.2.2)
+      ts-api-utils: 2.5.0(@typescript/typescript6@6.0.2)
+      ts-declaration-location: 1.0.7(@typescript/typescript6@6.0.2)
+    optionalDependencies:
+      typescript: "@typescript/typescript6@6.0.2"
+    transitivePeerDependencies:
+      - supports-color
 
   eslint-scope@9.1.2:
     dependencies:
@@ -3267,6 +3342,8 @@ snapshots:
 
   ignore@7.0.6: {}
 
+  immer@11.1.18: {}
+
   imurmurhash@0.1.4: {}
 
   is-extglob@2.1.1: {}
@@ -3274,6 +3351,16 @@ snapshots:
   is-glob@4.0.3:
     dependencies:
       is-extglob: 2.1.1
+
+  is-immutable-type@5.0.4(@typescript/typescript6@6.0.2)(eslint@10.9.0(supports-color@10.2.2))(supports-color@10.2.2):
+    dependencies:
+      "@typescript-eslint/type-utils": 8.67.0(@typescript/typescript6@6.0.2)(eslint@10.9.0(supports-color@10.2.2))(supports-color@10.2.2)
+      eslint: 10.9.0(supports-color@10.2.2)
+      ts-api-utils: 2.5.0(@typescript/typescript6@6.0.2)
+      ts-declaration-location: 1.0.7(@typescript/typescript6@6.0.2)
+      typescript: "@typescript/typescript6@6.0.2"
+    transitivePeerDependencies:
+      - supports-color
 
   is-plain-object@5.1.0: {}
 
@@ -3536,6 +3623,11 @@ snapshots:
 
   ts-api-utils@2.5.0(@typescript/typescript6@6.0.2):
     dependencies:
+      typescript: "@typescript/typescript6@6.0.2"
+
+  ts-declaration-location@1.0.7(@typescript/typescript6@6.0.2):
+    dependencies:
+      picomatch: 4.0.5
       typescript: "@typescript/typescript6@6.0.2"
 
   tslib@2.8.1:

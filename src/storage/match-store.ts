@@ -54,6 +54,26 @@ function requestResult<T>(request: IDBRequest<T>): Promise<T> {
   });
 }
 
+/**
+ * lib.dom leaves object-store reads untyped (`IDBRequest<any>`); these
+ * wrappers restore the expected payload shape at a single boundary. The
+ * payloads remain guarded by the structural assertions applied afterwards.
+ */
+function getRecord<T>(
+  store: IDBObjectStore,
+  key: IDBValidKey,
+): Promise<T | undefined> {
+  return requestResult(store.get(key) as IDBRequest<T | undefined>);
+}
+
+function getAllRecords<T>(
+  source: IDBObjectStore | IDBIndex,
+  key?: IDBValidKey,
+): Promise<readonly T[]> {
+  const request = key === undefined ? source.getAll() : source.getAll(key);
+  return requestResult(request) as Promise<readonly T[]>;
+}
+
 function transactionComplete(transaction: IDBTransaction): Promise<void> {
   return new Promise((resolve, reject) => {
     transaction.addEventListener("complete", () => resolve(), { once: true });
@@ -93,7 +113,7 @@ export class IndexedDbMatchStore {
   ) {}
 
   private open(): Promise<IDBDatabase> {
-    this.databasePromise ??= new Promise((resolve, reject) => {
+    const promise = (this.databasePromise ??= new Promise((resolve, reject) => {
       const request = this.factory.open(this.databaseName, DATABASE_VERSION);
       request.addEventListener("upgradeneeded", () => {
         const database = request.result;
@@ -124,8 +144,8 @@ export class IndexedDbMatchStore {
           ),
         { once: true },
       );
-    });
-    return this.databasePromise;
+    }));
+    return promise;
   }
 
   async commit(event: MatchEvent, state: MatchState): Promise<void> {
@@ -137,8 +157,9 @@ export class IndexedDbMatchStore {
     );
     const completion = transactionComplete(transaction);
     const metadataStore = transaction.objectStore(METADATA_STORE);
-    const current = await requestResult<CurrentMatchMetadata | undefined>(
-      metadataStore.get(CURRENT_MATCH_KEY),
+    const current = await getRecord<CurrentMatchMetadata>(
+      metadataStore,
+      CURRENT_MATCH_KEY,
     );
     const isReplacement =
       current !== undefined &&
@@ -148,7 +169,7 @@ export class IndexedDbMatchStore {
     if (isReplacement) {
       const oldSnapshotStore = transaction.objectStore(SNAPSHOT_STORE);
       const eventStore = transaction.objectStore(EVENT_STORE);
-      const oldKeys = await requestResult<IDBValidKey[]>(
+      const oldKeys = await requestResult(
         eventStore.index("matchId").getAllKeys(current.matchId),
       );
       oldSnapshotStore.delete(current.matchId);
@@ -166,14 +187,13 @@ export class IndexedDbMatchStore {
         throw new Error("The new record must continue the committed sequence.");
       }
       if (event.type === "UndoApplied") {
-        const previousState = await requestResult<MatchState | undefined>(
-          transaction.objectStore(SNAPSHOT_STORE).get(event.matchId),
+        const previousState = await getRecord<MatchState>(
+          transaction.objectStore(SNAPSHOT_STORE),
+          event.matchId,
         );
-        const previousEvents = await requestResult<MatchEvent[]>(
-          transaction
-            .objectStore(EVENT_STORE)
-            .index("matchId")
-            .getAll(event.matchId),
+        const previousEvents = await getAllRecords<MatchEvent>(
+          transaction.objectStore(EVENT_STORE).index("matchId"),
+          event.matchId,
         );
         if (previousState === undefined) {
           transaction.abort();
@@ -196,14 +216,13 @@ export class IndexedDbMatchStore {
         event.type === "ActionResolved" ||
         event.type === "SimultaneousEliminationRuled"
       ) {
-        const previousState = await requestResult<MatchState | undefined>(
-          transaction.objectStore(SNAPSHOT_STORE).get(event.matchId),
+        const previousState = await getRecord<MatchState>(
+          transaction.objectStore(SNAPSHOT_STORE),
+          event.matchId,
         );
-        const previousEvents = await requestResult<MatchEvent[]>(
-          transaction
-            .objectStore(EVENT_STORE)
-            .index("matchId")
-            .getAll(event.matchId),
+        const previousEvents = await getAllRecords<MatchEvent>(
+          transaction.objectStore(EVENT_STORE).index("matchId"),
+          event.matchId,
         );
         if (
           previousState === undefined ||
@@ -233,7 +252,10 @@ export class IndexedDbMatchStore {
         CURRENT_MATCH_KEY,
       );
       if (event.type === "MatchEnded") {
-        const endedState = state as Extract<MatchState, { phase: "ended" }>;
+        const endedState = state as Extract<
+          MatchState,
+          { readonly phase: "ended" }
+        >;
         const summary = toMatchSummary(endedState);
         assertMatchSummaryStructure(summary);
         transaction.objectStore(SUMMARY_STORE).put(summary, LATEST_SUMMARY_KEY);
@@ -253,23 +275,24 @@ export class IndexedDbMatchStore {
       "readwrite",
     );
     const completion = transactionComplete(transaction);
-    const metadata = await requestResult<unknown>(
-      transaction.objectStore(METADATA_STORE).get(CURRENT_MATCH_KEY),
+    const metadata = await getRecord<unknown>(
+      transaction.objectStore(METADATA_STORE),
+      CURRENT_MATCH_KEY,
     );
-    const allSnapshots = await requestResult<unknown[]>(
-      transaction.objectStore(SNAPSHOT_STORE).getAll(),
+    const allSnapshots = await getAllRecords<unknown>(
+      transaction.objectStore(SNAPSHOT_STORE),
     );
-    const allEvents = await requestResult<unknown[]>(
-      transaction.objectStore(EVENT_STORE).getAll(),
+    const allEvents = await getAllRecords<unknown>(
+      transaction.objectStore(EVENT_STORE),
     );
-    const summaryRaw = await requestResult<unknown>(
-      transaction.objectStore(SUMMARY_STORE).get(LATEST_SUMMARY_KEY),
+    const summaryRaw = await getRecord<unknown>(
+      transaction.objectStore(SUMMARY_STORE),
+      LATEST_SUMMARY_KEY,
     );
-    let summary: MatchSummary | null = null;
-    if (summaryRaw !== undefined) {
-      assertMatchSummaryStructure(summaryRaw);
-      summary = summaryRaw;
-    }
+    const summary: MatchSummary | null =
+      summaryRaw === undefined
+        ? null
+        : (assertMatchSummaryStructure(summaryRaw), summaryRaw);
     if (metadata === undefined) {
       if (allSnapshots.length > 0 || allEvents.length > 0) {
         transaction.abort();
@@ -315,7 +338,9 @@ export class IndexedDbMatchStore {
             throw new Error("Saved canonical data has a partial sequence.");
           }
         });
-        const replayed = restoreStateFromEvents(allEvents as MatchEvent[]);
+        const replayed = restoreStateFromEvents(
+          allEvents as readonly MatchEvent[],
+        );
         const legacyState = recordWithout(state, ["schemaVersion", "sequence"]);
         const replayedLegacy = recordWithout(replayed, [
           "schemaVersion",
@@ -335,7 +360,10 @@ export class IndexedDbMatchStore {
         if (!lastEvent)
           throw new Error("Saved canonical data has no Match Event.");
         const migrated = migrateLegacyMatch(state, lastEvent.occurredAt);
-        const migratedEvents = [...(allEvents as MatchEvent[]), migrated.event];
+        const migratedEvents = [
+          ...(allEvents as readonly MatchEvent[]),
+          migrated.event,
+        ];
         const migratedMetadata = {
           matchId: migrated.state.matchId,
           sequence: migrated.state.sequence,
@@ -363,8 +391,8 @@ export class IndexedDbMatchStore {
     assertRestoredMatch(metadata, state, allEvents);
     await completion;
     return {
-      state: state as MatchState,
-      events: allEvents as MatchEvent[],
+      state: state,
+      events: allEvents as readonly MatchEvent[],
       summary,
     };
   }
@@ -373,8 +401,9 @@ export class IndexedDbMatchStore {
     const database = await this.open();
     const transaction = database.transaction([SUMMARY_STORE], "readonly");
     const completion = transactionComplete(transaction);
-    const raw = await requestResult<unknown>(
-      transaction.objectStore(SUMMARY_STORE).get(LATEST_SUMMARY_KEY),
+    const raw = await getRecord<unknown>(
+      transaction.objectStore(SUMMARY_STORE),
+      LATEST_SUMMARY_KEY,
     );
     await completion;
     if (raw === undefined) return null;
@@ -400,8 +429,9 @@ export class IndexedDbMatchStore {
     );
     const completion = transactionComplete(transaction);
     const metadataStore = transaction.objectStore(METADATA_STORE);
-    const metadata = await requestResult<CurrentMatchMetadata | undefined>(
-      metadataStore.get(CURRENT_MATCH_KEY),
+    const metadata = await getRecord<CurrentMatchMetadata>(
+      metadataStore,
+      CURRENT_MATCH_KEY,
     );
     if (metadata !== undefined && metadata.matchId !== matchId) {
       transaction.abort();
@@ -409,13 +439,14 @@ export class IndexedDbMatchStore {
       throw new Error("The requested Match is not the saved Match.");
     }
     metadataStore.delete(CURRENT_MATCH_KEY);
-    const snapshot = await requestResult<MatchState | undefined>(
-      transaction.objectStore(SNAPSHOT_STORE).get(matchId),
+    const snapshot = await getRecord<MatchState>(
+      transaction.objectStore(SNAPSHOT_STORE),
+      matchId,
     );
     const shouldDeleteSummary = snapshot?.phase === "ended";
     transaction.objectStore(SNAPSHOT_STORE).delete(matchId);
     const eventStore = transaction.objectStore(EVENT_STORE);
-    const eventKeys = await requestResult<IDBValidKey[]>(
+    const eventKeys = await requestResult(
       eventStore.index("matchId").getAllKeys(matchId),
     );
     eventKeys.forEach((key) => eventStore.delete(key));

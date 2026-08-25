@@ -18,33 +18,39 @@ import {
 import { RULESET } from "../domain/ruleset";
 import { probeCanonicalStorage } from "../storage/canonical-storage-probe";
 import { render } from "../ui/render";
-import { matchStore, state } from "../ui/shell-state";
+import { matchStore, patchShellState, state } from "../ui/shell-state";
 
 export async function commitResult(result: CommandResult): Promise<boolean> {
-  state.saving = true;
-  state.matchError = null;
+  patchShellState({ saving: true, matchError: null });
   render();
   try {
     await matchStore.commit(result.event, result.state);
-    state.match = result.state;
-    state.events = [...state.events, result.event];
+    patchShellState({
+      match: result.state,
+      events: [...state.current.events, result.event],
+    });
     if (
       result.event.type === "MatchEnded" &&
-      (result.state as { phase: string }).phase === "ended"
+      (result.state as { readonly phase: string }).phase === "ended"
     ) {
-      const ended = result.state as Extract<MatchState, { phase: "ended" }>;
+      const ended = result.state as Extract<
+        MatchState,
+        { readonly phase: "ended" }
+      >;
       if (ended.decisionBasis && ended.finalCounts && ended.finalHpTotals) {
-        state.summary = {
-          outcome: ended.outcome,
-          decisionBasis: ended.decisionBasis,
-          finalCounts: ended.finalCounts,
-          finalHpTotals: ended.finalHpTotals,
-          rulesVersion: ended.rulesVersion,
-          endedAt: ended.endedAt,
-          ...(ended.coinFlipResult
-            ? { coinFlipResult: ended.coinFlipResult }
-            : {}),
-        };
+        patchShellState({
+          summary: {
+            outcome: ended.outcome,
+            decisionBasis: ended.decisionBasis,
+            finalCounts: ended.finalCounts,
+            finalHpTotals: ended.finalHpTotals,
+            rulesVersion: ended.rulesVersion,
+            endedAt: ended.endedAt,
+            ...(ended.coinFlipResult
+              ? { coinFlipResult: ended.coinFlipResult }
+              : {}),
+          },
+        });
       }
     }
     if (
@@ -53,48 +59,49 @@ export async function commitResult(result: CommandResult): Promise<boolean> {
     ) {
       try {
         const latest = await matchStore.getSummary();
-        state.summary = latest;
+        patchShellState({ summary: latest });
       } catch {
         // Keep current summary on fetch failure
       }
     }
     return true;
   } catch {
-    state.matchError = "Canonical storage could not commit the command.";
+    patchShellState({
+      matchError: "Canonical storage could not commit the command.",
+    });
     return false;
   } finally {
-    state.saving = false;
+    patchShellState({ saving: false });
     render();
   }
 }
 export function openBasicAttack(): void {
-  if (
-    state.match?.phase !== "active" ||
-    state.match.rulesVersion !== RULESET.version
-  )
+  const match = state.current.match;
+  if (match?.phase !== "active" || match.rulesVersion !== RULESET.version)
     return;
-  const sourceCharacterId =
-    state.match.initiative[state.match.activeSlot - 1]?.characterId;
+  const sourceCharacterId = match.initiative[match.activeSlot - 1]?.characterId;
   if (!sourceCharacterId) return;
-  state.actionDraft = {
-    sourceCharacterId,
-    rulesVersion: state.match.rulesVersion,
-    step: "contacts",
-    attackLegs: [[]],
-    physicalConfirmations: {
-      range: false,
-      "line-of-sight": false,
-      "legal-bottle-contact": false,
-      "terrain-contact": false,
+  patchShellState({
+    actionDraft: {
+      sourceCharacterId,
+      rulesVersion: match.rulesVersion,
+      step: "contacts",
+      attackLegs: [[]],
+      physicalConfirmations: {
+        range: false,
+        "line-of-sight": false,
+        "legal-bottle-contact": false,
+        "terrain-contact": false,
+      },
+      reactions: [],
+      majorActionOverride: false,
     },
-    reactions: [],
-    majorActionOverride: false,
-  };
+  });
   render();
 }
 export async function confirmBasicAttack(): Promise<void> {
-  const match = state.match;
-  const draft = state.actionDraft;
+  const match = state.current.match;
+  const draft = state.current.actionDraft;
   if (match?.phase !== "active" || !draft || draft.step !== "review") return;
   await commitResult(
     resolveBasicAttack(
@@ -119,7 +126,7 @@ export async function confirmBasicAttack(): Promise<void> {
       new Date().toISOString(),
     ),
   );
-  state.actionDraft = null;
+  patchShellState({ actionDraft: null });
   render();
 }
 export async function createMatch(): Promise<void> {
@@ -128,35 +135,39 @@ export async function createMatch(): Promise<void> {
   );
 }
 export async function generate(): Promise<void> {
-  if (state.match?.phase === "setup")
+  if (state.current.match?.phase === "setup")
     await commitResult(
       generateInitiative(
-        state.match,
+        state.current.match,
         cryptoRandomSource,
         new Date().toISOString(),
       ),
     );
 }
 export async function start(): Promise<void> {
-  if (state.match?.phase === "setup") {
-    await commitResult(startMatch(state.match, new Date().toISOString()));
+  if (state.current.match?.phase === "setup") {
+    await commitResult(
+      startMatch(state.current.match, new Date().toISOString()),
+    );
   }
 }
 export async function advanceTurn(): Promise<void> {
-  if (state.match?.phase === "active") {
-    await commitResult(finishTurn(state.match, new Date().toISOString()));
+  if (state.current.match?.phase === "active") {
+    await commitResult(
+      finishTurn(state.current.match, new Date().toISOString()),
+    );
   }
 }
 export async function continueMatch(): Promise<void> {
   if (
-    state.match?.phase !== "active" ||
-    state.match.eliminatedTeams.length !== 1
+    state.current.match?.phase !== "active" ||
+    state.current.match.eliminatedTeams.length !== 1
   )
     return;
   await commitResult(
     acknowledgeElimination(
-      state.match,
-      state.match.eliminatedTeams[0]!,
+      state.current.match,
+      state.current.match.eliminatedTeams[0]!,
       new Date().toISOString(),
     ),
   );
@@ -165,13 +176,13 @@ export async function recordSimultaneousRuling(
   outcome: "Drow" | "Duergar" | "draw",
 ): Promise<void> {
   if (
-    state.match?.phase !== "active" ||
-    state.match.eliminatedTeams.length !== 2 ||
-    state.match.outcome !== null
+    state.current.match?.phase !== "active" ||
+    state.current.match.eliminatedTeams.length !== 2 ||
+    state.current.match.outcome !== null
   )
     return;
   await commitResult(
-    ruleSimultaneousElimination(state.match, outcome, {
+    ruleSimultaneousElimination(state.current.match, outcome, {
       overrideEvidence:
         "The authoritative rules do not define simultaneous Team Elimination; the referee selected this recorded override.",
       occurredAt: new Date().toISOString(),
@@ -179,167 +190,184 @@ export async function recordSimultaneousRuling(
   );
 }
 export async function reopenEndedMatch(): Promise<void> {
-  if (state.match?.phase !== "ended") return;
-  await commitResult(reopenMatch(state.match, new Date().toISOString()));
+  if (state.current.match?.phase !== "ended") return;
+  await commitResult(
+    reopenMatch(state.current.match, new Date().toISOString()),
+  );
 }
 export async function confirmAction(): Promise<void> {
-  if (!state.confirmation) return;
-  const confirmation = state.confirmation;
-  state.confirmation = null;
+  if (!state.current.confirmation) return;
+  const confirmation = state.current.confirmation;
+  patchShellState({ confirmation: null });
   if (confirmation === "remove-summary") {
-    state.saving = true;
+    patchShellState({ saving: true });
     render();
     try {
       await matchStore.deleteSummary(true);
-      state.summary = null;
-      state.matchError = null;
+      patchShellState({ summary: null, matchError: null });
     } catch {
-      state.matchError =
-        "Canonical storage could not remove the prior summary.";
+      patchShellState({
+        matchError: "Canonical storage could not remove the prior summary.",
+      });
     } finally {
-      state.saving = false;
+      patchShellState({ saving: false });
       render();
     }
     return;
   }
-  if (confirmation === "start-new" && state.match?.phase === "ended") {
-    state.saving = true;
+  if (confirmation === "start-new" && state.current.match?.phase === "ended") {
+    patchShellState({ saving: true });
     render();
     try {
       const setup = createSetup(crypto.randomUUID(), new Date().toISOString());
       await matchStore.commit(setup.event, setup.state);
-      state.match = setup.state;
-      state.events = [setup.event];
-      state.matchError = null;
+      patchShellState({
+        match: setup.state,
+        events: [setup.event],
+        matchError: null,
+      });
       try {
-        state.summary = await matchStore.getSummary();
+        patchShellState({ summary: await matchStore.getSummary() });
       } catch {
         // keep existing
       }
     } catch {
-      state.matchError = "Canonical storage could not start a new Match.";
+      patchShellState({
+        matchError: "Canonical storage could not start a new Match.",
+      });
     } finally {
-      state.saving = false;
+      patchShellState({ saving: false });
       render();
     }
     return;
   }
-  if (state.match === null) return;
+  if (state.current.match === null) return;
   if (confirmation === "undo") {
     await commitResult(
-      undoLastEvent(state.match, state.events, {
+      undoLastEvent(state.current.match, state.current.events, {
         occurredAt: new Date().toISOString(),
         confirmed: true,
       }),
     );
     return;
   }
-  if (confirmation === "end" && state.match.phase === "active") {
-    const preview = state.endGamePreview;
-    let random: RandomSource = cryptoRandomSource;
-    if (preview?.coinFlipResult) {
-      const expected = preview.coinFlipResult;
-      random = { nextUint32: () => (expected === "Drow" ? 0 : 1) };
-    }
-    const result = endMatch(state.match, {
+  if (confirmation === "end" && state.current.match.phase === "active") {
+    const preview = state.current.endGamePreview;
+    const expected = preview?.coinFlipResult;
+    const random: RandomSource =
+      expected === undefined
+        ? cryptoRandomSource
+        : { nextUint32: () => (expected === "Drow" ? 0 : 1) };
+    const result = endMatch(state.current.match, {
       occurredAt: new Date().toISOString(),
       confirmed: true,
       random,
     });
-    state.endGamePreview = null;
+    patchShellState({ endGamePreview: null });
     await commitResult(result);
     return;
   }
-  if (confirmation === "remove" && state.match.phase === "ended") {
-    state.saving = true;
+  if (confirmation === "remove" && state.current.match.phase === "ended") {
+    patchShellState({ saving: true });
     render();
     try {
-      await matchStore.deleteMatch(state.match.matchId, true);
-      state.match = null;
-      state.events = [];
-      state.summary = null;
-      state.matchError = null;
+      await matchStore.deleteMatch(state.current.match.matchId, true);
+      patchShellState({
+        match: null,
+        events: [],
+        summary: null,
+        matchError: null,
+      });
     } catch {
-      state.matchError = "Canonical storage could not remove the Ended Match.";
+      patchShellState({
+        matchError: "Canonical storage could not remove the Ended Match.",
+      });
     } finally {
-      state.saving = false;
+      patchShellState({ saving: false });
       render();
     }
     return;
   }
-  if (state.match.phase !== "setup") return;
+  if (state.current.match.phase !== "setup") return;
   if (confirmation === "reroll") {
     await commitResult(
-      rerollInitiative(state.match, cryptoRandomSource, {
+      rerollInitiative(state.current.match, cryptoRandomSource, {
         occurredAt: new Date().toISOString(),
         confirmed: true,
       }),
     );
     return;
   }
-  state.saving = true;
+  patchShellState({ saving: true });
   render();
   try {
-    await matchStore.deleteMatch(state.match.matchId, true);
-    state.match = null;
-    state.events = [];
-    state.matchError = null;
+    await matchStore.deleteMatch(state.current.match.matchId, true);
+    patchShellState({ match: null, events: [], matchError: null });
     try {
-      state.summary = await matchStore.getSummary();
+      patchShellState({ summary: await matchStore.getSummary() });
     } catch {
       // keep prior summary on fetch failure
     }
   } catch {
-    state.matchError = "Canonical storage could not discard the Match.";
+    patchShellState({
+      matchError: "Canonical storage could not discard the Match.",
+    });
   } finally {
-    state.saving = false;
+    patchShellState({ saving: false });
     render();
   }
 }
 export async function restoreMatch(): Promise<void> {
   try {
     const restored = await matchStore.restore();
-    state.match = restored?.state ?? null;
-    state.events = restored?.events ?? [];
-    state.summary = restored?.summary ?? null;
-    if (state.summary === null) {
+    patchShellState({
+      match: restored?.state ?? null,
+      events: restored?.events ?? [],
+      summary: restored?.summary ?? null,
+    });
+    if (state.current.summary === null) {
       try {
-        state.summary = await matchStore.getSummary();
+        patchShellState({ summary: await matchStore.getSummary() });
       } catch {
         // keep null on fetch failure
       }
     }
-    state.matchError = null;
+    patchShellState({ matchError: null });
   } catch {
-    state.match = null;
-    state.events = [];
-    state.summary = null;
+    patchShellState({ match: null, events: [], summary: null });
     try {
-      state.summary = await matchStore.getSummary();
+      patchShellState({ summary: await matchStore.getSummary() });
     } catch {
       // keep null
     }
-    if (state.match === null && state.summary === null) {
-      state.matchError =
-        "Saved canonical data is incompatible, incomplete, or structurally invalid.";
+    if (state.current.match === null && state.current.summary === null) {
+      patchShellState({
+        matchError:
+          "Saved canonical data is incompatible, incomplete, or structurally invalid.",
+      });
     } else {
-      state.matchError = null;
+      patchShellState({ matchError: null });
     }
   } finally {
-    state.matchLoaded = true;
+    patchShellState({ matchLoaded: true });
     render();
   }
 }
 export async function runStorageProbe(): Promise<void> {
-  state.canonicalStorage = "checking";
-  state.storageDetail = "Running a write and removal safety check.";
+  patchShellState({
+    canonicalStorage: "checking",
+    storageDetail: "Running a write and removal safety check.",
+  });
   render();
   const result = await probeCanonicalStorage();
-  state.canonicalStorage = result.status;
-  state.storageDetail =
-    result.status === "ready"
-      ? "The canonical write and removal check passed."
-      : `${result.reason} The shell remains safe. Retry this check.`;
+  patchShellState({
+    canonicalStorage: result.status,
+    storageDetail:
+      result.status === "ready"
+        ? "The canonical write and removal check passed."
+        : `${result.reason} The shell remains safe. Retry this check.`,
+  });
   render();
-  if (result.status === "ready" && !state.matchLoaded) await restoreMatch();
+  if (result.status === "ready" && !state.current.matchLoaded)
+    await restoreMatch();
 }

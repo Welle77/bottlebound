@@ -14,5 +14,13 @@
     "noUncheckedIndexedAccess": true,
     "types": ["vite/client", "vitest/globals"]
   },
-  "include": ["src", "vite.config.ts", "eslint.config.js"]
+  "include": [
+    "src",
+    "tests/*.test.ts",
+    "tests/domain",
+    "tests/storage",
+    "tests/rules-reference",
+    "vite.config.ts",
+    "eslint.config.js"
+  ]
 }

@@ -5,7 +5,7 @@ import {
   type MatchSummary,
   type ProtectiveReactionInput,
 } from "../domain/match";
-import { RULESET, type PhysicalAttackCheck } from "../domain/ruleset";
+import { RULESET } from "../domain/ruleset";
 import type {
   AppShellCacheState,
   NetworkState,
@@ -30,36 +30,61 @@ export type Confirmation =
 export interface ActionDraft {
   readonly sourceCharacterId: string;
   readonly rulesVersion: string;
-  step: "contacts" | "review";
-  attackLegs: string[][];
-  physicalConfirmations: Record<PhysicalAttackCheck, boolean>;
-  reactions: Array<
+  readonly step: "contacts" | "review";
+  readonly attackLegs: readonly (readonly string[])[];
+  readonly physicalConfirmations: {
+    readonly range: boolean;
+    readonly "line-of-sight": boolean;
+    readonly "legal-bottle-contact": boolean;
+    readonly "terrain-contact": boolean;
+  };
+  readonly reactions: ReadonlyArray<
     ProtectiveReactionInput & { readonly override: string | null }
   >;
-  majorActionOverride: boolean;
+  readonly majorActionOverride: boolean;
 }
 
-export function draftAffectedCharacterIds(draft: ActionDraft): string[] {
+export function draftAffectedCharacterIds(
+  draft: ActionDraft,
+): readonly string[] {
   return draft.attackLegs.flatMap((leg) => leg);
 }
 export interface ShellState {
-  network: NetworkState;
-  serviceWorker: ServiceWorkerState;
-  appShellCache: AppShellCacheState;
-  canonicalStorage: ProbeState;
-  storageDetail: string;
-  match: MatchState | null;
-  events: readonly MatchEvent[];
-  matchLoaded: boolean;
-  matchError: string | null;
-  confirmation: Confirmation;
-  endGamePreview: EndGamePreview | null;
-  actionDraft: ActionDraft | null;
-  saving: boolean;
-  summary: MatchSummary | null;
+  readonly network: NetworkState;
+  readonly serviceWorker: ServiceWorkerState;
+  readonly appShellCache: AppShellCacheState;
+  readonly canonicalStorage: ProbeState;
+  readonly storageDetail: string;
+  readonly match: MatchState | null;
+  readonly events: readonly MatchEvent[];
+  readonly matchLoaded: boolean;
+  readonly matchError: string | null;
+  readonly confirmation: Confirmation;
+  readonly endGamePreview: EndGamePreview | null;
+  readonly actionDraft: ActionDraft | null;
+  readonly saving: boolean;
+  readonly summary: MatchSummary | null;
 }
 
-export const state: ShellState = {
+/**
+ * The one deliberate mutability cell in the Console. Its contents are always
+ * replaced wholesale with immutable snapshots; consumers never mutate fields,
+ * they call {@link Ref.set} with a new object.
+ */
+export class Ref<T> {
+  #value: T;
+  constructor(value: T) {
+    this.#value = value;
+  }
+  get current(): T {
+    return this.#value;
+  }
+  set(next: T): void {
+    this.#value = next;
+  }
+}
+
+export const state = new Ref<ShellState>({
   network: navigator.onLine ? "online" : "offline",
   serviceWorker: "serviceWorker" in navigator ? "registering" : "unsupported",
   appShellCache: "checking",
@@ -74,11 +99,14 @@ export const state: ShellState = {
   actionDraft: null,
   saving: false,
   summary: null,
-};
-export let rulesUi = createRulesUiState(RULESET.version);
+});
+export const rulesUi = new Ref<RulesUiState>(
+  createRulesUiState(RULESET.version),
+);
 
-export function replaceRulesUi(next: RulesUiState): void {
-  rulesUi = next;
+/** Replace the shell snapshot wholesale with a patched immutable copy. */
+export function patchShellState(patch: Partial<ShellState>): void {
+  state.set({ ...state.current, ...patch });
 }
 export const matchStore = new IndexedDbMatchStore();
 const root = document.querySelector<HTMLDivElement>("#app");

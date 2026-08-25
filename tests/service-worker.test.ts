@@ -2,20 +2,40 @@ import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it } from "vitest";
 
-type WorkerEvent = {
-  request: {
-    method: string;
-    mode: string;
-    url: string;
-  };
-  respondWith: (response: Promise<unknown>) => void;
+type WorkerRequestBody = {
+  readonly method: string;
+  readonly mode: string;
+  readonly url: string;
 };
+
+type WorkerEvent = {
+  readonly request: WorkerRequestBody;
+} & {
+  readonly respondWith: (response: Promise<unknown>) => void;
+};
+
+class TestCell<T> {
+  #value: T;
+  constructor(value: T) {
+    this.#value = value;
+  }
+  get current(): T {
+    return this.#value;
+  }
+  set(next: T): void {
+    this.#value = next;
+  }
+}
 
 describe("service worker navigation responses", () => {
   it("does not use a redirected cached response for a navigation", async () => {
-    const listeners = new Map<string, (event: WorkerEvent) => void>();
+    const listeners = new TestCell<
+      ReadonlyArray<readonly [string, (event: WorkerEvent) => void]>
+    >([]);
     const redirectedResponse = { redirected: true };
-    let responsePromise: Promise<unknown> | undefined;
+    const responsePromiseCell = new TestCell<Promise<unknown> | undefined>(
+      undefined,
+    );
     const cachesApi = {
       match: () => Promise.resolve(redirectedResponse),
       open: () =>
@@ -37,23 +57,28 @@ describe("service worker navigation responses", () => {
           addEventListener: (
             type: string,
             listener: (event: WorkerEvent) => void,
-          ) => listeners.set(type, listener),
+          ) => listeners.set([...listeners.current, [type, listener]]),
         },
         URL,
       },
     );
 
-    listeners.get("fetch")?.({
+    const fetchListener = listeners.current.find(
+      ([type]) => type === "fetch",
+    )?.[1];
+    fetchListener?.({
       request: {
         method: "GET",
         mode: "navigate",
         url: "https://bottlebound.win/",
       },
       respondWith: (response: Promise<unknown>) => {
-        responsePromise = response;
+        responsePromiseCell.set(response);
       },
     });
 
-    await expect(responsePromise).resolves.not.toBe(redirectedResponse);
+    await expect(responsePromiseCell.current).resolves.not.toBe(
+      redirectedResponse,
+    );
   });
 });

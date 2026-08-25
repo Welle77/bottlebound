@@ -27,15 +27,22 @@ export function highlightedExcerpt(
   excerpt: string,
   highlights: readonly RulesSearchHighlight[],
 ): string {
-  let cursor = 0;
-  let result = "";
-  for (const highlight of highlights) {
-    if (highlight.start < cursor) continue;
-    result += escapeHtml(excerpt.slice(cursor, highlight.start));
-    result += `<mark>${escapeHtml(excerpt.slice(highlight.start, highlight.end))}</mark>`;
-    cursor = highlight.end;
-  }
-  return result + escapeHtml(excerpt.slice(cursor));
+  const { markup, cursor } = highlights.reduce<{
+    readonly markup: string;
+    readonly cursor: number;
+  }>(
+    (built, highlight) => {
+      if (highlight.start < built.cursor) return built;
+      return {
+        markup:
+          `${built.markup}${escapeHtml(excerpt.slice(built.cursor, highlight.start))}` +
+          `<mark>${escapeHtml(excerpt.slice(highlight.start, highlight.end))}</mark>`,
+        cursor: highlight.end,
+      };
+    },
+    { markup: "", cursor: 0 },
+  );
+  return markup + escapeHtml(excerpt.slice(cursor));
 }
 
 export function searchResultKind(kind: string): string {

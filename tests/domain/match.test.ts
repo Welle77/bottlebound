@@ -6,8 +6,8 @@ import {
   migrateLegacyMatch,
   rerollInitiative,
   restoreStateFromEvents,
-} from "./match";
-import { RULESET, RULES_VERSION } from "./ruleset";
+} from "../../src/domain/match";
+import { RULESET, RULES_VERSION } from "../../src/domain/ruleset";
 import { queuedRandom } from "./match-test-support";
 
 describe("Setup Match commands", () => {
@@ -202,7 +202,7 @@ describe("Setup Match commands", () => {
       type: "InitiativeGenerated",
       sequence: 2,
       results: result.state.initiative,
-      tieOrder: expect.any(Array),
+      tieOrder: expect.any(Array) as readonly unknown[],
     });
   });
 
@@ -292,24 +292,19 @@ describe("Setup Match commands", () => {
 describe("combat-ready Match migration", () => {
   it("migrates a Setup Match with one atomic event and initialized combat state", () => {
     const setup = createSetup("match-migrate", "2026-08-22T14:00:00.000Z");
-    const legacy = {
-      ...setup.state,
-      schemaVersion: 2,
-      spentReactionIds: undefined,
-      majorActionUsed: undefined,
-      eliminatedTeams: undefined,
-      acknowledgedEliminations: undefined,
-      outcome: undefined,
-    };
-    for (const key of [
+    const removedLegacyKeys = [
       "spentReactionIds",
       "majorActionUsed",
       "eliminatedTeams",
       "acknowledgedEliminations",
       "outcome",
-    ]) {
-      delete (legacy as Record<string, unknown>)[key];
-    }
+    ];
+    const legacy = Object.fromEntries(
+      Object.entries({
+        ...setup.state,
+        schemaVersion: 2,
+      }).filter(([key]) => !removedLegacyKeys.includes(key)),
+    );
 
     const migrated = migrateLegacyMatch(legacy, "2026-08-22T14:00:00.000Z");
 

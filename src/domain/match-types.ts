@@ -325,13 +325,13 @@ export interface BasicAttackInput {
   readonly sourceCharacterId: string;
   readonly affectedCharacterIds?: readonly string[];
   readonly attackLegs?: readonly Readonly<{
-    affectedCharacterIds: readonly string[];
+    readonly affectedCharacterIds: readonly string[];
   }>[];
   readonly physicalConfirmations: Readonly<{
-    range: boolean;
-    lineOfSight: boolean;
-    legalBottleContact: boolean;
-    terrainContact: boolean;
+    readonly range: boolean;
+    readonly lineOfSight: boolean;
+    readonly legalBottleContact: boolean;
+    readonly terrainContact: boolean;
   }>;
   readonly reactions?: readonly ProtectiveReactionInput[];
   readonly majorActionOverride: string | null;
@@ -381,13 +381,11 @@ export interface UndoPreview {
 }
 
 export const initialCombatState = Object.freeze({
-  spentReactionIds: Object.freeze([]) as readonly string[],
-  spentAbilityIds: Object.freeze([]) as readonly string[],
+  spentReactionIds: Object.freeze([]),
+  spentAbilityIds: Object.freeze([]),
   majorActionUsed: false,
-  eliminatedTeams: Object.freeze([]) as readonly ("Drow" | "Duergar")[],
-  acknowledgedEliminations: Object.freeze([]) as readonly (
-    "Drow" | "Duergar"
-  )[],
+  eliminatedTeams: Object.freeze([]),
+  acknowledgedEliminations: Object.freeze([]),
   outcome: null,
-  activeEffects: Object.freeze([]) as readonly ActiveEffect[],
+  activeEffects: Object.freeze([]),
 });
