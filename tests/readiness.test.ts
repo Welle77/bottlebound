@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { deriveReadinessState } from "./readiness";
+import { deriveReadinessState } from "../src/readiness";
 
 describe("Referee Console readiness", () => {
   it("distinguishes network, service-worker, offline, and canonical-storage state", () => {

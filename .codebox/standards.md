@@ -26,6 +26,10 @@
 - Keep the README short and descriptive.
 - Update its game summary when an approved rules change makes the existing summary inaccurate.
 
+## Testing
+
+- Tests never coexist with application code in the same folder. Test files live in a separate location from the modules they exercise.
+
 ## Tooling
 
 - This repository currently has no configured build, lint, format, focused-test, or full-suite command.

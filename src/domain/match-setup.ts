@@ -3,6 +3,7 @@ import { nextBounded, orderByCoinFlips } from "./match-random";
 import { initialCombatState, MATCH_SCHEMA_VERSION } from "./match-types";
 import type {
   ActiveMatchState,
+  CoinFlipTieBreakStep,
   CommandResult,
   DisplayNames,
   DisplayNamesAssignedEvent,
@@ -64,15 +65,16 @@ export function createSetup(
 export function normalizeDisplayNames(
   requested: Readonly<Record<string, string>>,
 ): DisplayNames {
-  const normalized: Record<string, string> = {};
-  for (const [characterId, rawName] of Object.entries(requested)) {
-    if (!RULESET.characters.some(({ id }) => id === characterId)) {
-      throw new Error("The Display Name references an unknown character.");
-    }
-    const name = rawName.trim();
-    if (name.length > 0) normalized[characterId] = name;
-  }
-  return normalized;
+  return Object.fromEntries(
+    Object.entries(requested)
+      .filter(([characterId, rawName]) => {
+        if (!RULESET.characters.some(({ id }) => id === characterId)) {
+          throw new Error("The Display Name references an unknown character.");
+        }
+        return rawName.trim().length > 0;
+      })
+      .map(([characterId, rawName]) => [characterId, rawName.trim()]),
+  );
 }
 
 /**
@@ -109,7 +111,10 @@ export function assignDisplayNames(
 function rollInitiative(
   state: SetupMatchState,
   random: RandomSource,
-): { results: InitiativeEntry[]; tieOrder: TieOrder[] } {
+): {
+  readonly results: readonly InitiativeEntry[];
+  readonly tieOrder: readonly TieOrder[];
+} {
   const unsorted = RULESET.characters.map((character) => {
     const roll = nextBounded(random, 20) + 1;
     return {
@@ -122,23 +127,23 @@ function rollInitiative(
   const totals = [...new Set(unsorted.map(({ total }) => total))].sort(
     (left, right) => right - left,
   );
-  const tieOrder: TieOrder[] = [];
-  const ordered = totals.flatMap((total) => {
+  const grouped = totals.map((total) => {
     const group = unsorted.filter((entry) => entry.total === total);
     const tieBreak =
       group.length > 1
         ? orderByCoinFlips(group, random)
-        : { ordered: group, steps: [] };
-    if (group.length > 1) {
-      tieOrder.push({
-        total,
-        initialCharacterIds: group.map(({ characterId }) => characterId),
-        steps: tieBreak.steps,
-        characterIds: tieBreak.ordered.map(({ characterId }) => characterId),
-      });
-    }
-    return tieBreak.ordered;
+        : { ordered: group, steps: [] as readonly CoinFlipTieBreakStep[] };
+    return { total, group, tieBreak };
   });
+  const ordered = grouped.flatMap(({ tieBreak }) => tieBreak.ordered);
+  const tieOrder: readonly TieOrder[] = grouped
+    .filter(({ group }) => group.length > 1)
+    .map(({ total, group, tieBreak }) => ({
+      total,
+      initialCharacterIds: group.map(({ characterId }) => characterId),
+      steps: tieBreak.steps,
+      characterIds: tieBreak.ordered.map(({ characterId }) => characterId),
+    }));
   const results = ordered.map((entry, index) => ({
     ...entry,
     slot: index + 1,
@@ -153,7 +158,10 @@ function rollInitiative(
 function initiativeCommand(
   state: SetupMatchState,
   random: RandomSource,
-  command: { occurredAt: string; type: InitiativeEvent["type"] },
+  command: {
+    readonly occurredAt: string;
+    readonly type: InitiativeEvent["type"];
+  },
 ): CommandResult<SetupMatchState, InitiativeEvent> {
   const { occurredAt, type } = command;
   const { results, tieOrder } = rollInitiative(state, random);
@@ -196,7 +204,7 @@ export function generateInitiative(
 export function rerollInitiative(
   state: SetupMatchState,
   random: RandomSource,
-  command: { occurredAt: string; confirmed: boolean },
+  command: { readonly occurredAt: string; readonly confirmed: boolean },
 ): CommandResult<SetupMatchState, InitiativeEvent> {
   const { occurredAt, confirmed } = command;
   if (!confirmed) {

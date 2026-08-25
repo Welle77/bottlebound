@@ -171,7 +171,7 @@ export function assertCommit(event: MatchEvent, state: MatchState): void {
 export function assertRestoredMatch(
   metadata: unknown,
   state: unknown,
-  events: unknown[],
+  events: readonly unknown[],
 ): asserts state is MatchState {
   if (!isRecord(metadata))
     throw new Error("Saved canonical metadata is invalid.");
@@ -206,7 +206,7 @@ export function assertRestoredMatch(
   assertCommit(lastEvent, state);
   if (
     !canonicalMatchRecordsEqual(
-      restoreStateFromEvents(events as MatchEvent[]),
+      restoreStateFromEvents(events as readonly MatchEvent[]),
       state,
     )
   ) {

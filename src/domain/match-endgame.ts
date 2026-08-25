@@ -19,27 +19,36 @@ export function teamOfCharacter(characterId: string): "Drow" | "Duergar" {
 }
 
 function computeFinalTallies(state: ActiveMatchState): {
-  finalCounts: FinalTeamCounts;
-  finalHpTotals: FinalTeamCounts;
+  readonly finalCounts: FinalTeamCounts;
+  readonly finalHpTotals: FinalTeamCounts;
 } {
-  let drowCount = 0;
-  let duergarCount = 0;
-  let drowHp = 0;
-  let duergarHp = 0;
-  for (const { characterId, hp } of state.characters) {
-    if (hp === 0) continue;
-    const team = teamOfCharacter(characterId);
-    if (team === "Drow") {
-      drowCount += 1;
-      drowHp += hp;
-    } else {
-      duergarCount += 1;
-      duergarHp += hp;
-    }
-  }
+  const tallies = state.characters.reduce<{
+    readonly drowCount: number;
+    readonly duergarCount: number;
+    readonly drowHp: number;
+    readonly duergarHp: number;
+  }>(
+    (totals, { characterId, hp }) => {
+      if (hp === 0) return totals;
+      const team = teamOfCharacter(characterId);
+      if (team === "Drow") {
+        return {
+          ...totals,
+          drowCount: totals.drowCount + 1,
+          drowHp: totals.drowHp + hp,
+        };
+      }
+      return {
+        ...totals,
+        duergarCount: totals.duergarCount + 1,
+        duergarHp: totals.duergarHp + hp,
+      };
+    },
+    { drowCount: 0, duergarCount: 0, drowHp: 0, duergarHp: 0 },
+  );
   return {
-    finalCounts: { Drow: drowCount, Duergar: duergarCount },
-    finalHpTotals: { Drow: drowHp, Duergar: duergarHp },
+    finalCounts: { Drow: tallies.drowCount, Duergar: tallies.duergarCount },
+    finalHpTotals: { Drow: tallies.drowHp, Duergar: tallies.duergarHp },
   };
 }
 
@@ -67,7 +76,7 @@ export function getEndGamePreview(
     if (state.outcome === null) {
       throw new Error("End Game needs a resolved Team Elimination result.");
     }
-    const basisOutcome = state.outcome as Exclude<MatchOutcome, null>;
+    const basisOutcome = state.outcome;
     return {
       outcome: basisOutcome,
       decisionBasis: "elimination",
@@ -107,9 +116,9 @@ export function getEndGamePreview(
 export function endMatch(
   state: ActiveMatchState,
   command: {
-    occurredAt: string;
-    confirmed: boolean;
-    random?: RandomSource;
+    readonly occurredAt: string;
+    readonly confirmed: boolean;
+    readonly random?: RandomSource;
   },
 ): CommandResult<EndedMatchState, MatchEndedEvent> {
   const { occurredAt, confirmed } = command;

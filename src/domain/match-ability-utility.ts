@@ -1,183 +1,158 @@
-import { isAbilityNamed } from "./match-ability-effects";
 import type { ActionEffect, MatchCharacter } from "./match-types";
 import type { StructuredAbility } from "./ruleset";
+import { isAbilityNamed } from "./match-ability-effects";
 
 export interface UtilityAbilityContext {
   readonly ability: StructuredAbility;
   readonly affectedCharacterIds: readonly string[];
-  /** Working copy mutated in place as HP changes apply. */
-  readonly characters: MatchCharacter[];
   /** Pre-action snapshot backing the Lay on Hands revive-or-heal choice. */
   readonly priorCharacters: readonly MatchCharacter[];
+  /** Working copy the HP changes apply onto (already carries earlier legs). */
+  readonly characters: readonly MatchCharacter[];
+}
+
+export interface UtilityAbilityResult {
+  /** Updated working copy with every HP/maxHP change applied. */
+  readonly characters: readonly MatchCharacter[];
   /** Output ledger; every touched character appends exactly one entry. */
-  readonly effects: ActionEffect[];
+  readonly effects: readonly ActionEffect[];
+}
+
+interface TargetOutcome {
+  readonly character: MatchCharacter;
+  readonly effect: ActionEffect;
 }
 
 /**
  * Applies a resolved non-attack ability to its affected characters:
  * healing up to current maximum HP, revival to exactly 1 HP, Shapeshift's
  * maximum-HP change with its written 1-HP restore, and zero-damage ledger
- * entries for buff/marker abilities (rules §12 and §15 cards).
+ * entries for buff/marker abilities (rules §12 and §15 cards). Pure: both
+ * input collections stay untouched; the updated copies are returned.
  */
-export function applyUtilityAbility(context: UtilityAbilityContext): void {
-  const {
-    ability,
-    affectedCharacterIds,
-    characters,
-    priorCharacters,
-    effects,
-  } = context;
+export function applyUtilityAbility(
+  context: UtilityAbilityContext,
+): UtilityAbilityResult {
+  const { ability, affectedCharacterIds, priorCharacters } = context;
   const abilityName = ability.name;
 
-  const healTarget = (targetId: string) => {
-    const idx = characters.findIndex(
-      (character) => character.characterId === targetId,
-    );
-    const character = characters[idx];
-    if (!character) throw new Error("Heal target unknown");
+  const healTarget = (
+    character: MatchCharacter,
+    targetId: string,
+  ): TargetOutcome => {
     const maxHp = character.currentMaxHp;
     const hpAfter = Math.min(maxHp, character.hp + 1);
     const before = character.hp;
-    characters[idx] = { ...character, hp: hpAfter };
-    effects.push({
-      characterId: targetId,
-      damage: 0,
-      hpBefore: before,
-      hpAfter,
-      downedBefore: before === 0,
-      downedAfter: hpAfter === 0,
-    });
-  };
-
-  const reviveTarget = (targetId: string) => {
-    const idx = characters.findIndex(
-      (character) => character.characterId === targetId,
-    );
-    const character = characters[idx];
-    if (!character) throw new Error("Revive target unknown");
-    const before = character.hp;
-    characters[idx] = { ...character, hp: 1 };
-    effects.push({
-      characterId: targetId,
-      damage: 0,
-      hpBefore: before,
-      hpAfter: 1,
-      downedBefore: true,
-      downedAfter: false,
-    });
-  };
-
-  if (
-    isAbilityNamed(ability, "Nature’s Renewal") ||
-    abilityName === "Inspiring Words" ||
-    abilityName === "Second Wind"
-  ) {
-    for (const targetId of affectedCharacterIds) {
-      healTarget(targetId);
-    }
-  } else if (abilityName === "Lay on Hands") {
-    for (const targetId of affectedCharacterIds) {
-      const targetChar = priorCharacters.find(
-        (character) => character.characterId === targetId,
-      );
-      if (targetChar?.hp === 0) reviveTarget(targetId);
-      else healTarget(targetId);
-    }
-  } else if (abilityName === "Revivify") {
-    for (const targetId of affectedCharacterIds) reviveTarget(targetId);
-  } else if (abilityName === "Shapeshift") {
-    // Maximum HP becomes 4 and the ability restores 1 HP (rules §15).
-    for (const targetId of affectedCharacterIds) {
-      const idx = characters.findIndex(
-        (character) => character.characterId === targetId,
-      );
-      const character = characters[idx]!;
-      const before = character.hp;
-      const withMax = {
-        ...character,
-        currentMaxHp: 4,
-        hp: Math.min(4, character.hp + 1),
-      };
-      characters[idx] = withMax;
-      effects.push({
+    return {
+      character: { ...character, hp: hpAfter },
+      effect: {
         characterId: targetId,
         damage: 0,
         hpBefore: before,
-        hpAfter: withMax.hp,
+        hpAfter,
         downedBefore: before === 0,
-        downedAfter: withMax.hp === 0,
-      });
-    }
-  } else if (
-    abilityName === "Vanish" ||
-    abilityName === "Misty Escape" ||
-    abilityName === "Deflecting Palm" ||
-    abilityName === "Divine Shield" ||
-    abilityName === "Shield Wall" ||
-    abilityName === "Mirror Veil"
-  ) {
-    // Vanish is carried by its Active Effect; the Reaction cards resolve
-    // inside their triggering attack. No HP changes — record the ledger.
-    for (const targetId of affectedCharacterIds) {
-      const character = characters.find(
-        (candidate) => candidate.characterId === targetId,
-      )!;
-      effects.push({
+        downedAfter: hpAfter === 0,
+      },
+    };
+  };
+
+  const reviveTarget = (
+    character: MatchCharacter,
+    targetId: string,
+  ): TargetOutcome => {
+    const before = character.hp;
+    return {
+      character: { ...character, hp: 1 },
+      effect: {
         characterId: targetId,
         damage: 0,
-        hpBefore: character.hp,
-        hpAfter: character.hp,
-        downedBefore: character.hp === 0,
-        downedAfter: character.hp === 0,
-      });
+        hpBefore: before,
+        hpAfter: 1,
+        downedBefore: true,
+        downedAfter: false,
+      },
+    };
+  };
+
+  const ledgerOnlyTarget = (
+    character: MatchCharacter,
+    targetId: string,
+  ): TargetOutcome => ({
+    character,
+    effect: {
+      characterId: targetId,
+      damage: 0,
+      hpBefore: character.hp,
+      hpAfter: character.hp,
+      downedBefore: character.hp === 0,
+      downedAfter: character.hp === 0,
+    },
+  });
+
+  const updateFor = (
+    targetId: string,
+  ): ((character: MatchCharacter) => TargetOutcome) => {
+    const characterOf = (candidates: readonly MatchCharacter[]) =>
+      candidates.find((candidate) => candidate.characterId === targetId);
+    if (
+      isAbilityNamed(ability, "Nature’s Renewal") ||
+      abilityName === "Inspiring Words" ||
+      abilityName === "Second Wind"
+    ) {
+      return (character) => healTarget(character, targetId);
     }
-  } else if (
-    abilityName === "Frostbind" ||
-    abilityName === "Battle Hymn" ||
-    abilityName === "Blessing of Battle"
-  ) {
-    for (const targetId of affectedCharacterIds) {
-      const character = characters.find(
+    if (abilityName === "Lay on Hands") {
+      return (character) =>
+        (characterOf(priorCharacters)?.hp ?? 0) === 0
+          ? reviveTarget(character, targetId)
+          : healTarget(character, targetId);
+    }
+    if (abilityName === "Revivify") {
+      return (character) => reviveTarget(character, targetId);
+    }
+    if (abilityName === "Shapeshift") {
+      // Maximum HP becomes 4 and the ability restores 1 HP (rules §15).
+      return (character) => {
+        const outcome = healTarget(character, targetId);
+        const raised = {
+          ...outcome.character,
+          currentMaxHp: 4 as const,
+          hp: Math.min(4, character.hp + 1),
+        };
+        return {
+          character: raised,
+          effect: {
+            ...outcome.effect,
+            hpAfter: raised.hp,
+            downedAfter: raised.hp === 0,
+          },
+        };
+      };
+    }
+    // Vanish is carried by its Active Effect; Reaction cards resolve inside
+    // their triggering attack; buffs, marks, and Hex record their ledger.
+    return (character) => ledgerOnlyTarget(character, targetId);
+  };
+
+  const applied = affectedCharacterIds.reduce<{
+    readonly characters: readonly MatchCharacter[];
+    readonly effects: readonly ActionEffect[];
+  }>(
+    (accumulated, targetId) => {
+      const character = accumulated.characters.find(
         (candidate) => candidate.characterId === targetId,
-      )!;
-      effects.push({
-        characterId: targetId,
-        damage: 0,
-        hpBefore: character.hp,
-        hpAfter: character.hp,
-        downedBefore: character.hp === 0,
-        downedAfter: character.hp === 0,
-      });
-    }
-  } else if (abilityName === "Rage") {
-    for (const targetId of affectedCharacterIds) {
-      const character = characters.find(
-        (candidate) => candidate.characterId === targetId,
-      )!;
-      effects.push({
-        characterId: targetId,
-        damage: 0,
-        hpBefore: character.hp,
-        hpAfter: character.hp,
-        downedBefore: character.hp === 0,
-        downedAfter: character.hp === 0,
-      });
-    }
-  } else {
-    // Hunter's Mark, Hex, and any future no-HP marker: no immediate HP
-    // change, but the resolution ledger records each affected character.
-    for (const targetId of affectedCharacterIds) {
-      const character = characters.find(
-        (candidate) => candidate.characterId === targetId,
-      )!;
-      effects.push({
-        characterId: targetId,
-        damage: 0,
-        hpBefore: character.hp,
-        hpAfter: character.hp,
-        downedBefore: character.hp === 0,
-        downedAfter: character.hp === 0,
-      });
-    }
-  }
+      );
+      if (!character) throw new Error("Heal target unknown");
+      const outcome = updateFor(targetId)(character);
+      return {
+        characters: accumulated.characters.map((candidate) =>
+          candidate.characterId === targetId ? outcome.character : candidate,
+        ),
+        effects: [...accumulated.effects, outcome.effect],
+      };
+    },
+    { characters: context.characters, effects: [] },
+  );
+
+  return { characters: applied.characters, effects: applied.effects };
 }

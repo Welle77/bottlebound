@@ -1,3 +1,4 @@
+/* eslint-disable functional/no-let, functional/prefer-immutable-types -- Test harnesses build event histories and mutable run accumulators incrementally; this is the sanctioned mutability boundary for tests. */
 import { describe, expect, it } from "vitest";
 
 import {
@@ -13,7 +14,7 @@ import {
   startMatch,
   type ActiveMatchState,
   type MatchEvent,
-} from "./match";
+} from "../../src/domain/match";
 import {
   advanceTo,
   abilityId,
@@ -63,7 +64,7 @@ describe("rules coverage audit: attack damage pipeline", () => {
     });
     const resolution = run.events.at(-1) as Extract<
       MatchEvent,
-      { type: "ActionResolved" }
+      { readonly type: "ActionResolved" }
     >;
     expect(resolution.expiredEffects?.map(({ kind }) => kind)).toEqual([
       "hunters-mark",
@@ -89,7 +90,7 @@ describe("rules coverage audit: attack damage pipeline", () => {
 
     const resolution = run.events.at(-1) as Extract<
       MatchEvent,
-      { type: "ActionResolved" }
+      { readonly type: "ActionResolved" }
     >;
     expect(resolution.effects).toEqual([
       {
@@ -134,7 +135,7 @@ describe("rules coverage audit: attack damage pipeline", () => {
 
     const resolution = run.events.at(-1) as Extract<
       MatchEvent,
-      { type: "ActionResolved" }
+      { readonly type: "ActionResolved" }
     >;
     expect(resolution.effects[0]).toMatchObject({
       characterId: "drow-wizard",
@@ -156,7 +157,7 @@ describe("rules coverage audit: attack damage pipeline", () => {
     });
     const resolution = run.events.at(-1) as Extract<
       MatchEvent,
-      { type: "ActionResolved" }
+      { readonly type: "ActionResolved" }
     >;
     expect(resolution.rangePaces).toBe(8);
     expect(resolution.attackLegs[0]?.rangePaces).toBe(8);
@@ -189,7 +190,7 @@ describe("rules coverage audit: Basic Attacks carry character-based effects", ()
 
     const resolution = run.events.at(-1) as Extract<
       MatchEvent,
-      { type: "ActionResolved" }
+      { readonly type: "ActionResolved" }
     >;
     expect(resolution.effects).toEqual([
       {
@@ -231,7 +232,7 @@ describe("rules coverage audit: Basic Attacks carry character-based effects", ()
 
     const resolution = run.events.at(-1) as Extract<
       MatchEvent,
-      { type: "ActionResolved" }
+      { readonly type: "ActionResolved" }
     >;
     expect(resolution.effects).toEqual([
       {
@@ -269,7 +270,7 @@ describe("rules coverage audit: Basic Attacks carry character-based effects", ()
 
     const resolution = run.events.at(-1) as Extract<
       MatchEvent,
-      { type: "ActionResolved" }
+      { readonly type: "ActionResolved" }
     >;
     expect(resolution.effects).toEqual([
       {
@@ -442,8 +443,7 @@ describe("rules coverage audit: Powerful prohibition and expiry boundaries", () 
 
     // The prohibition expires at the end of the Sorcerer's own next turn.
     const endedProhibitedTurn = finishTurn(prohibited, stamp(3));
-    run.events.push(endedProhibitedTurn.event);
-    run.state = endedProhibitedTurn.state;
+    run.record(endedProhibitedTurn);
     expect(
       endedProhibitedTurn.event.expiredEffects?.map(({ kind }) => kind),
     ).toEqual(["prohibit-powerful"]);
@@ -476,7 +476,7 @@ describe("rules coverage audit: Powerful prohibition and expiry boundaries", () 
     const current = play(run, finishTurn(run.state, stamp(2)));
     const firstResolution = run.events.at(-1) as Extract<
       MatchEvent,
-      { type: "TurnFinished" }
+      { readonly type: "TurnFinished" }
     >;
     expect(firstResolution.expiredEffects ?? []).toEqual([]);
     expect(current.activeEffects).toHaveLength(2);
@@ -488,14 +488,13 @@ describe("rules coverage audit: Powerful prohibition and expiry boundaries", () 
       wizardEnded.event.activeSlot !== 2 &&
       !wizardEnded.event.skippedSlots.includes(2)
     ) {
-      run.events.push(wizardEnded.event);
+      run.recordEvent(wizardEnded.event);
       wizardEnded = finishTurn(
         wizardEnded.state,
         stamp(60 + run.events.length),
       );
     }
-    run.events.push(wizardEnded.event);
-    run.state = wizardEnded.state;
+    run.record(wizardEnded);
     expect(wizardEnded.event.activeSlot).toBe(2);
 
     const endsHisNextTurn = finishTurn(wizardEnded.state, stamp(4));
@@ -536,7 +535,7 @@ describe("rules coverage audit: Powerful prohibition and expiry boundaries", () 
     ).toBe(true);
 
     const ended = finishTurn(current, stamp(99));
-    run.events.push(ended.event);
+    run.recordEvent(ended.event);
     expect(ended.event.expiredEffects?.map(({ kind }) => kind)).toEqual([
       "hunters-mark",
     ]);
@@ -596,7 +595,7 @@ describe("rules coverage audit: immediate effect expiry on a Basic Attack", () =
     );
     const killEvent = run.events.at(-1) as Extract<
       MatchEvent,
-      { type: "ActionResolved" }
+      { readonly type: "ActionResolved" }
     >;
 
     expect(killEvent.effects[0]).toMatchObject({
@@ -647,7 +646,7 @@ describe("rules coverage audit: immediate effect expiry on a Basic Attack", () =
     );
     const strikeEvent = run.events.at(-1) as Extract<
       MatchEvent,
-      { type: "ActionResolved" }
+      { readonly type: "ActionResolved" }
     >;
 
     expect(strikeEvent.effects[0]).toMatchObject({

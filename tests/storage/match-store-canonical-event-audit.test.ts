@@ -1,3 +1,4 @@
+/* eslint-disable functional/no-let, functional/immutable-data -- Test harness builds event histories and storage fixtures incrementally; this is the sanctioned mutability boundary for tests. */
 import { describe, expect, it } from "vitest";
 
 import {
@@ -8,10 +9,10 @@ import {
   resolveBasicAttack,
   startMatch,
   type ActiveMatchState,
-} from "../domain/match";
+} from "../../src/domain/match";
 import { queuedRandom } from "../domain/match-test-support";
-import type { MatchEvent } from "../domain/match";
-import { assertCanonicalEvent } from "./match-store-canonical-event";
+import type { MatchEvent } from "../../src/domain/match";
+import { assertCanonicalEvent } from "../../src/storage/match-store-canonical-event";
 
 /**
  * Rules coverage audit (ticket T04): stacked character-based damage

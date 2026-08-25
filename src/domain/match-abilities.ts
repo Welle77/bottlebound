@@ -3,8 +3,8 @@ import {
   AUTOMATED_REACTION_NAMES,
   protectiveReactionWarnings,
 } from "./match-combat";
-import { teamOfCharacter } from "./match-endgame";
 import { applyDownedCleanup } from "./match-turn";
+import { applyUtilityAbility } from "./match-ability-utility";
 import type {
   ActionEffect,
   ActionResolvedEvent,
@@ -17,20 +17,21 @@ import type {
   ProtectiveReactionInput,
   ProtectiveReactionOperation,
   ProtectiveReactionResolution,
+  MatchCharacter,
 } from "./match-types";
 
 export interface AbilityInput {
   readonly abilityId: string;
   readonly targetCharacterIds?: readonly string[];
-  readonly attackLegs?: readonly Readonly<{
-    affectedCharacterIds: readonly string[];
-  }>[];
-  readonly physicalConfirmations?: Readonly<{
-    range: boolean;
-    lineOfSight: boolean;
-    legalBottleContact: boolean;
-    terrainContact: boolean;
-  }>;
+  readonly attackLegs?: readonly {
+    readonly affectedCharacterIds: readonly string[];
+  }[];
+  readonly physicalConfirmations?: {
+    readonly range: boolean;
+    readonly lineOfSight: boolean;
+    readonly legalBottleContact: boolean;
+    readonly terrainContact: boolean;
+  };
   readonly reactions?: readonly ProtectiveReactionInput[];
   readonly majorActionOverride?: string | null;
   readonly abilityOverride?: string | null;
@@ -55,10 +56,9 @@ import {
   abilityWarnings,
   buildAbilityEffects,
   getAbilityOrThrow,
-  isAbilityNamed,
+  resolveAffectedCharacterIds,
   resolveAttackDamageAgainstCharacter,
 } from "./match-ability-effects";
-import { applyUtilityAbility } from "./match-ability-utility";
 
 export function resolveAbility(
   state: ActiveMatchState,
@@ -133,373 +133,234 @@ export function resolveAbility(
   // For Powerful, same override required which we already check.
 
   // Determine affected / target ids based on interaction
-  let affectedCharacterIds: string[] = [];
   const attackLegsInput = input.attackLegs;
-  const targetIds = input.targetCharacterIds ?? [];
-
-  if (ability.interaction === "targeted-attack") {
-    if (targetIds.length !== 1) {
-      throw new Error("A targeted Ability Attack needs exactly one target.");
-    }
-    const targetId = targetIds[0]!;
-    const targetChar = state.characters.find(
-      (character) => character.characterId === targetId,
-    );
-    if (!targetChar)
-      throw new Error("The ability references an unknown target.");
-    const sourceTeam = teamOfCharacter(ability.ownerCharacterId);
-    const targetTeam = teamOfCharacter(targetId);
-    if (targetTeam === sourceTeam) {
-      const override = abilityOverride;
-      if (override === null) throw new Error("invalid-target-relation");
-    }
-    if (targetChar.hp === 0) {
-      const override = abilityOverride;
-      if (override === null) throw new Error("invalid-target-life-state");
-    }
-    // Enforce targetPolicy lifeState active unless either
-    if (ability.targetPolicy.lifeState === "active" && targetChar.hp === 0) {
-      const override = abilityOverride;
-      if (override === null) throw new Error("invalid-target-life-state");
-    }
-    affectedCharacterIds = [targetId];
-  } else if (ability.interaction === "physical-attack") {
-    if (!attackLegsInput || attackLegsInput.length === 0) {
-      throw new Error("A physical ability needs ordered bottle contacts.");
-    }
-    const confirmations = input.physicalConfirmations;
-    if (
-      !confirmations ||
-      Object.values(confirmations).some((value) => value !== true)
-    ) {
-      throw new Error("Every manual physical confirmation is required.");
-    }
-    const flat = attackLegsInput.flatMap(
-      ({ affectedCharacterIds }) => affectedCharacterIds,
-    );
-    if (flat.length === 0)
-      throw new Error(
-        "A physical ability needs at least one affected character.",
-      );
-    if (new Set(flat).size !== flat.length)
-      throw new Error("Basic Attack contacts must be unique.");
-    for (const characterId of flat) {
-      if (
-        !state.characters.some(
-          (character) => character.characterId === characterId,
-        )
-      ) {
-        throw new Error(
-          "Physical ability references an unknown affected character.",
-        );
-      }
-    }
-    // Deflecting Palm handling for physical ability (reuse)
-    const selectedReactions = input.reactions ?? [];
-    const redirectReaction = selectedReactions.find((selection) => {
-      const reaction = RULESET.reactions.find(
-        ({ id }) => id === selection.reactionId,
-      );
-      return reaction?.name === "Deflecting Palm";
-    });
-    if (redirectReaction && attackLegsInput.length !== 2) {
-      throw new Error(
-        "Deflecting Palm needs exactly one redirected Attack Leg.",
-      );
-    }
-    if (!redirectReaction && attackLegsInput.length !== 1) {
-      throw new Error("A redirected Attack Leg needs Deflecting Palm.");
-    }
-    affectedCharacterIds = flat;
-  } else if (ability.interaction === "self") {
-    affectedCharacterIds = [ability.ownerCharacterId];
-  } else if (
-    ability.interaction === "ally" ||
-    ability.interaction === "enemy" ||
-    ability.interaction === "utility"
-  ) {
-    // For utility: use provided targetCharacterIds or default to self for self-targeting heals
-    if (targetIds.length === 0) {
-      // Some utilities are self (Second Wind, Rage) – default to owner
-      if (
-        ability.name === "Second Wind" ||
-        ability.name === "Rage" ||
-        ability.name === "Vanish" ||
-        ability.name === "Shapeshift"
-      ) {
-        affectedCharacterIds = [ability.ownerCharacterId];
-      } else {
-        throw new Error("Utility ability needs target selection.");
-      }
-    } else {
-      // Card-level life-state gates with unambiguous rules text (rules §12
-      // and §15): ordinary healing cannot affect a Downed character, Nature's
-      // Renewal and Inspiring Words cannot target one, and Revivify needs a
-      // Downed ally. These absolute card prohibitions are checked before the
-      // overridable policy gates below.
-      if (
-        isAbilityNamed(ability, "Nature’s Renewal") ||
-        ability.name === "Inspiring Words"
-      ) {
-        for (const targetId of targetIds) {
-          const targetChar = state.characters.find(
-            (character) => character.characterId === targetId,
-          );
-          if (targetChar?.hp === 0) {
-            throw new Error(
-              "A Downed character cannot be targeted by this healing ability.",
-            );
-          }
-        }
-      }
-      if (ability.name === "Revivify") {
-        for (const targetId of targetIds) {
-          const targetChar = state.characters.find(
-            (character) => character.characterId === targetId,
-          );
-          if (targetChar && targetChar.hp !== 0) {
-            throw new Error("Revivify needs one Downed ally as its target.");
-          }
-        }
-      }
-      // Validate each target relation and lifeState
-      for (const targetId of targetIds) {
-        const targetChar = state.characters.find(
-          (character) => character.characterId === targetId,
-        );
-        if (!targetChar)
-          throw new Error("Utility ability references unknown target.");
-        const sourceTeam = teamOfCharacter(ability.ownerCharacterId);
-        const targetTeam = teamOfCharacter(targetId);
-        const relation = ability.targetPolicy.relation;
-        if (relation === "ally" && targetTeam !== sourceTeam) {
-          const override = abilityOverride;
-          if (override === null) throw new Error("invalid-target-relation");
-        }
-        if (relation === "enemy" && targetTeam === sourceTeam) {
-          const override = abilityOverride;
-          if (override === null) throw new Error("invalid-target-relation");
-        }
-        // lifeState
-        if (
-          ability.targetPolicy.lifeState === "active" &&
-          targetChar.hp === 0
-        ) {
-          const override = abilityOverride;
-          if (override === null) throw new Error("invalid-target-life-state");
-        }
-        if (
-          ability.targetPolicy.lifeState === "downed" &&
-          targetChar.hp !== 0
-        ) {
-          const override = abilityOverride;
-          if (override === null) throw new Error("invalid-target-life-state");
-        }
-      }
-      affectedCharacterIds = [...targetIds];
-    }
-    // Specific guards: Revivify and Lay on Hands revive blocked when team eliminated
-    if (
-      (ability.name === "Revivify" || ability.name === "Lay on Hands") &&
-      targetIds.some((targetId) => {
-        const targetChar = state.characters.find(
-          (character) => character.characterId === targetId,
-        );
-        return targetChar?.hp === 0;
-      })
-    ) {
-      for (const targetId of targetIds) {
-        const targetChar = state.characters.find(
-          (character) => character.characterId === targetId,
-        );
-        if (targetChar?.hp === 0) {
-          const team = teamOfCharacter(targetId);
-          if (state.eliminatedTeams.includes(team)) {
-            throw new Error("eliminated-team");
-          }
-        }
-      }
-    }
-  }
+  const affectedCharacterIds = resolveAffectedCharacterIds({
+    state,
+    ability,
+    input,
+    abilityOverride,
+  });
 
   // Reactions for targeted/physical abilities (reuse protective logic)
   const selectedReactions = input.reactions ?? [];
-  const reactionOwners = new Set<string>();
-  const reactions = selectedReactions.map((selection) => {
-    const reaction = RULESET.reactions.find(
-      ({ id }) => id === selection.reactionId,
-    );
-    if (!reaction || !AUTOMATED_REACTION_NAMES.has(reaction.name)) {
-      throw new Error("The Action Draft references an unsupported Reaction.");
-    }
-    if (!affectedCharacterIds.includes(selection.protectedCharacterId)) {
-      throw new Error("A Reaction can protect only an affected character.");
-    }
-    if (reactionOwners.has(reaction.ownerCharacterId)) {
-      throw new Error(
-        "One character cannot use two Reactions against one attack.",
+  const reactions = selectedReactions.reduce<{
+    readonly seen: ReadonlySet<string>;
+    readonly results: readonly ProtectiveReactionResolution[];
+  }>(
+    (accumulated, selection) => {
+      const reaction = RULESET.reactions.find(
+        ({ id }) => id === selection.reactionId,
       );
-    }
-    reactionOwners.add(reaction.ownerCharacterId);
-    const warnings = protectiveReactionWarnings(
-      state,
-      reaction.id,
-      selection.protectedCharacterId,
-    );
-    const reactionOverride = selection.override?.trim() || null;
-    if (warnings.length > 0 && reactionOverride === null) {
-      throw new Error("A state-invalid Reaction needs a recorded Override.");
-    }
-    const operations = reaction.operations.flatMap(
-      (operation): ProtectiveReactionOperation[] => {
-        if (operation.type === "prevent-damage-and-effects") {
-          return [
-            {
-              type: operation.type,
-              characterId: selection.protectedCharacterId,
-            },
-          ];
-        }
-        if (operation.type === "manual-movement") {
-          return [
-            {
-              type: operation.type,
-              characterId: reaction.ownerCharacterId,
-              maxPaces: operation.maxPaces,
-              instruction: `Move ${reaction.name}'s owner up to ${operation.maxPaces} paces immediately.`,
-            },
-          ];
-        }
-        if (operation.type === "redirect-physical-attack") {
-          return [
-            {
-              type: operation.type,
-              fromCharacterId: reaction.ownerCharacterId,
-              towardCharacterId: ability.ownerCharacterId,
-            },
-          ];
-        }
-        return [];
-      },
-    );
-    return {
-      reactionId: reaction.id,
-      ownerCharacterId: reaction.ownerCharacterId,
-      protectedCharacterId: selection.protectedCharacterId,
-      warnings,
-      override: reactionOverride,
-      operations,
-    } satisfies ProtectiveReactionResolution;
-  });
+      if (!reaction || !AUTOMATED_REACTION_NAMES.has(reaction.name)) {
+        throw new Error("The Action Draft references an unsupported Reaction.");
+      }
+      if (!affectedCharacterIds.includes(selection.protectedCharacterId)) {
+        throw new Error("A Reaction can protect only an affected character.");
+      }
+      if (accumulated.seen.has(reaction.ownerCharacterId)) {
+        throw new Error(
+          "One character cannot use two Reactions against one attack.",
+        );
+      }
+      const warnings = protectiveReactionWarnings(
+        state,
+        reaction.id,
+        selection.protectedCharacterId,
+      );
+      const reactionOverride = selection.override?.trim() || null;
+      if (warnings.length > 0 && reactionOverride === null) {
+        throw new Error("A state-invalid Reaction needs a recorded Override.");
+      }
+      const operations = reaction.operations.flatMap(
+        (operation): readonly ProtectiveReactionOperation[] => {
+          if (operation.type === "prevent-damage-and-effects") {
+            return [
+              {
+                type: operation.type,
+                characterId: selection.protectedCharacterId,
+              },
+            ];
+          }
+          if (operation.type === "manual-movement") {
+            return [
+              {
+                type: operation.type,
+                characterId: reaction.ownerCharacterId,
+                maxPaces: operation.maxPaces,
+                instruction: `Move ${reaction.name}'s owner up to ${operation.maxPaces} paces immediately.`,
+              },
+            ];
+          }
+          if (operation.type === "redirect-physical-attack") {
+            return [
+              {
+                type: operation.type,
+                fromCharacterId: reaction.ownerCharacterId,
+                towardCharacterId: ability.ownerCharacterId,
+              },
+            ];
+          }
+          return [];
+        },
+      );
+      return {
+        seen: new Set([...accumulated.seen, reaction.ownerCharacterId]),
+        results: [
+          ...accumulated.results,
+          {
+            reactionId: reaction.id,
+            ownerCharacterId: reaction.ownerCharacterId,
+            protectedCharacterId: selection.protectedCharacterId,
+            warnings,
+            override: reactionOverride,
+            operations,
+          } satisfies ProtectiveReactionResolution,
+        ],
+      };
+    },
+    { seen: new Set<string>(), results: [] },
+  ).results;
 
   // Compute damage/effects for ability
   const sequence = state.sequence + 1;
-  const characters = [...state.characters];
-  const effects: ActionEffect[] = [];
-  const pendingAppliedEffects: ActiveEffect[] = buildAbilityEffects(ability, {
+  // Per-target HP changes feed effect expiry checks, so the update is
+  // computed as one pure fold: every intermediate snapshot stays immutable.
+  const initialApplied: readonly ActiveEffect[] = buildAbilityEffects(ability, {
     affectedIds: affectedCharacterIds,
     sequence,
     anchorId: ability.ownerCharacterId,
   });
-  const pendingExpired: ActiveEffect[] = [];
 
-  // For targeted and physical attacks: deal damage path
-  if (
+  const isAttackInteraction =
     ability.interaction === "targeted-attack" ||
-    ability.interaction === "physical-attack"
-  ) {
-    const protectedIds = new Set(
-      reactions.flatMap(({ operations }) =>
-        operations.flatMap((operation) =>
-          operation.type === "prevent-damage-and-effects"
-            ? [operation.characterId]
-            : [],
-        ),
-      ),
-    );
-    // Check Vanish ignore
-    const vanishProtected = new Set(
-      state.activeEffects
-        .filter((effect) =>
-          effect.operations.includes("ignore-physical-attack"),
-        )
-        .map((effect) => effect.affectedCharacterId),
-    );
-    const baseDamage = 1;
-    // Build base effects with final damage after increases, prevention,
-    // reductions, and consumption (rules §10(4), §11, §15 cards).
-    for (const targetId of affectedCharacterIds) {
-      const character = characters.find(
-        (candidate) => candidate.characterId === targetId,
-      );
-      if (!character) throw new Error("Ability references unknown character.");
-      const resolved = resolveAttackDamageAgainstCharacter({
-        baseDamage,
-        affectedCharacterId: targetId,
-        physicalAttack: ability.interaction === "physical-attack",
-        prevented:
-          protectedIds.has(targetId) ||
-          (ability.interaction === "physical-attack" &&
-            vanishProtected.has(targetId)),
-        activeEffects: state.activeEffects,
-        sequence,
-      });
-      pendingExpired.push(...resolved.expired);
-      pendingAppliedEffects.push(...resolved.applied);
-      const hpBefore = character.hp;
-      const hpAfter = Math.max(0, hpBefore - resolved.finalDamage);
-      const idx = characters.findIndex(
-        (candidate) => candidate.characterId === targetId,
-      );
-      characters[idx] = { ...characters[idx]!, hp: hpAfter };
-      effects.push({
-        characterId: targetId,
-        damage: resolved.finalDamage,
-        hpBefore,
-        hpAfter,
-        downedBefore: hpBefore === 0,
-        downedAfter: hpAfter === 0,
-      });
-    }
-    // If damage was 0 due to prevention, do not trigger successful-damage consumption for marks that were not already handled? Already handled.
-  } else {
-    // Non-attack utilities: apply per ability through the shared
-    // utility-application module (heal, revive, Shapeshift, ledger entries).
-    applyUtilityAbility({
-      ability,
-      affectedCharacterIds,
-      characters,
-      priorCharacters: state.characters,
-      effects,
-    });
-  }
+    ability.interaction === "physical-attack";
 
-  // After HP changes, apply Shapeshift while-condition expiry check: if HP <3, expire shapeshift
-  const shapeshiftExpiries: ActiveEffect[] = [];
-  for (const effect of [...state.activeEffects, ...pendingAppliedEffects]) {
-    if (effect.kind === "shapeshift") {
-      const affected = characters.find(
-        (character) => character.characterId === effect.affectedCharacterId,
-      );
-      if (affected && (affected.hp < 3 || affected.hp === 0)) {
-        shapeshiftExpiries.push(effect);
-        // Also revert maxHP to 3
-        const idx = characters.findIndex(
+  const attackOutcome = isAttackInteraction
+    ? (() => {
+        const protectedIds = new Set(
+          reactions.flatMap(({ operations }) =>
+            operations.flatMap((operation) =>
+              operation.type === "prevent-damage-and-effects"
+                ? [operation.characterId]
+                : [],
+            ),
+          ),
+        );
+        // Check Vanish ignore
+        const vanishProtected = new Set(
+          state.activeEffects
+            .filter((effect) =>
+              effect.operations.includes("ignore-physical-attack"),
+            )
+            .map((effect) => effect.affectedCharacterId),
+        );
+        const baseDamage = 1;
+        return affectedCharacterIds.reduce<{
+          readonly characters: readonly MatchCharacter[];
+          readonly effects: readonly ActionEffect[];
+          readonly expired: readonly ActiveEffect[];
+          readonly applied: readonly ActiveEffect[];
+        }>(
+          (accumulated, targetId) => {
+            const character = accumulated.characters.find(
+              (candidate) => candidate.characterId === targetId,
+            );
+            if (!character)
+              throw new Error("Ability references unknown character.");
+            const resolved = resolveAttackDamageAgainstCharacter({
+              baseDamage,
+              affectedCharacterId: targetId,
+              physicalAttack: ability.interaction === "physical-attack",
+              prevented:
+                protectedIds.has(targetId) ||
+                (ability.interaction === "physical-attack" &&
+                  vanishProtected.has(targetId)),
+              activeEffects: state.activeEffects,
+              sequence,
+            });
+            const hpBefore = character.hp;
+            const hpAfter = Math.max(0, hpBefore - resolved.finalDamage);
+            return {
+              characters: accumulated.characters.map((candidate) =>
+                candidate.characterId === targetId
+                  ? { ...candidate, hp: hpAfter }
+                  : candidate,
+              ),
+              effects: [
+                ...accumulated.effects,
+                {
+                  characterId: targetId,
+                  damage: resolved.finalDamage,
+                  hpBefore,
+                  hpAfter,
+                  downedBefore: hpBefore === 0,
+                  downedAfter: hpAfter === 0,
+                },
+              ],
+              expired: [...accumulated.expired, ...resolved.expired],
+              applied: [...accumulated.applied, ...resolved.applied],
+            };
+          },
+          {
+            characters: [...state.characters],
+            effects: [],
+            expired: [],
+            applied: [],
+          },
+        );
+      })()
+    : (() => {
+        const utility = applyUtilityAbility({
+          ability,
+          affectedCharacterIds,
+          priorCharacters: state.characters,
+          characters: [...state.characters],
+        });
+        return {
+          ...utility,
+          expired: [] as readonly ActiveEffect[],
+          applied: [] as readonly ActiveEffect[],
+        };
+      })();
+
+  const shapeshiftExpiry = [...state.activeEffects, ...initialApplied]
+    .filter((effect) => effect.kind === "shapeshift")
+    .reduce<{
+      readonly characters: readonly MatchCharacter[];
+      readonly expired: readonly ActiveEffect[];
+    }>(
+      (accumulated, effect) => {
+        const affected = accumulated.characters.find(
           (character) => character.characterId === effect.affectedCharacterId,
         );
-        if (idx >= 0) {
-          const before = characters[idx]!;
-          characters[idx] = {
-            ...before,
-            currentMaxHp: 3,
-            hp: Math.min(before.hp, 3),
-          };
-          // Adjust effects hpAfter if changed? Keep original effects but maxHP change is expiry side effect.
+        if (!affected || (affected.hp >= 3 && affected.hp !== 0)) {
+          return accumulated;
         }
-      }
-    }
-  }
-  pendingExpired.push(...shapeshiftExpiries);
+        return {
+          characters: accumulated.characters.map((candidate) =>
+            candidate.characterId === effect.affectedCharacterId
+              ? { ...candidate, currentMaxHp: 3, hp: Math.min(candidate.hp, 3) }
+              : candidate,
+          ),
+          expired: [...accumulated.expired, effect],
+        };
+      },
+      {
+        characters: attackOutcome.characters,
+        expired: [],
+      },
+    );
+
+  const characters = shapeshiftExpiry.characters;
+  const effects: readonly ActionEffect[] = attackOutcome.effects;
+  const pendingAppliedEffects: readonly ActiveEffect[] = [
+    ...initialApplied,
+    ...attackOutcome.applied,
+  ];
+  const expiredBeforeCleanup: readonly ActiveEffect[] = [
+    ...attackOutcome.expired,
+    ...shapeshiftExpiry.expired,
+  ];
 
   // Downed cleanup after HP changes and immediate expiries
   const combinedEffects = [
@@ -507,16 +368,20 @@ export function resolveAbility(
     ...pendingAppliedEffects,
   ].filter(
     (effect) =>
-      !pendingExpired.some((expired) => expired.effectId === effect.effectId),
+      !expiredBeforeCleanup.some(
+        (expired) => expired.effectId === effect.effectId,
+      ),
   );
   const downedCleanup = applyDownedCleanup(characters, combinedEffects);
   const finalActiveEffects = downedCleanup.cleaned;
-  pendingExpired.push(...downedCleanup.expired);
 
   // Deduplicate expired
   const uniqueExpired = [
     ...new Map(
-      pendingExpired.map((effect) => [effect.effectId, effect]),
+      [...expiredBeforeCleanup, ...downedCleanup.expired].map((effect) => [
+        effect.effectId,
+        effect,
+      ]),
     ).values(),
   ];
 
@@ -530,7 +395,7 @@ export function resolveAbility(
             ?.hp === 0,
       ),
   );
-  const resultingEliminations: ("Drow" | "Duergar")[] = [
+  const resultingEliminations: readonly ("Drow" | "Duergar")[] = [
     ...new Set([...state.eliminatedTeams, ...eliminatedTeams]),
   ];
   const outcome: MatchOutcome =
@@ -541,33 +406,27 @@ export function resolveAbility(
       : null;
 
   // Build attackLegs for event
-  let attackLegs: AttackLeg[];
-  if (
-    ability.interaction === "targeted-attack" ||
-    ability.interaction === "physical-attack"
-  ) {
-    const cardRangePaces = attackRangePaces(ability);
-    const inputLegs = attackLegsInput ?? [
-      { affectedCharacterIds: affectedCharacterIds },
-    ];
-    attackLegs = inputLegs.map((leg, index) => ({
-      sequence: index + 1,
-      kind: index === 0 ? "initial" : "redirected",
-      sourceCharacterId: ability.ownerCharacterId,
-      attackId: ability.id,
-      rangePaces: cardRangePaces,
-      redirectedByReactionId:
-        index === 0 ? null : (reactions[0]?.reactionId ?? null),
-      towardCharacterId:
-        index === 0
-          ? null
-          : reactions[0]?.ownerCharacterId
-            ? ability.ownerCharacterId
-            : null,
-      affectedCharacterIds: [...leg.affectedCharacterIds],
-    }));
-    if (attackLegs.length === 0) {
-      attackLegs = [
+  const cardRangePaces = isAttackInteraction ? attackRangePaces(ability) : 2;
+  const mappedLegs: readonly AttackLeg[] = isAttackInteraction
+    ? (attackLegsInput ?? [{ affectedCharacterIds: affectedCharacterIds }]).map(
+        (leg, index) => ({
+          sequence: index + 1,
+          kind: index === 0 ? "initial" : "redirected",
+          sourceCharacterId: ability.ownerCharacterId,
+          attackId: ability.id,
+          rangePaces: cardRangePaces,
+          redirectedByReactionId:
+            index === 0 ? null : (reactions[0]?.reactionId ?? null),
+          towardCharacterId:
+            index === 0
+              ? null
+              : reactions[0]?.ownerCharacterId
+                ? ability.ownerCharacterId
+                : null,
+          affectedCharacterIds: [...leg.affectedCharacterIds],
+        }),
+      )
+    : [
         {
           sequence: 1,
           kind: "initial",
@@ -579,21 +438,21 @@ export function resolveAbility(
           affectedCharacterIds: [...affectedCharacterIds],
         },
       ];
-    }
-  } else {
-    attackLegs = [
-      {
-        sequence: 1,
-        kind: "initial",
-        sourceCharacterId: ability.ownerCharacterId,
-        attackId: ability.id,
-        rangePaces: 2,
-        redirectedByReactionId: null,
-        towardCharacterId: null,
-        affectedCharacterIds: [...affectedCharacterIds],
-      },
-    ];
-  }
+  const attackLegs: readonly AttackLeg[] =
+    isAttackInteraction && mappedLegs.length === 0
+      ? [
+          {
+            sequence: 1,
+            kind: "initial",
+            sourceCharacterId: ability.ownerCharacterId,
+            attackId: ability.id,
+            rangePaces: cardRangePaces,
+            redirectedByReactionId: null,
+            towardCharacterId: null,
+            affectedCharacterIds: [...affectedCharacterIds],
+          },
+        ]
+      : mappedLegs;
 
   const event: ActionResolvedEvent = {
     type: "ActionResolved",
@@ -605,11 +464,7 @@ export function resolveAbility(
     sourceCharacterId: ability.ownerCharacterId,
     attackId: ability.id,
     attackType: "ability",
-    rangePaces:
-      ability.interaction === "targeted-attack" ||
-      ability.interaction === "physical-attack"
-        ? attackRangePaces(ability)
-        : 2,
+    rangePaces: cardRangePaces,
     damage: 1,
     rulesSourceAnchor: ability.sourceAnchor,
     attackLegs,

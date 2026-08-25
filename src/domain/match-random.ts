@@ -1,3 +1,4 @@
+import { castDraft, produce } from "immer";
 import type {
   CoinFlipAttempt,
   CoinFlipTieBreakStep,
@@ -19,6 +20,16 @@ export const cryptoRandomSource: RandomSource = {
   },
 };
 
+function drawValidUint32(random: RandomSource): number {
+  const value = random.nextUint32();
+  if (!Number.isInteger(value) || value < 0 || value >= UINT32_RANGE) {
+    throw new Error(
+      "The random source must return an unsigned 32-bit integer.",
+    );
+  }
+  return value;
+}
+
 export function nextBounded(
   random: RandomSource,
   upperExclusive: number,
@@ -27,55 +38,69 @@ export function nextBounded(
     throw new Error("The random bound must be a positive safe integer.");
   }
   const limit = Math.floor(UINT32_RANGE / upperExclusive) * upperExclusive;
-  let value: number;
-  do {
-    value = random.nextUint32();
-    if (!Number.isInteger(value) || value < 0 || value >= UINT32_RANGE) {
-      throw new Error(
-        "The random source must return an unsigned 32-bit integer.",
-      );
-    }
-  } while (value >= limit);
-  return value % upperExclusive;
+  // Rejection sampling: every draw is validated before the bound comparison.
+  for (let value = drawValidUint32(random); ; value = drawValidUint32(random)) {
+    if (value < limit) return value % upperExclusive;
+  }
 }
 
 function drawIndexWithCoinFlips(
   random: RandomSource,
   upperExclusive: number,
-): { selectedIndex: number; attempts: CoinFlipAttempt[] } {
+  priorAttempts: readonly CoinFlipAttempt[] = [],
+): {
+  readonly selectedIndex: number;
+  readonly attempts: readonly CoinFlipAttempt[];
+} {
   const bitCount = Math.ceil(Math.log2(upperExclusive));
-  const attempts: CoinFlipAttempt[] = [];
-  for (;;) {
-    const flips: DigitalCoinFlipResult[] = [];
-    let candidate = 0;
-    for (let bit = 0; bit < bitCount; bit += 1) {
-      const flip = nextBounded(random, 2) === 1 ? "heads" : "tails";
-      flips.push(flip);
-      candidate = candidate * 2 + (flip === "heads" ? 1 : 0);
-    }
-    const accepted = candidate < upperExclusive;
-    attempts.push({ flips, candidate, accepted });
-    if (accepted) return { selectedIndex: candidate, attempts };
-  }
+  const { flips, candidate } = Array.from({ length: bitCount }, () =>
+    nextBounded(random, 2) === 1 ? ("heads" as const) : ("tails" as const),
+  ).reduce(
+    (drawn, flip) => ({
+      flips: [...drawn.flips, flip],
+      candidate: drawn.candidate * 2 + (flip === "heads" ? 1 : 0),
+    }),
+    { flips: [] as readonly DigitalCoinFlipResult[], candidate: 0 },
+  );
+  const accepted = candidate < upperExclusive;
+  const attempts: readonly CoinFlipAttempt[] = [
+    ...priorAttempts,
+    { flips, candidate, accepted },
+  ];
+  if (accepted) return { selectedIndex: candidate, attempts };
+  return drawIndexWithCoinFlips(random, upperExclusive, attempts);
 }
 
 export function orderByCoinFlips<T>(
   values: readonly T[],
   random: RandomSource,
-): { ordered: T[]; steps: CoinFlipTieBreakStep[] } {
-  const ordered = [...values];
-  const steps: CoinFlipTieBreakStep[] = [];
-  for (let position = ordered.length - 1; position > 0; position -= 1) {
-    const upperExclusive = position + 1;
-    const { selectedIndex, attempts } = drawIndexWithCoinFlips(
-      random,
-      upperExclusive,
-    );
-    [ordered[position], ordered[selectedIndex]] = [
-      ordered[selectedIndex] as T,
-      ordered[position] as T,
-    ];
-    steps.push({ position, upperExclusive, attempts, selectedIndex });
-  }
-  return { ordered, steps };
+): {
+  readonly ordered: readonly T[];
+  readonly steps: readonly CoinFlipTieBreakStep[];
+} {
+  // The shuffle is a sequence of swaps; immer keeps each intermediate
+  // snapshot immutable while the draft expresses the swap directly.
+  const shuffled = produce(
+    { ordered: [...values], steps: [] as readonly CoinFlipTieBreakStep[] },
+    (draft) => {
+      for (
+        let position = draft.ordered.length - 1;
+        position > 0;
+        position -= 1
+      ) {
+        const upperExclusive = position + 1;
+        const { selectedIndex, attempts } = drawIndexWithCoinFlips(
+          random,
+          upperExclusive,
+        );
+        const displaced = draft.ordered[position]!;
+        draft.ordered[position] = draft.ordered[selectedIndex]!;
+        draft.ordered[selectedIndex] = displaced;
+        draft.steps.push(
+          castDraft({ position, upperExclusive, attempts, selectedIndex }),
+        );
+      }
+    },
+  );
+  return { ordered: shuffled.ordered, steps: shuffled.steps };
 }

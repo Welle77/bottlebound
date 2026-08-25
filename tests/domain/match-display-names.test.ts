@@ -11,8 +11,8 @@ import {
   startMatch,
   undoLastEvent,
   type MatchState,
-} from "./match";
-import { RULES_VERSION } from "./ruleset";
+} from "../../src/domain/match";
+import { RULES_VERSION } from "../../src/domain/ruleset";
 import { queuedRandom } from "./match-test-support";
 
 describe("Display Name assignment", () => {
@@ -170,7 +170,7 @@ describe("Display Name assignment", () => {
     });
     const restoredSetup = undone.state as Extract<
       MatchState,
-      { phase: "setup" }
+      { readonly phase: "setup" }
     >;
     expect(restoredSetup.phase).toBe("setup");
     expect(restoredSetup.displayNames).toEqual(named.state.displayNames);

@@ -9,8 +9,8 @@ import {
   startMatch,
   undoLastEvent,
   type MatchState,
-} from "../domain/match";
-import { IndexedDbMatchStore } from "./match-store";
+} from "../../src/domain/match";
+import { IndexedDbMatchStore } from "../../src/storage/match-store";
 import {
   overwriteStoredEvent,
   randomQueue,
@@ -315,7 +315,7 @@ describe("IndexedDbMatchStore", () => {
     });
 
     const turned = finishTurn(
-      undone.state as Extract<MatchState, { phase: "active" }>,
+      undone.state as Extract<MatchState, { readonly phase: "active" }>,
       "2026-08-22T14:05:00.000Z",
     );
     await store.commit(turned.event, turned.state);
@@ -380,9 +380,10 @@ describe("IndexedDbMatchStore", () => {
     const store = new IndexedDbMatchStore(factory, databaseName);
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     await store.commit(setup.event, setup.state);
-    await rewriteCurrentSnapshotAsLegacy(factory, databaseName, (snapshot) => {
-      snapshot.characters = [];
-    });
+    await rewriteCurrentSnapshotAsLegacy(factory, databaseName, (snapshot) => ({
+      ...snapshot,
+      characters: [],
+    }));
     const before = await readRawMatch(factory, databaseName);
 
     await expect(store.restore()).rejects.toThrow("Match State");

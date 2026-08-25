@@ -1,0 +1,100 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  createSetup,
+  generateInitiative,
+  resolveAbility,
+  restoreStateFromEvents,
+  startMatch,
+} from "../../src/domain/match";
+import { queuedRandom } from "./match-test-support";
+
+// Distinct d20 results keep every initiative total unique (no tie flips) and
+// place the Druid (+1 modifier, roll 19, total 20) alone in slot 1.
+const druidFirstInitiative = [10, 19, 11, 8, 7, 14, 11, 12, 10, 9, 6, 5];
+
+function startedMatchWithActiveDruid() {
+  const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
+  const generated = generateInitiative(
+    setup.state,
+    queuedRandom(...druidFirstInitiative),
+    "2026-08-22T14:01:00.000Z",
+  );
+  const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
+  return { setup, generated, started };
+}
+
+describe("Ability resolution", () => {
+  it("resolves the Druid's Shapeshift as one reversible Match Event", () => {
+    const { started } = startedMatchWithActiveDruid();
+    expect(started.state.initiative[0]?.characterId).toBe("drow-druid");
+
+    const result = resolveAbility(
+      started.state,
+      { abilityId: "drow-druid-shapeshift" },
+      "2026-08-22T14:03:00.000Z",
+    );
+
+    expect(result.event).toMatchObject({
+      type: "ActionResolved",
+      sequence: 4,
+      actionType: "Ability",
+      sourceCharacterId: "drow-druid",
+      abilityId: "drow-druid-shapeshift",
+      targetCharacterIds: ["drow-druid"],
+    });
+    expect(result.event.effects).toEqual([
+      {
+        characterId: "drow-druid",
+        damage: 0,
+        hpBefore: 3,
+        hpAfter: 4,
+        downedBefore: false,
+        downedAfter: false,
+      },
+    ]);
+    expect(result.event.appliedEffects?.map(({ kind }) => kind)).toEqual([
+      "shapeshift",
+    ]);
+    expect(result.state.characters).toEqual(
+      started.state.characters.map((character) =>
+        character.characterId === "drow-druid"
+          ? { ...character, currentMaxHp: 4, hp: 4 }
+          : character,
+      ),
+    );
+    expect(result.state.activeEffects).toMatchObject([
+      {
+        kind: "shapeshift",
+        anchorCharacterId: "drow-druid",
+        affectedCharacterId: "drow-druid",
+        operations: ["change-max-hp"],
+      },
+    ]);
+    expect(result.state.spentAbilityIds).toEqual(["drow-druid-shapeshift"]);
+  });
+
+  it("replays a recorded Shapeshift Action Resolution through Match Events", () => {
+    const { setup, generated, started } = startedMatchWithActiveDruid();
+    const resolved = resolveAbility(
+      started.state,
+      { abilityId: "drow-druid-shapeshift" },
+      "2026-08-22T14:03:00.000Z",
+    );
+    const events = [
+      setup.event,
+      generated.event,
+      started.event,
+      resolved.event,
+    ];
+
+    const restored = restoreStateFromEvents(events);
+
+    expect(restored).toEqual(resolved.state);
+    expect(
+      restored.characters.find(
+        ({ characterId }) => characterId === "drow-druid",
+      ),
+    ).toMatchObject({ currentMaxHp: 4, hp: 4 });
+  });
+});

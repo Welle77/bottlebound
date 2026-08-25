@@ -1,3 +1,4 @@
+/* eslint-disable functional/no-let, functional/immutable-data, functional/prefer-readonly-type -- Test harness builds event histories and storage fixtures incrementally; this is the sanctioned mutability boundary for tests. */
 import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it } from "vitest";
 
@@ -13,9 +14,9 @@ import {
   type ActionResolvedEvent,
   type MatchEvent,
   type MatchState,
-} from "../domain/match";
+} from "../../src/domain/match";
 import { randomQueue } from "./match-store.test-helpers";
-import { IndexedDbMatchStore } from "./match-store";
+import { IndexedDbMatchStore } from "../../src/storage/match-store";
 
 /**
  * Store-seam acceptance evidence: one committed Match history that combines
@@ -42,7 +43,7 @@ describe("IndexedDbMatchStore combined Display Name and Ability persistence", ()
       "2026-08-24T08:03:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-24T08:04:00.000Z");
-    const results: Array<{ event: MatchEvent; state: MatchState }> = [
+    const results: { event: MatchEvent; state: MatchState }[] = [
       setup,
       named,
       generated,
@@ -197,7 +198,7 @@ describe("IndexedDbMatchStore combined Display Name and Ability persistence", ()
       "2026-08-24T08:03:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-24T08:04:00.000Z");
-    const history: Array<{ event: MatchEvent; state: MatchState }> = [
+    const history: { event: MatchEvent; state: MatchState }[] = [
       setup,
       generated,
       started,

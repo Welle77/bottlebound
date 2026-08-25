@@ -1,6 +1,9 @@
 import { describe, expect, test } from "vitest";
 
-import { createRulesUiState, retainRulesVersion } from "./rules-ui-state";
+import {
+  createRulesUiState,
+  retainRulesVersion,
+} from "../../src/rules-reference/rules-ui-state";
 
 describe("Rules UI page-lifetime state", () => {
   test("retains reading context for one Ruleset and resets it for a new version", () => {

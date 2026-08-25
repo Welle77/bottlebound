@@ -1,10 +1,10 @@
 export interface RulesUiState {
   readonly version: string;
-  open: boolean;
-  query: string;
-  selectedAnchor: string | null;
-  scrollTop: number;
-  openerId: string | null;
+  readonly open: boolean;
+  readonly query: string;
+  readonly selectedAnchor: string | null;
+  readonly scrollTop: number;
+  readonly openerId: string | null;
 }
 
 export function createRulesUiState(version: string): RulesUiState {

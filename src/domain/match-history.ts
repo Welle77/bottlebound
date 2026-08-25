@@ -43,7 +43,7 @@ export function canonicalMatchRecordsEqual(
 function assertStringArray(
   value: unknown,
   label: string,
-): asserts value is string[] {
+): asserts value is readonly string[] {
   if (
     !Array.isArray(value) ||
     !value.every((entry) => typeof entry === "string")
@@ -97,8 +97,7 @@ export function assertMatchStateStructure(
     ) {
       throw new Error("The canonical Match State roster is invalid.");
     }
-    const currentMaxHp = (entry as Record<string, unknown>).currentMaxHp as
-      number | undefined;
+    const currentMaxHp = entry.currentMaxHp as number | undefined;
     const effectiveMax = Number.isInteger(currentMaxHp)
       ? (currentMaxHp as number)
       : rulesCharacter.baseHp;
@@ -210,8 +209,8 @@ export function assertMatchStateStructure(
         !Object.keys(names).every(
           (characterId) =>
             typeof names[characterId] === "string" &&
-            (names[characterId] as string).length > 0 &&
-            (names[characterId] as string).trim() === names[characterId] &&
+            names[characterId].length > 0 &&
+            names[characterId].trim() === names[characterId] &&
             RULESET.characters.some(({ id }) => id === characterId),
         )
       ) {
@@ -325,7 +324,7 @@ export function migrateLegacyMatch(
   occurredAt: string,
 ): CommandResult<MatchState, MatchMigratedEvent> {
   assertMatchStateStructure(value, LEGACY_MATCH_SCHEMA_VERSION);
-  const legacy = value as LegacyMatchState;
+  const legacy = value;
   const sequence = legacy.sequence + 1;
   const state = {
     ...legacy,

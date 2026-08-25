@@ -16,7 +16,7 @@ import {
 } from "./format";
 import { state, type ActionDraft } from "./shell-state";
 
-type ActiveView = Extract<MatchState, { phase: "active" }>;
+type ActiveView = Extract<MatchState, { readonly phase: "active" }>;
 
 function activeCharacterIdOf(match: ActiveView): string | undefined {
   return match.initiative[match.activeSlot - 1]?.characterId;
@@ -28,7 +28,7 @@ export function rulesCharacterOf(characterId: string) {
   return character;
 }
 
-function hpByIdMap(match: ActiveView): Map<string, number> {
+function hpByIdMap(match: ActiveView): ReadonlyMap<string, number> {
   return new Map(
     match.characters.map(({ characterId, hp }) => [characterId, hp]),
   );
@@ -42,7 +42,9 @@ function currentMaxHpOf(match: ActiveView, characterId: string): number {
 }
 
 /** The active character's unspent, non-Reaction abilities from the Ruleset. */
-export function unspentAbilities(match: ActiveView): StructuredAbility[] {
+export function unspentAbilities(
+  match: ActiveView,
+): readonly StructuredAbility[] {
   const activeCharacterId = activeCharacterIdOf(match);
   return RULESET.abilities.filter(
     (ability) =>
@@ -111,7 +113,7 @@ export function buildAbilityInput(draft: ActionDraft): AbilityInput {
 /* ------------------------------------------------------------------ */
 
 export function abilityListPanel(match: ActiveView): string {
-  if (!state.abilityPickerOpen || state.actionDraft) return "";
+  if (!state.current.abilityPickerOpen || state.current.actionDraft) return "";
   const activeRules = rulesCharacterOf(activeCharacterIdOf(match) ?? "");
   const abilities = unspentAbilities(match);
   const cards = abilities
@@ -182,7 +184,7 @@ function reactionFieldset(
   return `<fieldset><legend>Protective Reactions</legend><p>Select at most one protected character for each reacting character.</p><div class="reaction-list">${eligibleChoices || "<p>No state-eligible Reactions.</p>"}</div>${overrideChoices ? `<details class="reaction-overrides"><summary>Override unavailable Reactions</summary><p>These choices have state warnings. Selection records an Override.</p><div class="reaction-list">${overrideChoices}</div></details>` : ""}</fieldset>`;
 }
 
-const CHECK_LABELS: readonly [PhysicalAttackCheck, string][] = [
+const CHECK_LABELS: readonly (readonly [PhysicalAttackCheck, string])[] = [
   ["range", "Range is legal"],
   ["line-of-sight", "Line of Sight is legal"],
   ["legal-bottle-contact", "Every selected bottle was physically hit"],
@@ -190,7 +192,7 @@ const CHECK_LABELS: readonly [PhysicalAttackCheck, string][] = [
 ];
 
 function checksFieldset(draft: ActionDraft): string {
-  if (!state.requirePhysicalConfirmations) return "";
+  if (!state.current.requirePhysicalConfirmations) return "";
   const checks = CHECK_LABELS.map(
     ([key, label]) =>
       `<label class="check-control"><input type="checkbox" data-physical-check="${key}" ${draft.physicalConfirmations[key] ? "checked" : ""}> ${escapeHtml(label)}</label>`,
@@ -225,26 +227,23 @@ function reviveBlockedOnEliminatedTeam(
 function targetCandidates(
   match: ActiveView,
   ability: StructuredAbility,
-): TargetCandidate[] {
+): readonly TargetCandidate[] {
   const hpById = hpByIdMap(match);
   const ownerTeam = rulesCharacterOf(ability.ownerCharacterId).team;
   return RULESET.characters.map((character) => {
     const hp = hpById.get(character.id) ?? 0;
-    const reasons: string[] = [];
-    if (
-      ability.targetPolicy.relation === "enemy" &&
-      character.team === ownerTeam
-    )
-      reasons.push("Enemies only");
-    if (
-      ability.targetPolicy.relation === "ally" &&
-      character.team !== ownerTeam
-    )
-      reasons.push("Allies only");
-    if (ability.targetPolicy.lifeState === "active" && hp === 0)
-      reasons.push("Active characters only");
-    if (ability.targetPolicy.lifeState === "downed" && hp !== 0)
-      reasons.push("Downed characters only");
+    const relation = ability.targetPolicy.relation;
+    const lifeState = ability.targetPolicy.lifeState;
+    const reasons: readonly string[] = [
+      ...(relation === "enemy" && character.team === ownerTeam
+        ? ["Enemies only"]
+        : []),
+      ...(relation === "ally" && character.team !== ownerTeam
+        ? ["Allies only"]
+        : []),
+      ...(lifeState === "active" && hp === 0 ? ["Active characters only"] : []),
+      ...(lifeState === "downed" && hp !== 0 ? ["Downed characters only"] : []),
+    ];
     const blocked = reviveBlockedOnEliminatedTeam(match, ability, character.id);
     return {
       characterId: character.id,
@@ -265,52 +264,58 @@ function draftWarnings(
   match: ActiveView,
   draft: ActionDraft,
   ability: StructuredAbility,
-): string[] {
-  const warnings: string[] = [];
-  if (draft.sourceCharacterId !== activeCharacterIdOf(match)) {
-    warnings.push(
-      "wrong-active-character — the Active Character changed since this draft opened. Confirming records an Override.",
-    );
-  }
-  if (match.spentAbilityIds.includes(ability.id)) {
-    warnings.push(
-      "ability-already-spent — this Ability was already used this Match. Confirming records an Override.",
-    );
-  }
+): readonly string[] {
   const hpById = hpByIdMap(match);
   const ownerTeam = rulesCharacterOf(ability.ownerCharacterId).team;
-  for (const targetCharacterId of draft.targets) {
-    const character = rulesCharacterOf(targetCharacterId);
-    const hp = hpById.get(targetCharacterId) ?? 0;
-    if (
-      ability.targetPolicy.relation === "enemy" &&
-      character.team === ownerTeam
-    )
-      warnings.push(
-        `invalid-target-relation — ${characterNameHtml(character, match.displayNames)} is not an enemy. Confirming records an Override.`,
-      );
-    if (
-      ability.targetPolicy.relation === "ally" &&
-      character.team !== ownerTeam
-    )
-      warnings.push(
-        `invalid-target-relation — ${characterNameHtml(character, match.displayNames)} is not an ally. Confirming records an Override.`,
-      );
-    if (ability.targetPolicy.lifeState === "active" && hp === 0)
-      warnings.push(
-        `invalid-target-life-state — ${characterNameHtml(character, match.displayNames)} is Downed. Confirming records an Override.`,
-      );
-    if (ability.targetPolicy.lifeState === "downed" && hp !== 0)
-      warnings.push(
-        `invalid-target-life-state — ${characterNameHtml(character, match.displayNames)} is Active. Confirming records an Override.`,
-      );
-  }
-  if (draft.overrideRequired) {
-    warnings.push(
-      `${escapeHtml(draft.overrideRequired)} — the resolution needs a recorded Override. Tick the checkbox below and confirm again.`,
-    );
-  }
-  return warnings;
+  const targetWarnings: readonly string[] = draft.targets.flatMap(
+    (targetCharacterId) => {
+      const character = rulesCharacterOf(targetCharacterId);
+      const nameHtml = characterNameHtml(character, match.displayNames);
+      const hp = hpById.get(targetCharacterId) ?? 0;
+      return [
+        ...(ability.targetPolicy.relation === "enemy" &&
+        character.team === ownerTeam
+          ? [
+              `invalid-target-relation — ${nameHtml} is not an enemy. Confirming records an Override.`,
+            ]
+          : []),
+        ...(ability.targetPolicy.relation === "ally" &&
+        character.team !== ownerTeam
+          ? [
+              `invalid-target-relation — ${nameHtml} is not an ally. Confirming records an Override.`,
+            ]
+          : []),
+        ...(ability.targetPolicy.lifeState === "active" && hp === 0
+          ? [
+              `invalid-target-life-state — ${nameHtml} is Downed. Confirming records an Override.`,
+            ]
+          : []),
+        ...(ability.targetPolicy.lifeState === "downed" && hp !== 0
+          ? [
+              `invalid-target-life-state — ${nameHtml} is Active. Confirming records an Override.`,
+            ]
+          : []),
+      ];
+    },
+  );
+  return [
+    ...(draft.sourceCharacterId !== activeCharacterIdOf(match)
+      ? [
+          "wrong-active-character — the Active Character changed since this draft opened. Confirming records an Override.",
+        ]
+      : []),
+    ...(match.spentAbilityIds.includes(ability.id)
+      ? [
+          "ability-already-spent — this Ability was already used this Match. Confirming records an Override.",
+        ]
+      : []),
+    ...targetWarnings,
+    ...(draft.overrideRequired
+      ? [
+          `${escapeHtml(draft.overrideRequired)} — the resolution needs a recorded Override. Tick the checkbox below and confirm again.`,
+        ]
+      : []),
+  ];
 }
 
 /* ------------------------------------------------------------------ */
@@ -318,7 +323,7 @@ function draftWarnings(
 /* ------------------------------------------------------------------ */
 
 function targetingPanel(match: ActiveView, ability: StructuredAbility): string {
-  const draft = state.actionDraft!;
+  const draft = state.current.actionDraft!;
   const single = ability.targetPolicy.cardinality !== "all-in-range";
   const candidates = targetCandidates(match, ability);
   const hpById = hpByIdMap(match);
@@ -347,7 +352,7 @@ function targetingPanel(match: ActiveView, ability: StructuredAbility): string {
 }
 
 function reactionsPanel(match: ActiveView, ability: StructuredAbility): string {
-  const draft = state.actionDraft!;
+  const draft = state.current.actionDraft!;
   return `<section class="match-panel action-draft ability-draft" aria-labelledby="ability-draft-heading"><p class="eyebrow">Use Ability · Reactions</p><h2 id="ability-draft-heading">${escapeHtml(ability.name)}</h2>${profileBlock(ability, characterNameHtml(rulesCharacterOf(draft.sourceCharacterId), match.displayNames))}${reactionFieldset(match, draft, draft.targets)}<div class="match-actions"><button id="review-ability" class="primary-action" type="button">Review Action Resolution</button><button id="back-to-ability-targets" class="secondary-action" type="button">Back</button><button id="cancel-ability" class="secondary-action" type="button">Cancel draft</button></div></section>`;
 }
 
@@ -355,7 +360,7 @@ function physicalContactsPanel(
   match: ActiveView,
   ability: StructuredAbility,
 ): string {
-  const draft = state.actionDraft!;
+  const draft = state.current.actionDraft!;
   const activeLegIndex = draft.attackLegs.length - 1;
   const activeLeg = draft.attackLegs[activeLegIndex]!;
   const closedCharacterIds = new Set(
@@ -372,7 +377,7 @@ function physicalContactsPanel(
       : "";
   const ready =
     activeLeg.length > 0 &&
-    (!state.requirePhysicalConfirmations ||
+    (!state.current.requirePhysicalConfirmations ||
       Object.values(draft.physicalConfirmations).every(Boolean));
   return `<section class="match-panel action-draft ability-draft" aria-labelledby="ability-draft-heading"><p class="eyebrow">Use Ability · Physical result</p><h2 id="ability-draft-heading">Record ${escapeHtml(ability.name)}</h2><p>This draft stays local until final confirmation.</p>${profileBlock(ability, characterNameHtml(rulesCharacterOf(draft.sourceCharacterId), match.displayNames))}${closedLeg}<fieldset><legend>${activeLegIndex === 0 ? "Ordered bottle contacts" : "Redirected bottle contacts"}</legend><p>Select contacts in their physical order. Allies and the attacker remain valid choices.</p><div class="contact-list">${contacts.join("")}</div></fieldset>${reactionFieldset(match, draft, draft.attackLegs.flat())}${checksFieldset(draft)}<div class="match-actions"><button id="review-ability" class="primary-action" type="button" ${ready ? "" : "disabled"}>Review Action Resolution</button><button id="cancel-ability" class="secondary-action" type="button">Cancel draft</button></div></section>`;
 }
@@ -471,8 +476,6 @@ function effectPreviewRow(
 ): string {
   const character = rulesCharacterOf(characterId);
   const hp = hpByIdMap(match).get(characterId) ?? 0;
-  let after = hp;
-  let label = "No HP change";
   const heals =
     ability.name === "Nature’s Renewal" ||
     ability.name === "Inspiring Words" ||
@@ -481,21 +484,22 @@ function effectPreviewRow(
   const revives =
     (ability.name === "Lay on Hands" && hp === 0) ||
     ability.name === "Revivify";
-  if (revives) {
-    after = 1;
-    label = "Revived";
-  } else if (heals) {
-    after = Math.min(
-      ability.name === "Shapeshift" ? 4 : currentMaxHpOf(match, characterId),
-      hp + 1,
-    );
-    label = "+1 HP";
-  }
+  const after = revives
+    ? 1
+    : heals
+      ? Math.min(
+          ability.name === "Shapeshift"
+            ? 4
+            : currentMaxHpOf(match, characterId),
+          hp + 1,
+        )
+      : hp;
+  const label = revives ? "Revived" : heals ? "+1 HP" : "No HP change";
   return `<tr data-ability-review-change><th scope="row">${characterNameHtml(character, match.displayNames)}</th><td>${escapeHtml(character.team)}</td><td>${escapeHtml(label)}</td><td>${hp} → ${after}</td><td>${after === 0 ? "Downed" : "Active"}</td></tr>`;
 }
 
 function reviewPanel(match: ActiveView, ability: StructuredAbility): string {
-  const draft = state.actionDraft!;
+  const draft = state.current.actionDraft!;
   const sourceNameHtml = characterNameHtml(
     rulesCharacterOf(draft.sourceCharacterId),
     match.displayNames,
@@ -585,12 +589,12 @@ function reviewPanel(match: ActiveView, ability: StructuredAbility): string {
       : backStep === "reactions"
         ? '<button id="back-to-ability-reactions" class="secondary-action" type="button">Back</button>'
         : '<button id="back-to-ability-targets" class="secondary-action" type="button">Back</button>';
-  return `<section class="match-panel action-draft ability-draft" aria-labelledby="ability-draft-heading"><p class="eyebrow">Use Ability · Review</p><h2 id="ability-draft-heading">Review ${escapeHtml(ability.name)}</h2>${profileBlock(ability, sourceNameHtml)}${legsReview ? `<section aria-labelledby="ability-legs-heading"><h3 id="ability-legs-heading">Ordered Attack Legs</h3><div class="attack-leg-review-list">${legsReview}</div></section>` : ""}${hitRows ? `<div class="table-wrap"><table class="initiative-table"><caption>Ordered hits and final changes</caption><thead><tr><th>Contact</th><th>Character</th><th>Team</th><th>Damage</th><th>HP</th><th>Downed</th></tr></thead><tbody>${hitRows}</tbody></table></div>` : ""}${changeRows ? `<div class="table-wrap"><table class="initiative-table"><caption>Expected changes</caption><thead><tr><th>Character</th><th>Team</th><th>Effect</th><th>HP</th><th>State</th></tr></thead><tbody>${changeRows}</tbody></table></div>` : ""}${reactionReviews ? `<section aria-labelledby="ability-reaction-review-heading"><h3 id="ability-reaction-review-heading">Reactions and objective operations</h3><div class="reaction-review-list">${reactionReviews}</div></section>` : "<p>No Reactions apply in this resolution.</p>"}${match.majorActionUsed ? `<label class="override-control"><input id="major-action-override" type="checkbox" ${draft.majorActionOverride ? "checked" : ""}> Record referee override for a second Major Action this turn</label>` : ""}${needsAbilityOverride ? `<div class="draft-warning" role="alert">${warnings.map((warning) => `<p>${warning}</p>`).join("")}<label class="override-control"><input id="ability-override" type="checkbox" ${draft.abilityOverride ? "checked" : ""}> Record referee Override for this Ability choice</label></div>` : ""}<div class="match-actions"><button id="confirm-ability" class="primary-action" type="button" ${ready && !needsMajorOverride ? "" : "disabled"}>${state.saving ? "Saving…" : "Confirm Action Resolution"}</button>${backButton}<button id="cancel-ability" class="secondary-action" type="button">Cancel draft</button></div></section>`;
+  return `<section class="match-panel action-draft ability-draft" aria-labelledby="ability-draft-heading"><p class="eyebrow">Use Ability · Review</p><h2 id="ability-draft-heading">Review ${escapeHtml(ability.name)}</h2>${profileBlock(ability, sourceNameHtml)}${legsReview ? `<section aria-labelledby="ability-legs-heading"><h3 id="ability-legs-heading">Ordered Attack Legs</h3><div class="attack-leg-review-list">${legsReview}</div></section>` : ""}${hitRows ? `<div class="table-wrap"><table class="initiative-table"><caption>Ordered hits and final changes</caption><thead><tr><th>Contact</th><th>Character</th><th>Team</th><th>Damage</th><th>HP</th><th>Downed</th></tr></thead><tbody>${hitRows}</tbody></table></div>` : ""}${changeRows ? `<div class="table-wrap"><table class="initiative-table"><caption>Expected changes</caption><thead><tr><th>Character</th><th>Team</th><th>Effect</th><th>HP</th><th>State</th></tr></thead><tbody>${changeRows}</tbody></table></div>` : ""}${reactionReviews ? `<section aria-labelledby="ability-reaction-review-heading"><h3 id="ability-reaction-review-heading">Reactions and objective operations</h3><div class="reaction-review-list">${reactionReviews}</div></section>` : "<p>No Reactions apply in this resolution.</p>"}${match.majorActionUsed ? `<label class="override-control"><input id="major-action-override" type="checkbox" ${draft.majorActionOverride ? "checked" : ""}> Record referee override for a second Major Action this turn</label>` : ""}${needsAbilityOverride ? `<div class="draft-warning" role="alert">${warnings.map((warning) => `<p>${warning}</p>`).join("")}<label class="override-control"><input id="ability-override" type="checkbox" ${draft.abilityOverride ? "checked" : ""}> Record referee Override for this Ability choice</label></div>` : ""}<div class="match-actions"><button id="confirm-ability" class="primary-action" type="button" ${ready && !needsMajorOverride ? "" : "disabled"}>${state.current.saving ? "Saving…" : "Confirm Action Resolution"}</button>${backButton}<button id="cancel-ability" class="secondary-action" type="button">Cancel draft</button></div></section>`;
 }
 
 /** Renders the ability draft panel shaped by the chosen ability's interaction. */
 export function abilityDraftPanel(match: ActiveView): string {
-  const draft = state.actionDraft;
+  const draft = state.current.actionDraft;
   if (!draft || draft.kind !== "ability") return "";
   const ability = abilityOf(draft);
   if (draft.rulesVersion !== match.rulesVersion) {

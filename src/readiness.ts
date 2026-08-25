@@ -5,19 +5,19 @@ export type ProbeState = "checking" | "ready" | "failed";
 export type AppShellCacheState = "checking" | "ready" | "failed";
 
 export interface ReadinessInputs {
-  network: NetworkState;
-  serviceWorker: ServiceWorkerState;
-  appShellCache: AppShellCacheState;
-  canonicalStorage: ProbeState;
+  readonly network: NetworkState;
+  readonly serviceWorker: ServiceWorkerState;
+  readonly appShellCache: AppShellCacheState;
+  readonly canonicalStorage: ProbeState;
 }
 
 export interface ReadinessState {
-  network: NetworkState;
-  serviceWorker: ServiceWorkerState;
-  canonicalStorage: ProbeState;
-  offline: "checking" | "ready" | "unavailable";
-  matchCreation: "available" | "blocked";
-  blockingReason: string | null;
+  readonly network: NetworkState;
+  readonly serviceWorker: ServiceWorkerState;
+  readonly canonicalStorage: ProbeState;
+  readonly offline: "checking" | "ready" | "unavailable";
+  readonly matchCreation: "available" | "blocked";
+  readonly blockingReason: string | null;
 }
 
 export function deriveReadinessState(inputs: ReadinessInputs): ReadinessState {

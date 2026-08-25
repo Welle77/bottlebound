@@ -8,7 +8,7 @@ import {
   restoreStateFromEvents,
   startMatch,
   type MatchEvent,
-} from "./match";
+} from "../../src/domain/match";
 import { queuedRandom } from "./match-test-support";
 
 describe("Active Match commands", () => {
@@ -228,7 +228,7 @@ describe("Active Match commands", () => {
     );
     const historicalVersion = "BB-prior-release";
     const history = [setup.event, generated.event, started.event].map(
-      (event) => ({ ...event, rulesVersion: historicalVersion }) as MatchEvent,
+      (event) => ({ ...event, rulesVersion: historicalVersion }),
     );
     const resolvedEvent = {
       ...attack.event,

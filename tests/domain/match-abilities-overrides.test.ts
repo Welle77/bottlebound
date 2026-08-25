@@ -5,7 +5,7 @@ import {
   resolveBasicAttack,
   restoreStateFromEvents,
   type ActionResolvedEvent,
-} from "./match";
+} from "../../src/domain/match";
 import {
   abilityId,
   advanceTo,
@@ -33,7 +33,9 @@ const ABILITY_OVERRIDE =
 const SECOND_MAJOR_OVERRIDE =
   "Referee confirmed a second Major Action this turn.";
 
-function asResolution(result: { event: unknown }): ActionResolvedEvent {
+function asResolution(result: {
+  readonly event: unknown;
+}): ActionResolvedEvent {
   const event = result.event as ActionResolvedEvent;
   if (event.type !== "ActionResolved" || event.actionType !== "Ability") {
     throw new Error("The command must record one Ability Action Resolution.");

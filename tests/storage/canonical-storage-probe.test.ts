@@ -1,7 +1,7 @@
 import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it } from "vitest";
 
-import { probeCanonicalStorage } from "./canonical-storage-probe";
+import { probeCanonicalStorage } from "../../src/storage/canonical-storage-probe";
 
 describe("canonical storage probe", () => {
   it("reports ready only after IndexedDB writes and removes the probe record", async () => {

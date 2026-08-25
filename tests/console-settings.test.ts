@@ -1,17 +1,27 @@
+/* eslint-disable functional/immutable-data, functional/prefer-readonly-type -- Test harness builds event histories and storage fixtures incrementally; this is the sanctioned mutability boundary for tests. */
 import { describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_REQUIRE_PHYSICAL_CONFIRMATIONS,
   loadRequirePhysicalConfirmations,
   saveRequirePhysicalConfirmations,
   type SettingsStorage,
-} from "./console-settings";
+} from "../src/ui/console-settings";
 
-function memoryStorage(initial: Record<string, string> = {}): SettingsStorage {
-  const values = new Map(Object.entries(initial));
-  return {
-    getItem: (key) => values.get(key) ?? null,
-    setItem: (key, value) => void values.set(key, value),
-  };
+class MemoryStorage implements SettingsStorage {
+  readonly #values: Map<string, string>;
+  constructor(initial: Record<string, string> = {}) {
+    this.#values = new Map(Object.entries(initial));
+  }
+  getItem(key: string): string | null {
+    return this.#values.get(key) ?? null;
+  }
+  setItem(key: string, value: string): void {
+    this.#values.set(key, value);
+  }
+}
+
+function memoryStorage(initial?: Record<string, string>): SettingsStorage {
+  return new MemoryStorage(initial);
 }
 
 describe("loadRequirePhysicalConfirmations", () => {
@@ -90,7 +100,7 @@ describe("default setting contract", () => {
     expect(DEFAULT_REQUIRE_PHYSICAL_CONFIRMATIONS).toBe(true);
   });
 
-  it("never touches storage when loading with no argument and blocked access", async () => {
+  it("never touches storage when loading with no argument and blocked access", () => {
     vi.stubGlobal(
       "localStorage",
       new Proxy(

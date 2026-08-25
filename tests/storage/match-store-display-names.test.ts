@@ -7,9 +7,9 @@ import {
   generateInitiative,
   startMatch,
   undoLastEvent,
-} from "../domain/match";
+} from "../../src/domain/match";
 import { randomQueue } from "./match-store.test-helpers";
-import { IndexedDbMatchStore } from "./match-store";
+import { IndexedDbMatchStore } from "../../src/storage/match-store";
 
 describe("IndexedDbMatchStore Display Name persistence", () => {
   it("preserves assigned names across a store reopen and Start Match", async () => {

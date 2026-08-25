@@ -31,7 +31,7 @@ export function assertCanonicalState(
       value.phase !== "active" &&
       value.phase !== "ended") ||
     !Number.isSafeInteger(value.sequence) ||
-    (value.sequence as number) < 1
+    value.sequence < 1
   ) {
     throw new Error("The canonical snapshot is structurally invalid.");
   }
@@ -42,7 +42,7 @@ export function assertCanonicalState(
     throw new Error("The canonical snapshot roster is invalid.");
   }
   for (const [index, rulesCharacter] of RULESET.characters.entries()) {
-    const matchCharacter = value.characters[index];
+    const matchCharacter: unknown = value.characters[index];
     if (
       !isRecord(matchCharacter) ||
       matchCharacter.characterId !== rulesCharacter.id ||
@@ -65,42 +65,48 @@ export function assertCanonicalState(
   ) {
     throw new Error("The canonical initiative result is structurally invalid.");
   }
-  const seen = new Set<string>();
-  let previousTotal = Number.POSITIVE_INFINITY;
-  value.initiative.forEach((entry, index) => {
-    if (!isRecord(entry))
-      throw new Error(
-        "The canonical initiative result is structurally invalid.",
+  value.initiative.reduce<{
+    readonly seen: ReadonlySet<string>;
+    readonly previousTotal: number;
+  }>(
+    (state, entry, index) => {
+      if (!isRecord(entry))
+        throw new Error(
+          "The canonical initiative result is structurally invalid.",
+        );
+      const rulesCharacter = RULESET.characters.find(
+        ({ id }) => id === entry.characterId,
       );
-    const rulesCharacter = RULESET.characters.find(
-      ({ id }) => id === entry.characterId,
-    );
-    if (
-      !rulesCharacter ||
-      seen.has(rulesCharacter.id) ||
-      entry.slot !== index + 1 ||
-      !Number.isInteger(entry.roll) ||
-      (entry.roll as number) < 1 ||
-      (entry.roll as number) > 20 ||
-      entry.modifier !== rulesCharacter.initiativeModifier ||
-      entry.total !==
-        (entry.roll as number) + rulesCharacter.initiativeModifier ||
-      (entry.total as number) > previousTotal
-    ) {
-      throw new Error(
-        "The canonical initiative result is structurally invalid.",
-      );
-    }
-    seen.add(rulesCharacter.id);
-    previousTotal = entry.total as number;
-  });
+      if (
+        !rulesCharacter ||
+        state.seen.has(rulesCharacter.id) ||
+        entry.slot !== index + 1 ||
+        !Number.isInteger(entry.roll) ||
+        (entry.roll as number) < 1 ||
+        (entry.roll as number) > 20 ||
+        entry.modifier !== rulesCharacter.initiativeModifier ||
+        entry.total !==
+          (entry.roll as number) + rulesCharacter.initiativeModifier ||
+        entry.total > state.previousTotal
+      ) {
+        throw new Error(
+          "The canonical initiative result is structurally invalid.",
+        );
+      }
+      return {
+        seen: new Set([...state.seen, rulesCharacter.id]),
+        previousTotal: entry.total,
+      };
+    },
+    { seen: new Set<string>(), previousTotal: Number.POSITIVE_INFINITY },
+  );
   if (
     (value.phase === "active" || value.phase === "ended") &&
     (!Number.isSafeInteger(value.round) ||
-      (value.round as number) < 1 ||
+      value.round < 1 ||
       !Number.isSafeInteger(value.activeSlot) ||
-      (value.activeSlot as number) < 1 ||
-      (value.activeSlot as number) > RULESET.characters.length)
+      value.activeSlot < 1 ||
+      value.activeSlot > RULESET.characters.length)
   ) {
     throw new Error("The Active Match turn is structurally invalid.");
   }
@@ -109,8 +115,8 @@ export function assertCanonicalState(
     (typeof value.endedAt !== "string" ||
       value.endedAt.length === 0 ||
       !Number.isSafeInteger(value.endedSequence) ||
-      (value.endedSequence as number) < 2 ||
-      (value.endedSequence as number) > (value.sequence as number) ||
+      value.endedSequence < 2 ||
+      value.endedSequence > value.sequence ||
       value.outcome === null)
   ) {
     throw new Error("The Ended Match is structurally invalid.");
@@ -131,25 +137,15 @@ export function assertCanonicalState(
         ended.finalCounts !== undefined ||
         ended.finalHpTotals !== undefined) &&
       (!isRecord(ended.finalCounts) ||
-        !Number.isInteger(
-          (ended.finalCounts as Record<string, unknown>).Drow as number,
-        ) ||
-        !Number.isInteger(
-          (ended.finalCounts as Record<string, unknown>).Duergar as number,
-        ) ||
-        ((ended.finalCounts as Record<string, unknown>).Drow as number) < 0 ||
-        ((ended.finalCounts as Record<string, unknown>).Duergar as number) <
-          0 ||
+        !Number.isInteger(ended.finalCounts.Drow) ||
+        !Number.isInteger(ended.finalCounts.Duergar) ||
+        (ended.finalCounts.Drow as number) < 0 ||
+        (ended.finalCounts.Duergar as number) < 0 ||
         !isRecord(ended.finalHpTotals) ||
-        !Number.isInteger(
-          (ended.finalHpTotals as Record<string, unknown>).Drow as number,
-        ) ||
-        !Number.isInteger(
-          (ended.finalHpTotals as Record<string, unknown>).Duergar as number,
-        ) ||
-        ((ended.finalHpTotals as Record<string, unknown>).Drow as number) < 0 ||
-        ((ended.finalHpTotals as Record<string, unknown>).Duergar as number) <
-          0)
+        !Number.isInteger(ended.finalHpTotals.Drow) ||
+        !Number.isInteger(ended.finalHpTotals.Duergar) ||
+        (ended.finalHpTotals.Drow as number) < 0 ||
+        (ended.finalHpTotals.Duergar as number) < 0)
     ) {
       throw new Error("The Ended Match is structurally invalid.");
     }
@@ -196,8 +192,8 @@ export function assertCoinFlipTieOrder(
   value: unknown,
   total: number,
   ids: {
-    initialCharacterIds: readonly string[];
-    finalCharacterIds: readonly string[];
+    readonly initialCharacterIds: readonly string[];
+    readonly finalCharacterIds: readonly string[];
   },
 ): void {
   const { initialCharacterIds, finalCharacterIds } = ids;
@@ -242,7 +238,8 @@ export function assertCoinFlipTieOrder(
       ) {
         throw new Error("The canonical digital coin-flip order is invalid.");
       }
-      const candidate = attempt.flips.reduce(
+      const flips: readonly unknown[] = attempt.flips;
+      const candidate = flips.reduce<number>(
         (result, flip) => result * 2 + (flip === "heads" ? 1 : 0),
         0,
       );

@@ -1,3 +1,4 @@
+/* eslint-disable functional/no-let, functional/immutable-data, functional/prefer-readonly-type, functional/prefer-immutable-types -- Test harnesses build event histories and mutable run accumulators incrementally; this is the sanctioned mutability boundary for tests. */
 import {
   createSetup,
   finishTurn,
@@ -7,9 +8,10 @@ import {
   type ActiveMatchState,
   type CommandResult,
   type MatchEvent,
-} from "./match";
+  type MatchState,
+} from "../../src/domain/match";
 import { queuedRandom } from "./match-test-support";
-import { RULESET } from "./ruleset";
+import { RULESET } from "../../src/domain/ruleset";
 
 /**
  * Rules coverage audit fixtures (ticket T04).
@@ -22,9 +24,29 @@ import { RULESET } from "./ruleset";
 export const AUDIT_ROLLS = [9, 14, 2, 18, 6, 12, 17, 1, 10, 15, 7, 13];
 export const BASE_TIME = "2026-08-24T09:00:00.000Z";
 
-export interface AuditRun {
-  events: MatchEvent[];
+/**
+ * Mutable test accumulator. Field writes stay inside class methods, which is
+ * the repository's sanctioned mutability boundary for test harness state.
+ */
+export class AuditRun {
+  events: MatchEvent[] = [];
   state: ActiveMatchState;
+
+  constructor(initialState: ActiveMatchState) {
+    this.state = initialState;
+  }
+
+  record(result: CommandResult<MatchState, MatchEvent>): ActiveMatchState {
+    // Audit runs only replay commands whose results stay Active; the
+    // constructor input and every recorded result satisfy that contract.
+    this.state = result.state as ActiveMatchState;
+    this.events.push(result.event);
+    return this.state;
+  }
+
+  recordEvent(event: MatchEvent): void {
+    this.events.push(event);
+  }
 }
 
 export function abilityId(ownerCharacterId: string, name: string): string {
@@ -46,10 +68,11 @@ export function startedAuditMatch(matchId: string): AuditRun {
     BASE_TIME,
   );
   const started = startMatch(generated.state, BASE_TIME);
-  return {
-    events: [setup.event, generated.event, started.event],
-    state: started.state,
-  };
+  const run = new AuditRun(started.state);
+  run.record(setup);
+  run.record(generated);
+  run.record(started);
+  return run;
 }
 
 export function slotOf(state: ActiveMatchState, characterId: string): number {
@@ -69,9 +92,7 @@ export function play(
   run: AuditRun,
   result: CommandResult<ActiveMatchState, MatchEvent>,
 ): ActiveMatchState {
-  run.events.push(result.event);
-  run.state = result.state;
-  return result.state;
+  return run.record(result);
 }
 
 /** Finishes turns until the given character begins a fresh, unacted turn. */

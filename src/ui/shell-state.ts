@@ -40,34 +40,38 @@ export interface ActionDraft {
    * drafts. Self abilities need none and physical-attack abilities use the
    * ordered bottle contacts instead.
    */
-  targets: string[];
+  readonly targets: readonly string[];
   /**
    * Ability draft progression: select-target (targeted/ally/enemy/utility),
    * reactions (targeted-attack only), contacts (physical-attack), review.
    * Basic Attack drafts start at contacts.
    */
-  step: "select-target" | "reactions" | "contacts" | "review";
-  attackLegs: string[][];
-  physicalConfirmations: Record<PhysicalAttackCheck, boolean>;
-  reactions: Array<
+  readonly step: "select-target" | "reactions" | "contacts" | "review";
+  readonly attackLegs: readonly (readonly string[])[];
+  readonly physicalConfirmations: Readonly<
+    Record<PhysicalAttackCheck, boolean>
+  >;
+  readonly reactions: ReadonlyArray<
     ProtectiveReactionInput & { readonly override: string | null }
   >;
   /** Records a state-invalid ability choice (spent, wrong active character, invalid target). */
-  abilityOverride: boolean;
+  readonly abilityOverride: boolean;
   /**
    * A domain error that demands a recorded Override before the ability can
    * commit again; rendered as an explicit Override prompt.
    */
-  overrideRequired: string | null;
-  majorActionOverride: boolean;
+  readonly overrideRequired: string | null;
+  readonly majorActionOverride: boolean;
 }
 
-export function draftAffectedCharacterIds(draft: ActionDraft): string[] {
+export function draftAffectedCharacterIds(
+  draft: ActionDraft,
+): readonly string[] {
   return draft.attackLegs.flatMap((leg) => leg);
 }
 export function createPhysicalConfirmations(
   requireManualChecks: boolean,
-): Record<PhysicalAttackCheck, boolean> {
+): Readonly<Record<PhysicalAttackCheck, boolean>> {
   return requireManualChecks
     ? {
         range: false,
@@ -83,25 +87,43 @@ export function createPhysicalConfirmations(
       };
 }
 export interface ShellState {
-  network: NetworkState;
-  serviceWorker: ServiceWorkerState;
-  appShellCache: AppShellCacheState;
-  canonicalStorage: ProbeState;
-  storageDetail: string;
-  match: MatchState | null;
-  events: readonly MatchEvent[];
-  matchLoaded: boolean;
-  matchError: string | null;
-  confirmation: Confirmation;
-  endGamePreview: EndGamePreview | null;
-  actionDraft: ActionDraft | null;
-  abilityPickerOpen: boolean;
-  requirePhysicalConfirmations: boolean;
-  saving: boolean;
-  summary: MatchSummary | null;
+  readonly network: NetworkState;
+  readonly serviceWorker: ServiceWorkerState;
+  readonly appShellCache: AppShellCacheState;
+  readonly canonicalStorage: ProbeState;
+  readonly storageDetail: string;
+  readonly match: MatchState | null;
+  readonly events: readonly MatchEvent[];
+  readonly matchLoaded: boolean;
+  readonly matchError: string | null;
+  readonly confirmation: Confirmation;
+  readonly endGamePreview: EndGamePreview | null;
+  readonly actionDraft: ActionDraft | null;
+  readonly abilityPickerOpen: boolean;
+  readonly requirePhysicalConfirmations: boolean;
+  readonly saving: boolean;
+  readonly summary: MatchSummary | null;
 }
 
-export const state: ShellState = {
+/**
+ * The one deliberate mutability cell in the Console. Its contents are always
+ * replaced wholesale with immutable snapshots; consumers never mutate fields,
+ * they call {@link Ref.set} with a new object.
+ */
+export class Ref<T> {
+  #value: T;
+  constructor(value: T) {
+    this.#value = value;
+  }
+  get current(): T {
+    return this.#value;
+  }
+  set(next: T): void {
+    this.#value = next;
+  }
+}
+
+export const state = new Ref<ShellState>({
   network: navigator.onLine ? "online" : "offline",
   serviceWorker: "serviceWorker" in navigator ? "registering" : "unsupported",
   appShellCache: "checking",
@@ -118,11 +140,14 @@ export const state: ShellState = {
   requirePhysicalConfirmations: loadRequirePhysicalConfirmations(),
   saving: false,
   summary: null,
-};
-export let rulesUi = createRulesUiState(RULESET.version);
+});
+export const rulesUi = new Ref<RulesUiState>(
+  createRulesUiState(RULESET.version),
+);
 
-export function replaceRulesUi(next: RulesUiState): void {
-  rulesUi = next;
+/** Replace the shell snapshot wholesale with a patched immutable copy. */
+export function patchShellState(patch: Partial<ShellState>): void {
+  state.set({ ...state.current, ...patch });
 }
 export const matchStore = new IndexedDbMatchStore();
 const root = document.querySelector<HTMLDivElement>("#app");
