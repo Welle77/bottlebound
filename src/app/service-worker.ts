@@ -1,11 +1,9 @@
-import { render } from "../ui/render";
-import { patchShellState } from "../ui/shell-state";
+import { patchShellState } from "../ui/shell-state.svelte";
 
 export function checkCachedShell(worker: ServiceWorker): void {
   const channel = new MessageChannel();
   const timeout = window.setTimeout(() => {
     patchShellState({ appShellCache: "failed" });
-    render();
   }, 3_000);
   channel.port1.addEventListener(
     "message",
@@ -19,7 +17,6 @@ export function checkCachedShell(worker: ServiceWorker): void {
             ? "ready"
             : "failed",
       });
-      render();
     },
     { once: true },
   );
@@ -30,7 +27,6 @@ export async function registerServiceWorker(): Promise<void> {
   if (!("serviceWorker" in navigator)) {
     patchShellState({ serviceWorker: "unsupported" });
     patchShellState({ appShellCache: "failed" });
-    render();
     return;
   }
   try {
@@ -41,13 +37,11 @@ export async function registerServiceWorker(): Promise<void> {
     if (controller) {
       patchShellState({ serviceWorker: "controlled" });
       checkCachedShell(controller);
-      render();
       return;
     }
     patchShellState({
       serviceWorker: registration.active ? "waiting" : "registering",
     });
-    render();
     navigator.serviceWorker.addEventListener(
       "controllerchange",
       () => {
@@ -55,7 +49,6 @@ export async function registerServiceWorker(): Promise<void> {
         if (nextController) {
           patchShellState({ serviceWorker: "controlled" });
           checkCachedShell(nextController);
-          render();
         }
       },
       { once: true },
@@ -63,6 +56,5 @@ export async function registerServiceWorker(): Promise<void> {
   } catch {
     patchShellState({ serviceWorker: "failed" });
     patchShellState({ appShellCache: "failed" });
-    render();
   }
 }

@@ -17,6 +17,7 @@
   "include": [
     "src",
     "tests/*.test.ts",
+    "tests/*.svelte.ts",
     "tests/domain",
     "tests/storage",
     "tests/rules-reference",

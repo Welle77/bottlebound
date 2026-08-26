@@ -1,20 +1,10 @@
 import "./styles.css";
 
-import { runStorageProbe } from "./app/actions";
-import { registerServiceWorker } from "./app/service-worker";
-import { render } from "./ui/render";
-import { keepFocusInsideRules } from "./ui/rules-dialog";
-import { patchShellState } from "./ui/shell-state";
+import { mount } from "svelte";
 
-window.addEventListener("online", () => {
-  patchShellState({ network: "online" });
-  render();
-});
-window.addEventListener("offline", () => {
-  patchShellState({ network: "offline" });
-  render();
-});
-document.addEventListener("keydown", keepFocusInsideRules);
-render();
-void runStorageProbe();
-void registerServiceWorker();
+import { appRoot } from "./app/runtime";
+import App from "./ui/App.svelte";
+
+// The root Svelte component owns bootstrap and every Console surface; each
+// panel reacts to the runes-backed shell store, so no render step exists.
+mount(App, { target: appRoot });
