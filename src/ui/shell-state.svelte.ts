@@ -1,3 +1,16 @@
+/**
+ * Runes-backed reactive shell state.
+ *
+ * Owns every reactive Console cell: the {@link ShellState} snapshot, the
+ * rules UI state, and the pending Rules-anchor reveal. Each cell pairs a
+ * plain snapshot holder with a `$state` revision counter, so reactivity
+ * fires exactly when a cell is replaced wholesale and never on in-place
+ * mutation — matching the functional-style discipline: consumers never
+ * mutate fields, they install a fresh immutable snapshot. Reads hand back
+ * the raw installed snapshot (never a proxy), keeping every object that
+ * reaches the domain layer and IndexedDB structured-clone-safe.
+ */
+
 import {
   type EndGamePreview,
   type MatchEvent,
@@ -16,7 +29,6 @@ import {
   createRulesUiState,
   type RulesUiState,
 } from "../rules-reference/rules-ui-state";
-import { IndexedDbMatchStore } from "../storage/match-store";
 import { loadRequirePhysicalConfirmations } from "./console-settings";
 
 export type Confirmation =
@@ -106,50 +118,91 @@ export interface ShellState {
 }
 
 /**
- * The one deliberate mutability cell in the Console. Its contents are always
- * replaced wholesale with immutable snapshots; consumers never mutate fields,
- * they call {@link Ref.set} with a new object.
+ * Internal storage shape of one reactive cell: a plain holder of the current
+ * snapshot plus a `$state` revision counter. Reassigning the field and
+ * bumping the counter together reproduce the deleted Ref discipline exactly —
+ * wholesale replacement is the only visible change, and reads return the raw
+ * installed value. Both write boundaries are module-private and lint-scoped
+ * (`*Cell.value`, `*Revision.n`).
  */
-export class Ref<T> {
-  #value: T;
-  constructor(value: T) {
-    this.#value = value;
-  }
-  get current(): T {
-    return this.#value;
-  }
-  set(next: T): void {
-    this.#value = next;
-  }
+interface StoreCell<T> {
+  // eslint-disable-next-line functional/prefer-readonly-type -- the one mutable field whose reassignment IS the wholesale replacement boundary
+  value: T;
 }
 
-export const state = new Ref<ShellState>({
-  network: navigator.onLine ? "online" : "offline",
-  serviceWorker: "serviceWorker" in navigator ? "registering" : "unsupported",
-  appShellCache: "checking",
-  canonicalStorage: "checking",
-  storageDetail: "Running a write and removal safety check.",
-  match: null,
-  events: [],
-  matchLoaded: false,
-  matchError: null,
-  confirmation: null,
-  endGamePreview: null,
-  actionDraft: null,
-  abilityPickerOpen: false,
-  requirePhysicalConfirmations: loadRequirePhysicalConfirmations(),
-  saving: false,
-  summary: null,
-});
-export const rulesUi = new Ref<RulesUiState>(
-  createRulesUiState(RULESET.version),
-);
+function createInitialShellState(): ShellState {
+  return {
+    network: navigator.onLine ? "online" : "offline",
+    serviceWorker: "serviceWorker" in navigator ? "registering" : "unsupported",
+    appShellCache: "checking",
+    canonicalStorage: "checking",
+    storageDetail: "Running a write and removal safety check.",
+    match: null,
+    events: [],
+    matchLoaded: false,
+    matchError: null,
+    confirmation: null,
+    endGamePreview: null,
+    actionDraft: null,
+    abilityPickerOpen: false,
+    requirePhysicalConfirmations: loadRequirePhysicalConfirmations(),
+    saving: false,
+    summary: null,
+  };
+}
+
+const shellCell: StoreCell<ShellState> = { value: createInitialShellState() };
+const shellRevision = $state({ n: 0 });
+
+/**
+ * Reactive Console snapshot. Reads go through `state.current`; installs go
+ * through {@link patchShellState}, the one wholesale-replacement entry.
+ */
+export const state = {
+  get current(): ShellState {
+    // Reading the revision counter tracks every wholesale replacement.
+    void shellRevision.n;
+    return shellCell.value;
+  },
+};
+
+const rulesCell: StoreCell<RulesUiState> = {
+  value: createRulesUiState(RULESET.version),
+};
+const rulesRevision = $state({ n: 0 });
+
+/** Reactive rules UI state with explicit wholesale replacement for dialog transitions. */
+export const rulesUi = {
+  get current(): RulesUiState {
+    void rulesRevision.n;
+    return rulesCell.value;
+  },
+  set(next: RulesUiState): void {
+    rulesCell.value = next;
+    rulesRevision.n += 1;
+  },
+};
+
+const anchorCell: StoreCell<string | null> = { value: null };
+const anchorRevision = $state({ n: 0 });
+
+/**
+ * Anchor requested through openRules that the next Rules modal mount must
+ * reveal; consumed and cleared by the RulesModal component.
+ */
+export const pendingAnchorReveal = {
+  get current(): string | null {
+    void anchorRevision.n;
+    return anchorCell.value;
+  },
+  set(next: string | null): void {
+    anchorCell.value = next;
+    anchorRevision.n += 1;
+  },
+};
 
 /** Replace the shell snapshot wholesale with a patched immutable copy. */
 export function patchShellState(patch: Partial<ShellState>): void {
-  state.set({ ...state.current, ...patch });
+  shellCell.value = { ...shellCell.value, ...patch };
+  shellRevision.n += 1;
 }
-export const matchStore = new IndexedDbMatchStore();
-const root = document.querySelector<HTMLDivElement>("#app");
-if (!root) throw new Error("The Referee Console root element is missing.");
-export const appRoot: HTMLDivElement = root;

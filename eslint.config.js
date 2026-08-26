@@ -2,11 +2,13 @@ import eslint from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 import functional from "eslint-plugin-functional";
+import sveltePlugin from "eslint-plugin-svelte";
 
 // Surfaces covered by tsconfig.json; type-aware rules require this wiring.
 const typeCheckedFiles = [
   "src/**/*.ts",
   "tests/*.test.ts",
+  "tests/*.svelte.ts",
   "tests/domain/**/*.ts",
   "tests/storage/**/*.ts",
   "tests/rules-reference/**/*.ts",
@@ -17,6 +19,7 @@ const typeCheckedFiles = [
 const functionalFiles = [
   "src/**/*.ts",
   "tests/*.test.ts",
+  "tests/*.svelte.ts",
   "tests/domain/**/*.ts",
   "tests/storage/**/*.ts",
   "tests/rules-reference/**/*.ts",
@@ -35,10 +38,44 @@ const misplacedTestFiles = ["src", "build"].flatMap((applicationFolder) => [
   `${applicationFolder}/**/*.spec.ts`,
 ]);
 
+// Shared option set for the functional/immutable-data gate: plugin-sanctioned
+// exemptions (used by its own `lite` preset) plus the accessor patterns this
+// repository declares as write boundaries.
+const immutableDataOptions = {
+  ignoreClasses: "fieldsOnly",
+  ignoreAccessorPattern: [
+    // The DOM write properties this app uses — rendering is an unavoidable
+    // effect boundary, while all application/domain state stays immutable.
+    "*.innerHTML",
+    "*.hidden",
+    "*.scrollTop",
+    // The same allowance scoped to immer recipe parameters: updates run
+    // inside produce(), so the written objects are drafts, never real state.
+    "draft",
+    "draft.**",
+  ],
+};
+
 export default tseslint.config(
   { ignores: ["dist", "playwright-report", "test-results"] },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
+  // Svelte-aware linting for .svelte files. Spread after the TypeScript
+  // presets so the svelte-eslint-parser takes precedence for .svelte over
+  // the typescript-eslint parser set above.
+  ...sveltePlugin.configs["flat/recommended"],
+  {
+    files: ["**/*.svelte"],
+    languageOptions: {
+      globals: { ...globals.browser },
+      // svelte-eslint-parser delegates <script lang="ts"> contents to this
+      // parser; without it, TypeScript syntax inside components fails to
+      // parse as plain JavaScript.
+      parserOptions: {
+        parser: tseslint.parser,
+      },
+    },
+  },
   {
     files: typeCheckedFiles,
     extends: [...tseslint.configs.recommendedTypeChecked],
@@ -82,26 +119,8 @@ export default tseslint.config(
     rules: {
       "functional/immutable-data": [
         "error",
-        // Plugin-sanctioned exemption (used by its own `lite` preset): class
-        // instances may encapsulate internal mutability behind methods; every
-        // non-class object/array/map/set stays fully protected.
-        //
-        // The accessor pattern enumerates the only DOM write properties this
-        // app uses — rendering is an unavoidable effect boundary, while all
-        // application/domain state stays immutable. The `draft` patterns
-        // scope the same allowance to immer recipe parameters: updates run
-        // inside produce(), so the written objects are drafts, never real
-        // state.
-        {
-          ignoreClasses: "fieldsOnly",
-          ignoreAccessorPattern: [
-            "*.innerHTML",
-            "*.hidden",
-            "*.scrollTop",
-            "draft",
-            "draft.**",
-          ],
-        },
+        // Option set above; see the shared `immutableDataOptions` notes.
+        immutableDataOptions,
       ],
       // Option sets below are the plugin's own `recommended` preset choices
       // for these rules: parameter immutability enforced by declaration
@@ -131,6 +150,26 @@ export default tseslint.config(
       ],
       "functional/no-let": ["error", { allowInForLoopInit: true }],
       "functional/no-mixed-types": "error",
+    },
+  },
+  {
+    // The runes shell store's cell writes (shellCell.value = …,
+    // shellRevision.n += 1) are the reactive replacement boundary that
+    // succeeded the deleted Ref class discipline; every other non-class
+    // object stays fully protected.
+    files: ["src/ui/shell-state.svelte.ts"],
+    rules: {
+      "functional/immutable-data": [
+        "error",
+        {
+          ...immutableDataOptions,
+          ignoreAccessorPattern: [
+            ...immutableDataOptions.ignoreAccessorPattern,
+            "*Cell.value",
+            "*Revision.n",
+          ],
+        },
+      ],
     },
   },
   {

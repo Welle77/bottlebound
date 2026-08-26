@@ -1,9 +1,10 @@
+import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { defineConfig } from "vite";
 
 import { rulesReferencePlugin } from "./build/rules-reference-plugin.ts";
 
 export default defineConfig({
-  plugins: [rulesReferencePlugin()],
+  plugins: [rulesReferencePlugin(), svelte()],
   build: {
     rollupOptions: {
       output: {

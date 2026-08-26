@@ -20,20 +20,17 @@ import {
 } from "../domain/match";
 import { RULESET } from "../domain/ruleset";
 import { probeCanonicalStorage } from "../storage/canonical-storage-probe";
-import { render } from "../ui/render";
+import { appRoot, matchStore } from "./runtime";
 import {
-  appRoot,
   createPhysicalConfirmations,
-  matchStore,
   patchShellState,
   state,
   type ActionDraft,
-} from "../ui/shell-state";
+} from "../ui/shell-state.svelte";
 import { buildAbilityInput } from "../ui/ability-draft";
 
 export async function commitResult(result: CommandResult): Promise<boolean> {
   patchShellState({ saving: true, matchError: null });
-  render();
   try {
     await matchStore.commit(result.event, result.state);
     patchShellState({
@@ -83,7 +80,6 @@ export async function commitResult(result: CommandResult): Promise<boolean> {
     return false;
   } finally {
     patchShellState({ saving: false });
-    render();
   }
 }
 export function openBasicAttack(): void {
@@ -111,7 +107,6 @@ export function openBasicAttack(): void {
       majorActionOverride: false,
     },
   });
-  render();
 }
 
 export function openAbilityPicker(): void {
@@ -129,12 +124,10 @@ export function openAbilityPicker(): void {
     )?.hp ?? 0;
   if (activeHp === 0 || match.eliminatedTeams.length === 2) return;
   patchShellState({ abilityPickerOpen: true });
-  render();
 }
 
 export function closeAbilityPicker(): void {
   patchShellState({ abilityPickerOpen: false });
-  render();
 }
 
 export function openAbilityDraft(abilityId: string): void {
@@ -176,14 +169,12 @@ export function openAbilityDraft(abilityId: string): void {
       majorActionOverride: false,
     },
   });
-  render();
 }
 
 export function setAbilityStep(step: ActionDraft["step"]): void {
   const draft = state.current.actionDraft;
   if (!draft || draft.kind !== "ability") return;
   patchShellState({ actionDraft: { ...draft, step } });
-  render();
 }
 export async function confirmBasicAttack(): Promise<void> {
   const match = state.current.match;
@@ -213,7 +204,6 @@ export async function confirmBasicAttack(): Promise<void> {
     ),
   );
   patchShellState({ actionDraft: null });
-  render();
 }
 
 const OVERRIDEABLE_DOMAIN_ERRORS = new Set([
@@ -230,7 +220,6 @@ export function cancelAbilityDraft(): void {
   )
     return;
   patchShellState({ actionDraft: null, abilityPickerOpen: false });
-  render();
 }
 
 /**
@@ -264,14 +253,12 @@ export async function confirmAbility(): Promise<void> {
       } else {
         patchShellState({ matchError: message });
       }
-      render();
       return null;
     }
   })();
   if (result === null) return;
   await commitResult(result);
   patchShellState({ actionDraft: null, abilityPickerOpen: false });
-  render();
 }
 
 export async function createMatch(): Promise<void> {
@@ -367,7 +354,6 @@ export async function confirmAction(): Promise<void> {
   patchShellState({ confirmation: null });
   if (confirmation === "remove-summary") {
     patchShellState({ saving: true });
-    render();
     try {
       await matchStore.deleteSummary(true);
       patchShellState({ summary: null, matchError: null });
@@ -377,13 +363,11 @@ export async function confirmAction(): Promise<void> {
       });
     } finally {
       patchShellState({ saving: false });
-      render();
     }
     return;
   }
   if (confirmation === "start-new" && state.current.match?.phase === "ended") {
     patchShellState({ saving: true });
-    render();
     try {
       const setup = createSetup(crypto.randomUUID(), new Date().toISOString());
       await matchStore.commit(setup.event, setup.state);
@@ -403,7 +387,6 @@ export async function confirmAction(): Promise<void> {
       });
     } finally {
       patchShellState({ saving: false });
-      render();
     }
     return;
   }
@@ -435,7 +418,6 @@ export async function confirmAction(): Promise<void> {
   }
   if (confirmation === "remove" && state.current.match.phase === "ended") {
     patchShellState({ saving: true });
-    render();
     try {
       await matchStore.deleteMatch(state.current.match.matchId, true);
       patchShellState({
@@ -450,7 +432,6 @@ export async function confirmAction(): Promise<void> {
       });
     } finally {
       patchShellState({ saving: false });
-      render();
     }
     return;
   }
@@ -465,7 +446,6 @@ export async function confirmAction(): Promise<void> {
     return;
   }
   patchShellState({ saving: true });
-  render();
   try {
     await matchStore.deleteMatch(state.current.match.matchId, true);
     patchShellState({ match: null, events: [], matchError: null });
@@ -480,7 +460,6 @@ export async function confirmAction(): Promise<void> {
     });
   } finally {
     patchShellState({ saving: false });
-    render();
   }
 }
 export async function restoreMatch(): Promise<void> {
@@ -516,7 +495,6 @@ export async function restoreMatch(): Promise<void> {
     }
   } finally {
     patchShellState({ matchLoaded: true });
-    render();
   }
 }
 export async function runStorageProbe(): Promise<void> {
@@ -524,7 +502,6 @@ export async function runStorageProbe(): Promise<void> {
     canonicalStorage: "checking",
     storageDetail: "Running a write and removal safety check.",
   });
-  render();
   const result = await probeCanonicalStorage();
   patchShellState({
     canonicalStorage: result.status,
@@ -533,7 +510,6 @@ export async function runStorageProbe(): Promise<void> {
         ? "The canonical write and removal check passed."
         : `${result.reason} The shell remains safe. Retry this check.`,
   });
-  render();
   if (result.status === "ready" && !state.current.matchLoaded)
     await restoreMatch();
 }
