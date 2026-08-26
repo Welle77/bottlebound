@@ -6,10 +6,7 @@
  * existing importers of "./domain/match" are unaffected.
  */
 
-export {
-  LEGACY_MATCH_SCHEMA_VERSION,
-  MATCH_SCHEMA_VERSION,
-} from "./match-types";
+export { MATCH_SCHEMA_VERSION } from "./match-types";
 
 export { cryptoRandomSource } from "./match-random";
 
@@ -41,7 +38,6 @@ export {
   assertMatchStateStructure,
   assertMatchSummaryStructure,
   canonicalMatchRecordsEqual,
-  migrateLegacyMatch,
   toMatchSummary,
 } from "./match-history";
 
@@ -72,13 +68,9 @@ export type {
   FinalTeamCounts,
   InitiativeEntry,
   InitiativeEvent,
-  LegacyActiveMatchState,
-  LegacyMatchState,
-  LegacySetupMatchState,
   MatchCharacter,
   MatchEndedEvent,
   MatchEvent,
-  MatchMigratedEvent,
   MatchOutcome,
   MatchReopenedEvent,
   MatchStartedEvent,

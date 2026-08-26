@@ -85,6 +85,8 @@
     };
   });
 
+  type AbilityDraftBase = NonNullable<typeof base>;
+
   const targeting = $derived.by(() => {
     const b = base;
     if (!b || b.draft.step !== "select-target") return null;
@@ -120,12 +122,14 @@
     const b = base;
     if (!b || b.draft.step !== "contacts") return null;
     const activeLegIndex = b.draft.attackLegs.length - 1;
-    const activeLeg = b.draft.attackLegs[activeLegIndex]!;
+    const activeLeg = b.draft.attackLegs.at(activeLegIndex);
+    if (!activeLeg) return null;
+    const closedLeg = b.draft.attackLegs.at(0);
     return {
       closedLeg:
         activeLegIndex === 1
           ? {
-              names: b.draft.attackLegs[0]!.map((id) => rulesCharacterOf(id)),
+              names: (closedLeg ?? []).map((id) => rulesCharacterOf(id)),
             }
           : null,
       ready:
@@ -308,38 +312,38 @@
   }
 </script>
 
-{#snippet abilityProfile()}
+{#snippet abilityProfile(b: AbilityDraftBase)}
   <div class="attack-profile">
     <!-- Single-line runs: specs regex-match across these phrases and read
          raw textContent from the source paragraph. -->
-    <p><strong>Source:</strong> <CharacterName character={base!.sourceCharacter} displayNames={base!.match.displayNames} /></p>
-    <p><strong>Ability:</strong> {base!.ability.name} · {base!.ability.actionType === "powerful" ? "Powerful" : "Standard"}</p>
-    <p><strong>Range:</strong> {base!.ability.range}</p>
-    <p><strong>Effect:</strong> {base!.ability.rulesText}</p>
+    <p><strong>Source:</strong> <CharacterName character={b.sourceCharacter} displayNames={b.match.displayNames} /></p>
+    <p><strong>Ability:</strong> {b.ability.name} · {b.ability.actionType === "powerful" ? "Powerful" : "Standard"}</p>
+    <p><strong>Range:</strong> {b.ability.range}</p>
+    <p><strong>Effect:</strong> {b.ability.rulesText}</p>
     <button
-      id={`rules-ability-draft-${base!.ability.id}`}
+      id={`rules-ability-draft-${b.ability.id}`}
       class="rules-context-link"
       type="button"
-      data-open-rules-anchor={base!.ability.sourceAnchor}
+      data-open-rules-anchor={b.ability.sourceAnchor}
       onclick={handleOpenRules}
     >
-      {base!.ability.name} rules
+      {b.ability.name} rules
     </button>
   </div>
 {/snippet}
 
-{#snippet reviewArticle(leg: LegReview, index: number)}
+{#snippet reviewArticle(leg: LegReview, index: number, b: AbilityDraftBase)}
   <article class="attack-leg-review" data-attack-leg-review>
     <h3>Leg {index + 1} · {index === 0 ? "Initial throw" : "Deflecting Palm redirect"}</h3>
-    <p>{#each leg.names as name, nameIndex (name.id)}{#if nameIndex > 0}{LEG_NAME_SEPARATOR}{/if}<CharacterName character={name} displayNames={base!.match.displayNames} />{/each}{#if leg.names.length === 0}{LEG_CONTACTS_NONE}{/if}</p>
+    <p>{#each leg.names as name, nameIndex (name.id)}{#if nameIndex > 0}{LEG_NAME_SEPARATOR}{/if}<CharacterName character={name} displayNames={b.match.displayNames} />{/each}{#if leg.names.length === 0}{LEG_CONTACTS_NONE}{/if}</p>
     {#if leg.redirect}
       <!-- Single-line run: matched across interpolations. -->
-      <p>Original source: <CharacterName character={base!.sourceCharacter} displayNames={base!.match.displayNames} /> · {base!.ability.name} · hard maximum range {base!.ability.range}.</p>
+      <p>Original source: <CharacterName character={b.sourceCharacter} displayNames={b.match.displayNames} /> · {b.ability.name} · hard maximum range {b.ability.range}.</p>
     {/if}
   </article>
 {/snippet}
 
-{#snippet targetRow(row: TargetRow, override: boolean)}
+{#snippet targetRow(row: TargetRow, override: boolean, b: AbilityDraftBase)}
   <label class="contact-control">
     <input
       type="checkbox"
@@ -350,7 +354,7 @@
     />
     <!-- Single-line runs: getByLabel(REGEX) probes receive raw label text,
          so every spec-matched phrase stays contiguous. -->
-    <span><CharacterName character={row.character} displayNames={base!.match.displayNames} /> · {row.character.team} · HP {row.hp}/{row.maxHp}{#if row.candidate.reasons.length > 0}<small>{row.candidate.reasons.join(" · ")}. Selecting records an Override.</small>{/if}</span>
+    <span><CharacterName character={row.character} displayNames={b.match.displayNames} /> · {row.character.team} · HP {row.hp}/{row.maxHp}{#if row.candidate.reasons.length > 0}<small>{row.candidate.reasons.join(" · ")}. Selecting records an Override.</small>{/if}</span>
   </label>
 {/snippet}
 
@@ -362,7 +366,7 @@
     {#if targeting}
       <p class="eyebrow">Use Ability · Choose target</p>
       <h2 id="ability-draft-heading">{base.ability.name}</h2>
-      {@render abilityProfile()}
+      {@render abilityProfile(base)}
       <fieldset>
         <legend>
           {targeting.single ? "Exactly one target" : "Targets in range"}
@@ -373,7 +377,7 @@
         <div class="contact-list" data-eligible-targets>
           {#if targeting.eligible.length > 0}
             {#each targeting.eligible as row (row.candidate.characterId)}
-              {@render targetRow(row, false)}
+              {@render targetRow(row, false, base)}
             {/each}
           {:else}
             <p>No state-eligible targets.</p>
@@ -389,7 +393,7 @@
           </p>
           <div class="contact-list" data-override-targets>
             {#each targeting.overridden as row (row.candidate.characterId)}
-              {@render targetRow(row, true)}
+              {@render targetRow(row, true, base)}
             {/each}
           </div>
         </details>
@@ -420,7 +424,7 @@
     {:else if base.draft.step === "reactions"}
       <p class="eyebrow">Use Ability · Reactions</p>
       <h2 id="ability-draft-heading">{base.ability.name}</h2>
-      {@render abilityProfile()}
+      {@render abilityProfile(base)}
       <DraftReactionsFieldset
         match={base.match}
         affectedCharacterIds={base.draft.targets}
@@ -455,7 +459,7 @@
       <p class="eyebrow">Use Ability · Physical result</p>
       <h2 id="ability-draft-heading">Record {base.ability.name}</h2>
       <p>This draft stays local until final confirmation.</p>
-      {@render abilityProfile()}
+      {@render abilityProfile(base)}
       {#if physicalContacts.closedLeg}
         <section class="closed-attack-leg" data-closed-attack-leg>
           <h3>Attack Leg 1 closed</h3>
@@ -496,13 +500,13 @@
     {:else if review}
       <p class="eyebrow">Use Ability · Review</p>
       <h2 id="ability-draft-heading">Review {base.ability.name}</h2>
-      {@render abilityProfile()}
+      {@render abilityProfile(base)}
       {#if review.legReviews.length > 0}
         <section aria-labelledby="ability-legs-heading">
           <h3 id="ability-legs-heading">Ordered Attack Legs</h3>
           <div class="attack-leg-review-list">
             {#each review.legReviews as leg, index (index)}
-              {@render reviewArticle(leg, index)}
+              {@render reviewArticle(leg, index, base)}
             {/each}
           </div>
         </section>

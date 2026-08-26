@@ -45,21 +45,21 @@ export async function commitResult(result: CommandResult): Promise<boolean> {
         MatchState,
         { readonly phase: "ended" }
       >;
-      if (ended.decisionBasis && ended.finalCounts && ended.finalHpTotals) {
-        patchShellState({
-          summary: {
-            outcome: ended.outcome,
-            decisionBasis: ended.decisionBasis,
-            finalCounts: ended.finalCounts,
-            finalHpTotals: ended.finalHpTotals,
-            rulesVersion: ended.rulesVersion,
-            endedAt: ended.endedAt,
-            ...(ended.coinFlipResult
-              ? { coinFlipResult: ended.coinFlipResult }
-              : {}),
-          },
-        });
-      }
+      // Post-T02 the ended-state contract fields are required, so the
+      // summary is always complete once phase === "ended".
+      patchShellState({
+        summary: {
+          outcome: ended.outcome,
+          decisionBasis: ended.decisionBasis,
+          finalCounts: ended.finalCounts,
+          finalHpTotals: ended.finalHpTotals,
+          rulesVersion: ended.rulesVersion,
+          endedAt: ended.endedAt,
+          ...(ended.coinFlipResult
+            ? { coinFlipResult: ended.coinFlipResult }
+            : {}),
+        },
+      });
     }
     if (
       result.event.type === "SetupCreated" &&
@@ -295,7 +295,7 @@ export async function saveDisplayNames(): Promise<void> {
     }),
   );
   const normalized = normalizeDisplayNames(requested);
-  const current = match.displayNames ?? {};
+  const current = match.displayNames;
   const unchanged =
     Object.keys(normalized).length === Object.keys(current).length &&
     Object.entries(normalized).every(([id, name]) => current[id] === name);
@@ -312,17 +312,12 @@ export async function advanceTurn(): Promise<void> {
   }
 }
 export async function continueMatch(): Promise<void> {
-  if (
-    state.current.match?.phase !== "active" ||
-    state.current.match.eliminatedTeams.length !== 1
-  )
-    return;
+  const match = state.current.match;
+  if (match?.phase !== "active" || match.eliminatedTeams.length !== 1) return;
+  const [eliminatedTeam] = match.eliminatedTeams;
+  if (eliminatedTeam === undefined) return;
   await commitResult(
-    acknowledgeElimination(
-      state.current.match,
-      state.current.match.eliminatedTeams[0]!,
-      new Date().toISOString(),
-    ),
+    acknowledgeElimination(match, eliminatedTeam, new Date().toISOString()),
   );
 }
 export async function recordSimultaneousRuling(

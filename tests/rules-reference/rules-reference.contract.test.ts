@@ -312,12 +312,12 @@ describe("Ruleset reference contract", () => {
       ),
     };
 
-    expect(() =>
+    expect(() => {
       assertStructuredRulesetMatchesReference(
         reference,
         drifted as unknown as typeof RULESET,
-      ),
-    ).toThrow(
+      );
+    }).toThrow(
       'Structured character "Rogue" role drifts from the authoritative rules.',
     );
   });
@@ -334,12 +334,12 @@ describe("Ruleset reference contract", () => {
       ),
     };
 
-    expect(() =>
+    expect(() => {
       assertStructuredRulesetMatchesReference(
         reference,
         drifted as unknown as typeof RULESET,
-      ),
-    ).toThrow(
+      );
+    }).toThrow(
       'Structured character "Rogue" basicAttack drifts from the authoritative rules.',
     );
   });
@@ -363,12 +363,12 @@ describe("Ruleset reference contract", () => {
       ),
     };
 
-    expect(() =>
+    expect(() => {
       assertStructuredRulesetMatchesReference(
         reference,
         drifted as unknown as typeof RULESET,
-      ),
-    ).toThrow(
+      );
+    }).toThrow(
       'Structured ability "Backstab" Effect drifts from the authoritative rules.',
     );
   });

@@ -9,7 +9,7 @@ import {
   startMatch,
 } from "../../src/domain/match";
 import { RULESET } from "../../src/domain/ruleset";
-import { queuedRandom } from "./match-test-support";
+import { initiativeCharacterId, queuedRandom } from "./match-test-support";
 
 describe("Active Match commands", () => {
   it("applies several protective Reactions only to their selected characters", () => {
@@ -23,7 +23,7 @@ describe("Active Match commands", () => {
     const result = resolveBasicAttack(
       started.state,
       {
-        sourceCharacterId: started.state.initiative[0]!.characterId,
+        sourceCharacterId: initiativeCharacterId(started.state, 0),
         affectedCharacterIds: [
           "duergar-ranger",
           "drow-wizard",
@@ -133,10 +133,11 @@ describe("Active Match commands", () => {
       "2026-08-22T14:01:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
-    const sourceCharacterId = started.state.initiative[0]!.characterId;
+    const sourceCharacterId = initiativeCharacterId(started.state, 0);
     const attack = RULESET.basicAttacks.find(
       ({ characterId }) => characterId === sourceCharacterId,
-    )!;
+    );
+    if (!attack) throw new Error("The test expected a Basic Attack entry.");
     const result = resolveBasicAttack(
       started.state,
       {
@@ -274,7 +275,7 @@ describe("Active Match commands", () => {
       resolveBasicAttack(
         started.state,
         {
-          sourceCharacterId: started.state.initiative[0]!.characterId,
+          sourceCharacterId: initiativeCharacterId(started.state, 0),
           attackLegs: [
             { affectedCharacterIds: ["duergar-monk", "drow-paladin"] },
             { affectedCharacterIds: ["drow-paladin"] },
@@ -330,7 +331,7 @@ describe("Active Match commands", () => {
       ],
     });
     const input = {
-      sourceCharacterId: state.initiative[0]!.characterId,
+      sourceCharacterId: initiativeCharacterId(state, 0),
       affectedCharacterIds: ["duergar-ranger"],
       physicalConfirmations: {
         range: true,
@@ -387,7 +388,7 @@ describe("Active Match commands", () => {
       resolveBasicAttack(
         started.state,
         {
-          sourceCharacterId: started.state.initiative[0]!.characterId,
+          sourceCharacterId: initiativeCharacterId(started.state, 0),
           affectedCharacterIds: ["duergar-ranger", "duergar-warlock"],
           physicalConfirmations: {
             range: true,
@@ -433,7 +434,7 @@ describe("Active Match commands", () => {
     const resolved = resolveBasicAttack(
       atOneHp,
       {
-        sourceCharacterId: atOneHp.initiative[0]!.characterId,
+        sourceCharacterId: initiativeCharacterId(atOneHp, 0),
         affectedCharacterIds: ["duergar-ranger"],
         physicalConfirmations: {
           range: true,

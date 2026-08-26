@@ -44,8 +44,9 @@ export function overwriteStoredEvent(
     const open = factory.open(databaseName);
     open.addEventListener(
       "error",
-      () =>
-        reject(open.error ?? new Error("The Match database could not open.")),
+      () => {
+        reject(open.error ?? new Error("The Match database could not open."));
+      },
       { once: true },
     );
     open.addEventListener(
@@ -53,16 +54,23 @@ export function overwriteStoredEvent(
       () => {
         const transaction = open.result.transaction("events", "readwrite");
         transaction.objectStore("events").put(event);
-        transaction.addEventListener("complete", () => resolve(), {
-          once: true,
-        });
+        transaction.addEventListener(
+          "complete",
+          () => {
+            resolve();
+          },
+          {
+            once: true,
+          },
+        );
         transaction.addEventListener(
           "error",
-          () =>
+          () => {
             reject(
               transaction.error ??
                 new Error("The IndexedDB transaction failed."),
-            ),
+            );
+          },
           { once: true },
         );
       },
@@ -80,8 +88,9 @@ export function rewriteStoredRulesVersion(
     const open = factory.open(databaseName);
     open.addEventListener(
       "error",
-      () =>
-        reject(open.error ?? new Error("The Match database could not open.")),
+      () => {
+        reject(open.error ?? new Error("The Match database could not open."));
+      },
       { once: true },
     );
     open.addEventListener(
@@ -111,16 +120,23 @@ export function rewriteStoredRulesVersion(
         rewriteAll("metadata");
         rewriteAll("snapshots");
         rewriteAll("events");
-        transaction.addEventListener("complete", () => resolve(), {
-          once: true,
-        });
+        transaction.addEventListener(
+          "complete",
+          () => {
+            resolve();
+          },
+          {
+            once: true,
+          },
+        );
         transaction.addEventListener(
           "error",
-          () =>
+          () => {
             reject(
               transaction.error ??
                 new Error("The IndexedDB transaction failed."),
-            ),
+            );
+          },
           { once: true },
         );
       },
@@ -129,19 +145,22 @@ export function rewriteStoredRulesVersion(
   });
 }
 
-export function rewriteCurrentSnapshotAsLegacy(
+/**
+ * Rewrites the persisted Match into the retired schema-2 on-disk shape:
+ * schema version 2 in metadata and snapshot with the combat-state keys the
+ * retired format did not store. Used to prove restore() rejects it.
+ */
+export function rewriteCurrentSnapshotAsRetiredSchema(
   factory: IDBFactory,
   databaseName: string,
-  transform: (snapshot: Record<string, unknown>) => Record<string, unknown> = (
-    snapshot,
-  ) => snapshot,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const open = factory.open(databaseName);
     open.addEventListener(
       "error",
-      () =>
-        reject(open.error ?? new Error("The Match database could not open.")),
+      () => {
+        reject(open.error ?? new Error("The Match database could not open."));
+      },
       { once: true },
     );
     open.addEventListener(
@@ -162,38 +181,43 @@ export function rewriteCurrentSnapshotAsLegacy(
         const snapshots = transaction.objectStore("snapshots");
         const snapshotRequest = snapshots.getAll();
         snapshotRequest.addEventListener("success", () => {
-          const rawSnapshot: unknown = snapshotRequest.result[0];
-          const snapshot: Record<string, unknown> = {
-            ...(rawSnapshot as Record<string, unknown>),
-            schemaVersion: 2,
-          };
-          const legacyKeys = [
+          // Retired schema-2 combat keys are omitted by rebuilding instead of
+          // mutating the parsed record.
+          const retiredKeys: ReadonlySet<string> = new Set([
             "spentReactionIds",
             "majorActionUsed",
             "eliminatedTeams",
             "acknowledgedEliminations",
             "outcome",
-          ];
-          snapshots.put(
-            transform(
+          ]);
+          for (const rawSnapshot of snapshotRequest.result) {
+            const source = rawSnapshot as Record<string, unknown>;
+            const retiredSchemaSnapshot: Record<string, unknown> =
               Object.fromEntries(
-                Object.entries(snapshot).filter(
-                  ([key]) => !legacyKeys.includes(key),
+                Object.entries(source).filter(
+                  ([key]) => !retiredKeys.has(key),
                 ),
-              ),
-            ),
-          );
-        });
-        transaction.addEventListener("complete", () => resolve(), {
-          once: true,
+              );
+            snapshots.put({ ...retiredSchemaSnapshot, schemaVersion: 2 });
+          }
         });
         transaction.addEventListener(
+          "complete",
+          () => {
+            resolve();
+          },
+          {
+            once: true,
+          },
+        );
+        transaction.addEventListener(
           "error",
-          () =>
+          () => {
             reject(
               transaction.error ??
                 new Error("The IndexedDB transaction failed."),
-            ),
+            );
+          },
           { once: true },
         );
       },
@@ -210,8 +234,9 @@ export function readRawMatch(
     const open = factory.open(databaseName);
     open.addEventListener(
       "error",
-      () =>
-        reject(open.error ?? new Error("The Match database could not open.")),
+      () => {
+        reject(open.error ?? new Error("The Match database could not open."));
+      },
       { once: true },
     );
     open.addEventListener(
@@ -236,11 +261,12 @@ export function readRawMatch(
         );
         transaction.addEventListener(
           "error",
-          () =>
+          () => {
             reject(
               transaction.error ??
                 new Error("The IndexedDB transaction failed."),
-            ),
+            );
+          },
           { once: true },
         );
       },
@@ -302,10 +328,14 @@ export function simultaneousEliminationRun(matchId: string): {
     readonly current: ActiveMatchState;
   }>(
     (progress, affectedCharacterIds, index) => {
+      const sourceCharacterId = sources.at(index);
+      if (sourceCharacterId === undefined) {
+        throw new Error("Missing test attack source.");
+      }
       const attacked = resolveBasicAttack(
         progress.current,
         {
-          sourceCharacterId: sources[index]!,
+          sourceCharacterId,
           affectedCharacterIds,
           physicalConfirmations: confirmations,
           majorActionOverride: null,

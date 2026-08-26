@@ -116,11 +116,13 @@
       !saving && getUndoPreview(match, state.current.events) !== null;
     const combatAvailable = match.rulesVersion === RULESET.version;
     const activeDowned = hpByCharacter.get(activeEntry.characterId) === 0;
+    const [firstEliminatedTeam] = match.eliminatedTeams;
     const normalElimination =
       match.eliminatedTeams.length === 1 && match.outcome !== null;
     const eliminationAcknowledged =
       normalElimination &&
-      match.acknowledgedEliminations.includes(match.eliminatedTeams[0]!);
+      firstEliminatedTeam !== undefined &&
+      match.acknowledgedEliminations.includes(firstEliminatedTeam);
     const promptKind = normalElimination
       ? eliminationAcknowledged
         ? "acknowledged"
@@ -130,14 +132,19 @@
         : match.eliminatedTeams.length === 2 && match.outcome !== null
           ? "simultaneous-resolved"
           : "none";
+    const activeHp = hpByCharacter.get(activeEntry.characterId);
+    const nextHp = hpByCharacter.get(nextEntry.characterId);
+    if (activeHp === undefined || nextHp === undefined) {
+      throw new Error("The Active Match references an unknown character.");
+    }
     return {
       match,
       activeSlot: activeEntry.slot,
       nextSlot: nextEntry.slot,
       activeCharacter,
       nextCharacter,
-      activeHp: hpByCharacter.get(activeEntry.characterId)!,
-      nextHp: hpByCharacter.get(nextEntry.characterId)!,
+      activeHp,
+      nextHp,
       activeDowned,
       rows,
       saving,

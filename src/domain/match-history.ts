@@ -1,15 +1,8 @@
 import { RULESET } from "./ruleset";
-import {
-  initialCombatState,
-  LEGACY_MATCH_SCHEMA_VERSION,
-  MATCH_SCHEMA_VERSION,
-} from "./match-types";
+import { MATCH_SCHEMA_VERSION } from "./match-types";
 import type {
-  CommandResult,
   EndedMatchState,
   FinalTeamCounts,
-  LegacyMatchState,
-  MatchMigratedEvent,
   MatchState,
   MatchSummary,
 } from "./match-types";
@@ -55,16 +48,8 @@ function assertStringArray(
 /** Shared structural boundary used by domain replay and canonical storage. */
 export function assertMatchStateStructure(
   value: unknown,
-  schemaVersion?: typeof MATCH_SCHEMA_VERSION,
-): asserts value is MatchState;
-export function assertMatchStateStructure(
-  value: unknown,
-  schemaVersion: typeof LEGACY_MATCH_SCHEMA_VERSION,
-): asserts value is LegacyMatchState;
-export function assertMatchStateStructure(
-  value: unknown,
-  schemaVersion: number = MATCH_SCHEMA_VERSION,
-): void {
+  schemaVersion: typeof MATCH_SCHEMA_VERSION = MATCH_SCHEMA_VERSION,
+): asserts value is MatchState {
   if (
     !isRecord(value) ||
     value.schemaVersion !== schemaVersion ||
@@ -142,103 +127,88 @@ export function assertMatchStateStructure(
   ) {
     throw new Error("The Ended Match state is structurally invalid.");
   }
-  if (value.phase === "ended" && schemaVersion === MATCH_SCHEMA_VERSION) {
+  if (value.phase === "ended") {
     const ended = value as unknown as EndedMatchState;
+    // Widened views keep every literal comparison live so persisted values
+    // outside the contract still fail validation exactly as before.
+    const decisionBasis: string = ended.decisionBasis;
     if (
-      ended.decisionBasis !== undefined &&
-      ended.decisionBasis !== "elimination" &&
-      ended.decisionBasis !== "activeCount" &&
-      ended.decisionBasis !== "activeHpTotal" &&
-      ended.decisionBasis !== "coinFlip"
+      decisionBasis !== "elimination" &&
+      decisionBasis !== "activeCount" &&
+      decisionBasis !== "activeHpTotal" &&
+      decisionBasis !== "coinFlip"
     ) {
       throw new Error("The Ended Match decision basis is invalid.");
     }
     if (
-      (ended.decisionBasis !== undefined ||
-        ended.finalCounts !== undefined ||
-        ended.finalHpTotals !== undefined) &&
-      (!isRecord(ended.finalCounts) ||
-        !Number.isInteger((ended.finalCounts as FinalTeamCounts).Drow) ||
-        !Number.isInteger((ended.finalCounts as FinalTeamCounts).Duergar) ||
-        (ended.finalCounts as FinalTeamCounts).Drow < 0 ||
-        (ended.finalCounts as FinalTeamCounts).Duergar < 0 ||
-        !isRecord(ended.finalHpTotals) ||
-        !Number.isInteger((ended.finalHpTotals as FinalTeamCounts).Drow) ||
-        !Number.isInteger((ended.finalHpTotals as FinalTeamCounts).Duergar) ||
-        (ended.finalHpTotals as FinalTeamCounts).Drow < 0 ||
-        (ended.finalHpTotals as FinalTeamCounts).Duergar < 0)
+      !isRecord(ended.finalCounts) ||
+      !Number.isInteger((ended.finalCounts as FinalTeamCounts).Drow) ||
+      !Number.isInteger((ended.finalCounts as FinalTeamCounts).Duergar) ||
+      (ended.finalCounts as FinalTeamCounts).Drow < 0 ||
+      (ended.finalCounts as FinalTeamCounts).Duergar < 0 ||
+      !isRecord(ended.finalHpTotals) ||
+      !Number.isInteger((ended.finalHpTotals as FinalTeamCounts).Drow) ||
+      !Number.isInteger((ended.finalHpTotals as FinalTeamCounts).Duergar) ||
+      (ended.finalHpTotals as FinalTeamCounts).Drow < 0 ||
+      (ended.finalHpTotals as FinalTeamCounts).Duergar < 0
     ) {
       throw new Error("The Ended Match final team tallies are invalid.");
     }
+    const coinFlipResult: string | null = ended.coinFlipResult;
     if (
-      ended.coinFlipResult !== undefined &&
-      ended.coinFlipResult !== "Drow" &&
-      ended.coinFlipResult !== "Duergar"
+      coinFlipResult !== null &&
+      coinFlipResult !== "Drow" &&
+      coinFlipResult !== "Duergar"
     ) {
       throw new Error("The Ended Match coin flip result is invalid.");
     }
     if (
-      ended.decisionBasis === "coinFlip" &&
-      ended.coinFlipResult === undefined
-    ) {
-      throw new Error("The Ended Match coin flip result is invalid.");
-    }
-    if (
-      ended.coinFlipResult !== undefined &&
-      ended.decisionBasis !== "coinFlip"
+      (ended.decisionBasis === "coinFlip") !==
+      (ended.coinFlipResult !== null)
     ) {
       throw new Error("The Ended Match coin flip result is invalid.");
     }
   }
-  if (schemaVersion === MATCH_SCHEMA_VERSION) {
-    // Backwards compat: older snapshots may lack ability fields
-    if (value.spentAbilityIds !== undefined) {
-      assertStringArray(value.spentAbilityIds, "spent Abilities");
-    }
-    if (
-      value.activeEffects !== undefined &&
-      !Array.isArray(value.activeEffects)
-    ) {
-      throw new Error("The canonical active effects are structurally invalid.");
-    }
-    // Backwards compat: snapshots from before Display Names may omit the map
-    if (value.displayNames !== undefined) {
-      const names = value.displayNames as Record<string, unknown>;
-      if (
-        !isRecord(names) ||
-        !Object.keys(names).every(
-          (characterId) =>
-            typeof names[characterId] === "string" &&
-            names[characterId].length > 0 &&
-            names[characterId].trim() === names[characterId] &&
-            RULESET.characters.some(({ id }) => id === characterId),
-        )
-      ) {
-        throw new Error("The canonical Match display names are invalid.");
-      }
-    }
-    assertStringArray(value.spentReactionIds, "spent Reactions");
-    assertStringArray(value.eliminatedTeams, "Team Elimination state");
-    assertStringArray(
-      value.acknowledgedEliminations,
-      "acknowledged Team Elimination state",
-    );
-    if (
-      typeof value.majorActionUsed !== "boolean" ||
-      !value.eliminatedTeams.every(
-        (team) => team === "Drow" || team === "Duergar",
-      ) ||
-      new Set(value.eliminatedTeams).size !== value.eliminatedTeams.length ||
-      !value.acknowledgedEliminations.every(
-        (team) => team === "Drow" || team === "Duergar",
-      ) ||
-      (value.outcome !== null &&
-        value.outcome !== "Drow" &&
-        value.outcome !== "Duergar" &&
-        value.outcome !== "draw")
-    ) {
-      throw new Error("The canonical combat state is structurally invalid.");
-    }
+  // Single-schema persistence (ADR 0001): the parameter type is the one
+  // current version, so these canonical checks apply unconditionally.
+  assertStringArray(value.spentAbilityIds, "spent Abilities");
+  if (!Array.isArray(value.activeEffects)) {
+    throw new Error("The canonical active effects are structurally invalid.");
+  }
+  const names = value.displayNames as Record<string, unknown>;
+  if (
+    !isRecord(names) ||
+    !Object.keys(names).every(
+      (characterId) =>
+        typeof names[characterId] === "string" &&
+        names[characterId].length > 0 &&
+        names[characterId].trim() === names[characterId] &&
+        RULESET.characters.some(({ id }) => id === characterId),
+    )
+  ) {
+    throw new Error("The canonical Match display names are invalid.");
+  }
+  assertStringArray(value.spentReactionIds, "spent Reactions");
+  assertStringArray(value.eliminatedTeams, "Team Elimination state");
+  assertStringArray(
+    value.acknowledgedEliminations,
+    "acknowledged Team Elimination state",
+  );
+  if (
+    typeof value.majorActionUsed !== "boolean" ||
+    !value.eliminatedTeams.every(
+      (team) => team === "Drow" || team === "Duergar",
+    ) ||
+    new Set(value.eliminatedTeams).size !== value.eliminatedTeams.length ||
+    !value.acknowledgedEliminations.every(
+      (team) => team === "Drow" || team === "Duergar",
+    ) ||
+    (value.outcome !== null &&
+      value.outcome !== "Drow" &&
+      value.outcome !== "Duergar" &&
+      value.outcome !== "draw")
+  ) {
+    throw new Error("The canonical combat state is structurally invalid.");
   }
 }
 
@@ -299,13 +269,6 @@ export function assertMatchSummaryStructure(
 }
 
 export function toMatchSummary(state: EndedMatchState): MatchSummary {
-  if (
-    state.decisionBasis === undefined ||
-    state.finalCounts === undefined ||
-    state.finalHpTotals === undefined
-  ) {
-    throw new Error("The Ended Match does not contain summary fields.");
-  }
   const summary: MatchSummary = {
     outcome: state.outcome,
     decisionBasis: state.decisionBasis,
@@ -317,31 +280,4 @@ export function toMatchSummary(state: EndedMatchState): MatchSummary {
   };
   assertMatchSummaryStructure(summary);
   return summary;
-}
-
-export function migrateLegacyMatch(
-  value: unknown,
-  occurredAt: string,
-): CommandResult<MatchState, MatchMigratedEvent> {
-  assertMatchStateStructure(value, LEGACY_MATCH_SCHEMA_VERSION);
-  const legacy = value;
-  const sequence = legacy.sequence + 1;
-  const state = {
-    ...legacy,
-    schemaVersion: MATCH_SCHEMA_VERSION,
-    sequence,
-    ...initialCombatState,
-  } as MatchState;
-  return {
-    state,
-    event: {
-      type: "MatchMigrated",
-      matchId: legacy.matchId,
-      sequence,
-      rulesVersion: legacy.rulesVersion,
-      occurredAt,
-      fromSchemaVersion: LEGACY_MATCH_SCHEMA_VERSION,
-      toSchemaVersion: MATCH_SCHEMA_VERSION,
-    },
-  };
 }

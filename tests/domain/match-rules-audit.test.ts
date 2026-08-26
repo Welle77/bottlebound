@@ -66,7 +66,7 @@ describe("rules coverage audit: attack damage pipeline", () => {
       MatchEvent,
       { readonly type: "ActionResolved" }
     >;
-    expect(resolution.expiredEffects?.map(({ kind }) => kind)).toEqual([
+    expect(resolution.expiredEffects.map(({ kind }) => kind)).toEqual([
       "hunters-mark",
     ]);
     expect(
@@ -142,7 +142,7 @@ describe("rules coverage audit: attack damage pipeline", () => {
       damage: 0,
       hpAfter: 3,
     });
-    expect(resolution.expiredEffects ?? []).toEqual([]);
+    expect(resolution.expiredEffects).toEqual([]);
     expect(run.state.activeEffects.some(({ kind }) => kind === "hex")).toBe(
       true,
     );
@@ -202,7 +202,7 @@ describe("rules coverage audit: Basic Attacks carry character-based effects", ()
         downedAfter: false,
       },
     ]);
-    expect(resolution.expiredEffects?.map(({ kind }) => kind)).toEqual([
+    expect(resolution.expiredEffects.map(({ kind }) => kind)).toEqual([
       "hunters-mark",
     ]);
     expect(
@@ -282,7 +282,7 @@ describe("rules coverage audit: Basic Attacks carry character-based effects", ()
         downedAfter: false,
       },
     ]);
-    expect(resolution.expiredEffects?.map(({ kind }) => kind)).toEqual([
+    expect(resolution.expiredEffects.map(({ kind }) => kind)).toEqual([
       "rage",
     ]);
     expect(run.state.activeEffects.some(({ kind }) => kind === "rage")).toBe(
@@ -445,7 +445,7 @@ describe("rules coverage audit: Powerful prohibition and expiry boundaries", () 
     const endedProhibitedTurn = finishTurn(prohibited, stamp(3));
     run.record(endedProhibitedTurn);
     expect(
-      endedProhibitedTurn.event.expiredEffects?.map(({ kind }) => kind),
+      endedProhibitedTurn.event.expiredEffects.map(({ kind }) => kind),
     ).toEqual(["prohibit-powerful"]);
 
     const freed = advanceTo(run, "drow-sorcerer");
@@ -478,7 +478,7 @@ describe("rules coverage audit: Powerful prohibition and expiry boundaries", () 
       MatchEvent,
       { readonly type: "TurnFinished" }
     >;
-    expect(firstResolution.expiredEffects ?? []).toEqual([]);
+    expect(firstResolution.expiredEffects).toEqual([]);
     expect(current.activeEffects).toHaveLength(2);
 
     // Advance through the Wizard's next turn; her buff expires at its end
@@ -499,7 +499,7 @@ describe("rules coverage audit: Powerful prohibition and expiry boundaries", () 
 
     const endsHisNextTurn = finishTurn(wizardEnded.state, stamp(4));
     expect(
-      endsHisNextTurn.event.expiredEffects?.map(
+      endsHisNextTurn.event.expiredEffects.map(
         ({ affectedCharacterId }) => affectedCharacterId,
       ),
     ).toEqual(["drow-wizard"]);
@@ -536,7 +536,7 @@ describe("rules coverage audit: Powerful prohibition and expiry boundaries", () 
 
     const ended = finishTurn(current, stamp(99));
     run.recordEvent(ended.event);
-    expect(ended.event.expiredEffects?.map(({ kind }) => kind)).toEqual([
+    expect(ended.event.expiredEffects.map(({ kind }) => kind)).toEqual([
       "hunters-mark",
     ]);
     expect(ended.state.activeEffects).toEqual([]);
@@ -605,7 +605,7 @@ describe("rules coverage audit: immediate effect expiry on a Basic Attack", () =
       hpAfter: 0,
       downedAfter: true,
     });
-    expect(killEvent.expiredEffects?.map(({ kind }) => kind)).toEqual([
+    expect(killEvent.expiredEffects.map(({ kind }) => kind)).toEqual([
       "hex",
       "movement-cap",
     ]);
@@ -655,7 +655,7 @@ describe("rules coverage audit: immediate effect expiry on a Basic Attack", () =
       hpBefore: 4,
       hpAfter: 2,
     });
-    expect(strikeEvent.expiredEffects?.map(({ kind }) => kind)).toEqual([
+    expect(strikeEvent.expiredEffects.map(({ kind }) => kind)).toEqual([
       "hex",
       "shapeshift",
     ]);

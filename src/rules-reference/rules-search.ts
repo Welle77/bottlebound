@@ -30,7 +30,8 @@ const EXCERPT_CONTEXT = 48;
 const MAX_COMPLETE_EXCERPT = 180;
 
 function normalizeWithSourceMap(source: string): NormalizedText {
-  const scanned = [...source].reduce<{
+  // Array.from iterates Unicode code points exactly like string spread.
+  const scanned = Array.from(source).reduce<{
     readonly characters: readonly string[];
     readonly sourceStarts: readonly number[];
     readonly sourceEnds: readonly number[];
@@ -41,7 +42,7 @@ function normalizeWithSourceMap(source: string): NormalizedText {
       const normalizedCharacter = sourceCharacter
         .normalize("NFKD")
         .toLowerCase();
-      const written = [...normalizedCharacter].reduce<typeof acc>(
+      const written = Array.from(normalizedCharacter).reduce<typeof acc>(
         (inner, character) => {
           if (/\p{M}/u.test(character)) return inner;
           if (/[\p{L}\p{N}]/u.test(character)) {
@@ -77,8 +78,8 @@ function normalizeWithSourceMap(source: string): NormalizedText {
   const contentIndices = scanned.characters.flatMap((character, position) =>
     character === " " ? [] : [position],
   );
-  const keepLength =
-    contentIndices.length === 0 ? 0 : contentIndices.at(-1)! + 1;
+  const lastContentIndex = contentIndices.at(-1);
+  const keepLength = lastContentIndex === undefined ? 0 : lastContentIndex + 1;
   const trimmedCharacters = scanned.characters.slice(0, keepLength);
   const trimmedStarts = scanned.sourceStarts.slice(0, keepLength);
   const trimmedEnds = scanned.sourceEnds.slice(0, keepLength);
@@ -139,7 +140,7 @@ function matchingRanges(
         { cursor: 0, ranges: [] as readonly SourceRange[] },
       ).ranges;
     })
-    .reduce(insertSorted, [] as readonly SourceRange[]);
+    .reduce<readonly SourceRange[]>(insertSorted, []);
   const merged = sorted.reduce<readonly SourceRange[]>(
     (mergedRanges, range) => {
       const previous = mergedRanges.at(-1);
@@ -239,12 +240,11 @@ export function searchRules(
         normalizeWithSourceMap(record.title).value === normalizedQuery;
       return [{ result: resultFor(record, ranges), exactTitle }];
     })
-    .reduce(
-      insertRanked,
-      [] as readonly {
+    .reduce<
+      readonly {
         readonly result: RulesSearchResult;
         readonly exactTitle: boolean;
-      }[],
-    )
+      }[]
+    >(insertRanked, [])
     .map(({ result }) => result);
 }

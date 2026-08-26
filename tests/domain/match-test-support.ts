@@ -36,6 +36,18 @@ export function queuedRandom(...values: readonly number[]): RandomSource {
   };
 }
 
+/** Narrowed initiative lookup for tests; the roster always fills the order. */
+export function initiativeCharacterId(
+  state: ActiveMatchState,
+  index: number,
+): string {
+  const entry = state.initiative.at(index);
+  if (entry === undefined) {
+    throw new Error("The test Match has no such initiative entry.");
+  }
+  return entry.characterId;
+}
+
 export function simultaneousEliminationRun(matchId: string): {
   readonly steps: ReadonlyArray<{
     readonly event: MatchEvent;
@@ -89,10 +101,14 @@ export function simultaneousEliminationRun(matchId: string): {
     readonly current: ActiveMatchState;
   }>(
     (progress, affectedCharacterIds, index) => {
+      const sourceCharacterId = sources.at(index);
+      if (sourceCharacterId === undefined) {
+        throw new Error("Missing test attack source.");
+      }
       const attacked = resolveBasicAttack(
         progress.current,
         {
-          sourceCharacterId: sources[index]!,
+          sourceCharacterId,
           affectedCharacterIds,
           physicalConfirmations: confirmations,
           majorActionOverride: null,

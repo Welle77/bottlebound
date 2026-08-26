@@ -5,7 +5,7 @@ export function statusLabel(value: string): string {
   return value.replaceAll("-", " ");
 }
 export function modifierLabel(modifier: number): string {
-  return modifier >= 0 ? `+${modifier}` : String(modifier);
+  return modifier >= 0 ? `+${String(modifier)}` : String(modifier);
 }
 
 export function escapeHtml(value: string): string {

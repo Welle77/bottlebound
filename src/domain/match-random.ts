@@ -93,8 +93,14 @@ export function orderByCoinFlips<T>(
           random,
           upperExclusive,
         );
-        const displaced = draft.ordered[position]!;
-        draft.ordered[position] = draft.ordered[selectedIndex]!;
+        const displaced = draft.ordered[position];
+        const promoted = draft.ordered[selectedIndex];
+        if (displaced === undefined || promoted === undefined) {
+          throw new Error(
+            "The initiative shuffle references an absent roster entry.",
+          );
+        }
+        draft.ordered[position] = promoted;
         draft.ordered[selectedIndex] = displaced;
         draft.steps.push(
           castDraft({ position, upperExclusive, attempts, selectedIndex }),

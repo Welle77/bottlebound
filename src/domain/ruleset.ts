@@ -414,7 +414,7 @@ const abilities = Object.freeze(
 
 if (abilities.length !== 24) {
   throw new Error(
-    `Expected 24 structured abilities; found ${abilities.length}.`,
+    `Expected 24 structured abilities; found ${String(abilities.length)}.`,
   );
 }
 

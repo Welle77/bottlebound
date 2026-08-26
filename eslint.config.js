@@ -58,8 +58,12 @@ const immutableDataOptions = {
 
 export default tseslint.config(
   { ignores: ["dist", "playwright-report", "test-results"] },
+  // Base core rules for every parsed file (.svelte scripts, public/sw.js).
+  // @eslint/js v10 no longer exports its own `strict` preset, so the strict
+  // conversion rides the typescript-eslint presets below (see feature spec:
+  // "typescript-eslint strict").
   eslint.configs.recommended,
-  ...tseslint.configs.recommended,
+  ...tseslint.configs.strict,
   // Svelte-aware linting for .svelte files. Spread after the TypeScript
   // presets so the svelte-eslint-parser takes precedence for .svelte over
   // the typescript-eslint parser set above.
@@ -78,7 +82,7 @@ export default tseslint.config(
   },
   {
     files: typeCheckedFiles,
-    extends: [...tseslint.configs.recommendedTypeChecked],
+    extends: [...tseslint.configs.strictTypeChecked],
     languageOptions: {
       parserOptions: {
         projectService: true,

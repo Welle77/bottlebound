@@ -6,7 +6,7 @@ const CHECK_LABELS = [
   "Line of Sight is legal",
   "Every selected bottle was physically hit",
   "Terrain contact was resolved",
-];
+] as const;
 
 function toggle(page: import("@playwright/test").Page) {
   return page.getByRole("checkbox", { name: TOGGLE_LABEL });
@@ -84,7 +84,7 @@ test("with the setting OFF a Basic Attack commits with zero manual check taps", 
   await page.getByRole("button", { name: "Basic Attack" }).click();
   await page.getByLabel(/Ranger · Duergar/).check();
 
-  await expect(page.getByLabel(CHECK_LABELS[2]!)).toBeHidden();
+  await expect(page.getByLabel(CHECK_LABELS[2])).toBeHidden();
   await page.getByRole("button", { name: "Review Action Resolution" }).click();
   await expect(
     page.getByRole("heading", { name: "Review Basic Attack" }),

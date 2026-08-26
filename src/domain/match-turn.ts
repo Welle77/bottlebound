@@ -186,7 +186,7 @@ export function finishTurn(
       round,
       activeSlot,
       skippedSlots,
-      ...(pendingExpired.length > 0 ? { expiredEffects: pendingExpired } : {}),
+      expiredEffects: pendingExpired,
     },
   };
 }
@@ -241,8 +241,13 @@ export function ruleSimultaneousElimination(
   if ((state as MatchState).phase === "ended") {
     throw new Error("The Ended Match is read-only.");
   }
+  // Widened view keeps this guard live for callers bypassing the typed
+  // parameter with cast values.
+  const ruledOutcome: string = outcome;
   if (
-    (outcome !== "Drow" && outcome !== "Duergar" && outcome !== "draw") ||
+    (ruledOutcome !== "Drow" &&
+      ruledOutcome !== "Duergar" &&
+      ruledOutcome !== "draw") ||
     state.eliminatedTeams.length !== 2 ||
     !state.eliminatedTeams.includes("Drow") ||
     !state.eliminatedTeams.includes("Duergar") ||

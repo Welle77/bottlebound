@@ -68,56 +68,6 @@ async function rewritePersistedRulesVersion(
   }, rulesVersion);
 }
 
-async function rewritePersistedMatchAsSchema2(
-  page: import("@playwright/test").Page,
-) {
-  await page.evaluate(async () => {
-    const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open("bottlebound-match", 2);
-      request.addEventListener("success", () => resolve(request.result));
-      request.addEventListener("error", () => reject(request.error));
-    });
-    const transaction = database.transaction(
-      ["metadata", "snapshots"],
-      "readwrite",
-    );
-    const metadata = transaction.objectStore("metadata");
-    const savedMetadata = await new Promise<Record<string, unknown>>(
-      (resolve, reject) => {
-        const request = metadata.get("current-match");
-        request.addEventListener("success", () => resolve(request.result));
-        request.addEventListener("error", () => reject(request.error));
-      },
-    );
-    metadata.put({ ...savedMetadata, schemaVersion: 2 }, "current-match");
-    const snapshots = transaction.objectStore("snapshots");
-    const savedSnapshots = await new Promise<Record<string, unknown>[]>(
-      (resolve, reject) => {
-        const request = snapshots.getAll();
-        request.addEventListener("success", () => resolve(request.result));
-        request.addEventListener("error", () => reject(request.error));
-      },
-    );
-    const snapshot = { ...savedSnapshots[0], schemaVersion: 2 };
-    for (const key of [
-      "spentReactionIds",
-      "majorActionUsed",
-      "eliminatedTeams",
-      "acknowledgedEliminations",
-      "outcome",
-    ]) {
-      delete snapshot[key];
-    }
-    snapshots.put(snapshot);
-    await new Promise<void>((resolve, reject) => {
-      transaction.addEventListener("complete", () => resolve());
-      transaction.addEventListener("error", () => reject(transaction.error));
-      transaction.addEventListener("abort", () => reject(transaction.error));
-    });
-    database.close();
-  });
-}
-
 test("the complete bundled Ruleset opens globally in the responsive modal", async ({
   page,
 }, testInfo) => {
@@ -331,37 +281,6 @@ test("gates Basic Attack by exact combat version while turn correction remains s
   await page.getByRole("button", { name: "Undo" }).click();
   await page.getByRole("button", { name: "Confirm Undo" }).click();
   await expect(page.getByText("Round 1 · Slot 2 of 12")).toBeVisible();
-});
-
-test("restores a schema-2 Match only after one atomic combat migration", async ({
-  page,
-}) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Create Match" }).click();
-  await page.getByRole("button", { name: "Generate initiative" }).click();
-  await rewritePersistedMatchAsSchema2(page);
-
-  await page.reload();
-
-  await expect(page.getByText("Setup · Sequence 3")).toBeVisible();
-  const [, snapshots, events] = await persistedMatchData(page);
-  expect(snapshots).toEqual([
-    expect.objectContaining({
-      schemaVersion: 3,
-      sequence: 3,
-      spentReactionIds: [],
-      majorActionUsed: false,
-      eliminatedTeams: [],
-      acknowledgedEliminations: [],
-      outcome: null,
-    }),
-  ]);
-  expect(events).toHaveLength(3);
-  expect(events.at(-1)).toMatchObject({
-    type: "MatchMigrated",
-    fromSchemaVersion: 2,
-    toSchemaVersion: 3,
-  });
 });
 
 test("Rules retains live context, focus, search, and reading position", async ({

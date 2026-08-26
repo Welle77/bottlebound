@@ -10,6 +10,7 @@ import type {
   InitiativeEntry,
   InitiativeEvent,
   MatchStartedEvent,
+  MatchState,
   RandomSource,
   SetupCreatedEvent,
   SetupMatchState,
@@ -36,6 +37,9 @@ export function createSetupForRulesVersion(
       currentMaxHp: baseHp,
     })),
     initiative: null,
+    // The complete Display Name map lives in every Match State; it stays
+    // empty until the referee assigns names during Setup.
+    displayNames: {},
     ...initialCombatState,
   };
   return {
@@ -86,7 +90,10 @@ export function assignDisplayNames(
   requested: Readonly<Record<string, string>>,
   occurredAt: string,
 ): CommandResult<SetupMatchState, DisplayNamesAssignedEvent> {
-  if (state.phase !== "setup") {
+  // Runtime guard against callers bypassing the typed parameter (tests pass
+  // foreign phases through casts); compared against the full phase union so
+  // the check stays statically meaningful.
+  if ((state as MatchState).phase !== "setup") {
     throw new Error("Display Names can only be assigned during Setup.");
   }
   const displayNames = normalizeDisplayNames(requested);

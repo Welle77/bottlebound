@@ -66,9 +66,13 @@ describe("rules search", () => {
       searchRules(records, "Backstab").map(({ anchor }) => anchor),
     ).toEqual(["ability-rogue-backstab", "section-15-character-ability-cards"]);
 
+    const tiedSource = records.at(2);
+    if (tiedSource === undefined) {
+      throw new Error("Missing fixture record for the tie-break probe.");
+    }
     const tied = [
-      { ...records[2]!, sourceOrder: 300, title: "Late", anchor: "late" },
-      { ...records[2]!, sourceOrder: 200, title: "Early", anchor: "early" },
+      { ...tiedSource, sourceOrder: 300, title: "Late", anchor: "late" },
+      { ...tiedSource, sourceOrder: 200, title: "Early", anchor: "early" },
     ];
     expect(
       searchRules(tied, "target torso").map(({ anchor }) => anchor),

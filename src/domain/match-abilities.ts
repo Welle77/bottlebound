@@ -187,20 +187,18 @@ export function resolveAbility(
                 type: operation.type,
                 characterId: reaction.ownerCharacterId,
                 maxPaces: operation.maxPaces,
-                instruction: `Move ${reaction.name}'s owner up to ${operation.maxPaces} paces immediately.`,
+                instruction: `Move ${reaction.name}'s owner up to ${String(operation.maxPaces)} paces immediately.`,
               },
             ];
           }
-          if (operation.type === "redirect-physical-attack") {
-            return [
-              {
-                type: operation.type,
-                fromCharacterId: reaction.ownerCharacterId,
-                towardCharacterId: ability.ownerCharacterId,
-              },
-            ];
-          }
-          return [];
+          // Only "redirect-physical-attack" operations remain in this union.
+          return [
+            {
+              type: operation.type,
+              fromCharacterId: reaction.ownerCharacterId,
+              towardCharacterId: ability.ownerCharacterId,
+            },
+          ];
         },
       );
       return {
