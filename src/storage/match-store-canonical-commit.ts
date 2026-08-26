@@ -3,7 +3,9 @@ import {
   canonicalMatchRecordsEqual,
   restoreStateFromEvents,
   type MatchEvent,
+  type MatchStartedEvent,
   type MatchState,
+  type TurnFinishedEvent,
 } from "../domain/match";
 import { assertCanonicalEvent } from "./match-store-canonical-event";
 import {
@@ -11,6 +13,18 @@ import {
   isRecord,
   sameInitiative,
 } from "./match-store-canonical-state";
+
+/**
+ * Runtime check against a widened event-type view so persisted values that
+ * bypass the typed event contract still fail, while keeping the compile-time
+ * narrowing for the live-event comparisons below.
+ */
+function isLiveCommittedEvent(
+  event: MatchEvent,
+): event is MatchStartedEvent | TurnFinishedEvent {
+  const eventType: string = event.type;
+  return eventType === "MatchStarted" || eventType === "TurnFinished";
+}
 
 export function assertCommit(event: MatchEvent, state: MatchState): void {
   assertCanonicalState(state);
@@ -51,16 +65,13 @@ export function assertCommit(event: MatchEvent, state: MatchState): void {
   if (event.type === "DisplayNamesAssigned") {
     if (
       state.phase !== "setup" ||
-      !canonicalMatchRecordsEqual(state.displayNames ?? {}, event.displayNames)
+      !canonicalMatchRecordsEqual(state.displayNames, event.displayNames)
     ) {
       throw new Error("The Display Name event and snapshot do not match.");
     }
     return;
   }
   if (event.type === "UndoApplied") {
-    return;
-  }
-  if (event.type === "MatchMigrated") {
     return;
   }
   if (event.type === "ActionResolved") {
@@ -133,18 +144,10 @@ export function assertCommit(event: MatchEvent, state: MatchState): void {
       throw new Error("The End Game Event and snapshot do not match.");
     }
     if (
-      (event as unknown as Record<string, unknown>).decisionBasis !==
-        (state as unknown as Record<string, unknown>).decisionBasis ||
-      !canonicalMatchRecordsEqual(
-        (event as unknown as Record<string, unknown>).finalCounts,
-        (state as unknown as Record<string, unknown>).finalCounts,
-      ) ||
-      !canonicalMatchRecordsEqual(
-        (event as unknown as Record<string, unknown>).finalHpTotals,
-        (state as unknown as Record<string, unknown>).finalHpTotals,
-      ) ||
-      (event as unknown as Record<string, unknown>).coinFlipResult !==
-        (state as unknown as Record<string, unknown>).coinFlipResult
+      event.decisionBasis !== state.decisionBasis ||
+      !canonicalMatchRecordsEqual(event.finalCounts, state.finalCounts) ||
+      !canonicalMatchRecordsEqual(event.finalHpTotals, state.finalHpTotals) ||
+      event.coinFlipResult !== state.coinFlipResult
     ) {
       throw new Error("The End Game Event and snapshot do not match.");
     }
@@ -156,7 +159,7 @@ export function assertCommit(event: MatchEvent, state: MatchState): void {
     }
     return;
   }
-  if (event.type !== "MatchStarted" && event.type !== "TurnFinished") {
+  if (!isLiveCommittedEvent(event)) {
     throw new Error("The canonical Match Event is structurally invalid.");
   }
   if (
@@ -193,8 +196,7 @@ export function assertRestoredMatch(
       (index === 0 && event.type !== "SetupCreated") ||
       (index === 1 &&
         event.type !== "InitiativeGenerated" &&
-        event.type !== "DisplayNamesAssigned" &&
-        event.type !== "MatchMigrated")
+        event.type !== "DisplayNamesAssigned")
     ) {
       throw new Error("Saved canonical data has a partial sequence.");
     }

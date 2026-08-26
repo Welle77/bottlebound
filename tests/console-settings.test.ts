@@ -79,7 +79,9 @@ describe("saveRequirePhysicalConfirmations", () => {
   });
 
   it("does nothing without storage", () => {
-    expect(() => saveRequirePhysicalConfirmations(false, null)).not.toThrow();
+    expect(() => {
+      saveRequirePhysicalConfirmations(false, null);
+    }).not.toThrow();
   });
 
   it("swallows a throwing write", () => {
@@ -89,9 +91,9 @@ describe("saveRequirePhysicalConfirmations", () => {
         throw new DOMException("quota exceeded", "QuotaExceededError");
       },
     };
-    expect(() =>
-      saveRequirePhysicalConfirmations(false, throwing),
-    ).not.toThrow();
+    expect(() => {
+      saveRequirePhysicalConfirmations(false, throwing);
+    }).not.toThrow();
   });
 });
 
@@ -114,7 +116,9 @@ describe("default setting contract", () => {
     );
     try {
       expect(loadRequirePhysicalConfirmations()).toBe(true);
-      expect(() => saveRequirePhysicalConfirmations(false)).not.toThrow();
+      expect(() => {
+        saveRequirePhysicalConfirmations(false);
+      }).not.toThrow();
     } finally {
       vi.unstubAllGlobals();
     }

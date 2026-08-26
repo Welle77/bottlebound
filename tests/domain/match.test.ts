@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   createSetup,
   generateInitiative,
-  migrateLegacyMatch,
   rerollInitiative,
   restoreStateFromEvents,
+  startMatch,
 } from "../../src/domain/match";
 import { RULESET, RULES_VERSION } from "../../src/domain/ruleset";
 import { queuedRandom } from "./match-test-support";
@@ -289,46 +289,27 @@ describe("Setup Match commands", () => {
   });
 });
 
-describe("combat-ready Match migration", () => {
-  it("migrates a Setup Match with one atomic event and initialized combat state", () => {
-    const setup = createSetup("match-migrate", "2026-08-22T14:00:00.000Z");
-    const removedLegacyKeys = [
-      "spentReactionIds",
-      "majorActionUsed",
-      "eliminatedTeams",
-      "acknowledgedEliminations",
-      "outcome",
-    ];
-    const legacy = Object.fromEntries(
-      Object.entries({
-        ...setup.state,
-        schemaVersion: 2,
-      }).filter(([key]) => !removedLegacyKeys.includes(key)),
+describe("single-schema Match replay", () => {
+  it("replays the complete recorded event history into the identical current-schema state", () => {
+    const setup = createSetup("match-replay", "2026-08-22T14:00:00.000Z");
+    const generated = generateInitiative(
+      setup.state,
+      queuedRandom(19, 19, 18, 18, 17, 14, 12, 11, 12, 11, 11, 10),
+      "2026-08-22T14:01:00.000Z",
     );
+    const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
 
-    const migrated = migrateLegacyMatch(legacy, "2026-08-22T14:00:00.000Z");
+    const replayed = restoreStateFromEvents([
+      setup.event,
+      generated.event,
+      started.event,
+    ]);
 
-    expect(migrated.state).toEqual({
-      ...legacy,
-      schemaVersion: 3,
-      sequence: 2,
-      spentReactionIds: [],
-      majorActionUsed: false,
-      eliminatedTeams: [],
-      acknowledgedEliminations: [],
-      outcome: null,
-    });
-    expect(migrated.event).toEqual({
-      type: "MatchMigrated",
-      matchId: "match-migrate",
-      sequence: 2,
-      rulesVersion: RULES_VERSION,
-      occurredAt: "2026-08-22T14:00:00.000Z",
-      fromSchemaVersion: 2,
-      toSchemaVersion: 3,
-    });
-    expect(restoreStateFromEvents([setup.event, migrated.event])).toEqual(
-      migrated.state,
-    );
+    expect(replayed).toEqual(started.state);
+    expect(setup.event.type).toBe("SetupCreated");
+    expect([generated.event, started.event].map(({ type }) => type)).toEqual([
+      "InitiativeGenerated",
+      "MatchStarted",
+    ]);
   });
 });

@@ -78,6 +78,8 @@
     return { draft, match, attack, sourceCharacter };
   });
 
+  type BasicAttackDraftBase = NonNullable<typeof base>;
+
   // Display-name-aware plain label for review detail sentences, matching the
   // legacy primaryNameOf() fallback order.
   function primaryNameOf(match: ActiveView, characterId: string): string {
@@ -176,10 +178,11 @@
       affectedCharacterIds.length > 0 &&
       (!requireManualChecks ||
         Object.values(b.draft.physicalConfirmations).every(Boolean));
+    const closedLegSource = b.draft.attackLegs.at(0);
     const closedLeg =
       activeLegIndex === 1
         ? {
-            names: b.draft.attackLegs[0]!.flatMap((id) => {
+            names: (closedLegSource ?? []).flatMap((id) => {
               const character = rulesCharacterById(id);
               return character ? [character] : [];
             }),
@@ -226,19 +229,19 @@
   }
 </script>
 
-{#snippet attackProfile()}
+{#snippet attackProfile(b: BasicAttackDraftBase)}
   <div class="attack-profile">
     <!-- Single-line runs: specs read raw textContent() from the first
          paragraph and regex-match across these phrases. -->
-    <p><strong>Source:</strong> <CharacterName character={base!.sourceCharacter} displayNames={base!.match.displayNames} /></p>
-    <p><strong>Type:</strong> {base!.attack.attackType === "melee" ? "Melee" : "Ranged"}</p>
-    <p><strong>Range:</strong> {base!.attack.rangePaces} paces</p>
-    <p><strong>Damage:</strong> {base!.attack.damage}</p>
+    <p><strong>Source:</strong> <CharacterName character={b.sourceCharacter} displayNames={b.match.displayNames} /></p>
+    <p><strong>Type:</strong> {b.attack.attackType === "melee" ? "Melee" : "Ranged"}</p>
+    <p><strong>Range:</strong> {b.attack.rangePaces} paces</p>
+    <p><strong>Damage:</strong> {b.attack.damage}</p>
     <button
       id="rules-basic-attack"
       class="rules-context-link"
       type="button"
-      data-open-rules-anchor={base!.attack.sourceAnchor}
+      data-open-rules-anchor={b.attack.sourceAnchor}
       onclick={handleOpenRules}
     >
       Basic Attack rules
@@ -254,7 +257,7 @@
     {#if review}
       <p class="eyebrow">Action Draft · Review</p>
       <h2 id="action-draft-heading">Review Basic Attack</h2>
-      {@render attackProfile()}
+      {@render attackProfile(base)}
       <p>All four physical facts are referee-confirmed.</p>
       <section aria-labelledby="attack-legs-heading">
         <h3 id="attack-legs-heading">Ordered Attack Legs</h3>
@@ -378,7 +381,7 @@
       <p class="eyebrow">Action Draft · Physical result</p>
       <h2 id="action-draft-heading">Record Basic Attack</h2>
       <p>This draft stays local until final confirmation.</p>
-      {@render attackProfile()}
+      {@render attackProfile(base)}
       {#if contacts.closedLeg}
         <section class="closed-attack-leg" data-closed-attack-leg>
           <h3>Attack Leg 1 closed</h3>

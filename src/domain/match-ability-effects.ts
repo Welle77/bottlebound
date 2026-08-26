@@ -46,7 +46,7 @@ function buildAbilityEffects(
   // scheduled initiative position; rules §15 card durations)
   if (isAbilityNamed(ability, "Hunter’s Mark") || name === "Hex") {
     return affectedIds.map((targetId) => ({
-      effectId: `${ability.id}-${targetId}-${sequence}`,
+      effectId: `${ability.id}-${targetId}-${String(sequence)}`,
       abilityId: ability.id,
       kind: isAbilityNamed(ability, "Hunter’s Mark") ? "hunters-mark" : "hex",
       anchorCharacterId: anchorId,
@@ -64,7 +64,7 @@ function buildAbilityEffects(
   if (name === "Rage") {
     return [
       {
-        effectId: `${ability.id}-${anchorId}-${sequence}`,
+        effectId: `${ability.id}-${anchorId}-${String(sequence)}`,
         abilityId: ability.id,
         kind: "rage",
         anchorCharacterId: anchorId,
@@ -83,7 +83,7 @@ function buildAbilityEffects(
   if (name === "Vanish") {
     return [
       {
-        effectId: `${ability.id}-${anchorId}-${sequence}`,
+        effectId: `${ability.id}-${anchorId}-${String(sequence)}`,
         abilityId: ability.id,
         kind: "vanish",
         anchorCharacterId: anchorId,
@@ -102,7 +102,7 @@ function buildAbilityEffects(
   if (name === "Shapeshift") {
     return [
       {
-        effectId: `${ability.id}-${anchorId}-${sequence}`,
+        effectId: `${ability.id}-${anchorId}-${String(sequence)}`,
         abilityId: ability.id,
         kind: "shapeshift",
         anchorCharacterId: anchorId,
@@ -120,7 +120,7 @@ function buildAbilityEffects(
   // Physical prohibit effects
   if (name === "Backstab" || name === "Stunning Strike") {
     return affectedIds.map((targetId) => ({
-      effectId: `${ability.id}-${targetId}-${sequence}`,
+      effectId: `${ability.id}-${targetId}-${String(sequence)}`,
       abilityId: ability.id,
       kind: "prohibit-powerful",
       anchorCharacterId: anchorId,
@@ -142,7 +142,7 @@ function buildAbilityEffects(
     name === "Blessing of Battle"
   ) {
     return affectedIds.map((targetId) => ({
-      effectId: `${ability.id}-${targetId}-${sequence}`,
+      effectId: `${ability.id}-${targetId}-${String(sequence)}`,
       abilityId: ability.id,
       kind: "movement-cap",
       anchorCharacterId: anchorId,
@@ -183,10 +183,10 @@ function resolveAffectedCharacterIds(context: {
   const targetIds = input.targetCharacterIds ?? [];
 
   if (ability.interaction === "targeted-attack") {
-    if (targetIds.length !== 1) {
+    const [targetId] = targetIds;
+    if (targetIds.length !== 1 || targetId === undefined) {
       throw new Error("A targeted Ability Attack needs exactly one target.");
     }
-    const targetId = targetIds[0]!;
     const targetChar = state.characters.find(
       (character) => character.characterId === targetId,
     );
@@ -215,7 +215,7 @@ function resolveAffectedCharacterIds(context: {
     const confirmations = input.physicalConfirmations;
     if (
       !confirmations ||
-      Object.values(confirmations).some((value) => value !== true)
+      Object.values(confirmations).some((value) => !value)
     ) {
       throw new Error("Every manual physical confirmation is required.");
     }
@@ -258,11 +258,8 @@ function resolveAffectedCharacterIds(context: {
     return flat;
   } else if (ability.interaction === "self") {
     return [ability.ownerCharacterId];
-  } else if (
-    ability.interaction === "ally" ||
-    ability.interaction === "enemy" ||
-    ability.interaction === "utility"
-  ) {
+  } else {
+    // Only "utility" interactions remain in the union.
     // For utility: use provided targetCharacterIds or default to self for self-targeting heals
     if (targetIds.length === 0) {
       // Some utilities are self (Second Wind, Rage) – default to owner
@@ -379,7 +376,7 @@ function hexTriggeredMovementCap(
   sequence: number,
 ): ActiveEffect {
   return {
-    effectId: `${hex.abilityId}-hex-movement-${hex.affectedCharacterId}-${sequence}`,
+    effectId: `${hex.abilityId}-hex-movement-${hex.affectedCharacterId}-${String(sequence)}`,
     abilityId: hex.abilityId,
     kind: "movement-cap",
     anchorCharacterId: hex.anchorCharacterId,

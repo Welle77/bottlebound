@@ -137,9 +137,7 @@ export function endMatch(
       decisionBasis: preview.decisionBasis,
       finalCounts: preview.finalCounts,
       finalHpTotals: preview.finalHpTotals,
-      ...(preview.coinFlipResult
-        ? { coinFlipResult: preview.coinFlipResult }
-        : {}),
+      coinFlipResult: preview.coinFlipResult ?? null,
     },
     event: {
       type: "MatchEnded",
@@ -152,9 +150,7 @@ export function endMatch(
       decisionBasis: preview.decisionBasis,
       finalCounts: preview.finalCounts,
       finalHpTotals: preview.finalHpTotals,
-      ...(preview.coinFlipResult
-        ? { coinFlipResult: preview.coinFlipResult }
-        : {}),
+      coinFlipResult: preview.coinFlipResult ?? null,
     },
   };
 }
@@ -175,16 +171,15 @@ export function reopenMatch(
     round: state.round,
     activeSlot: state.activeSlot,
     spentReactionIds: state.spentReactionIds,
-    spentAbilityIds:
-      (state as unknown as ActiveMatchState).spentAbilityIds ?? [],
+    spentAbilityIds: state.spentAbilityIds,
     majorActionUsed: state.majorActionUsed,
     eliminatedTeams: state.eliminatedTeams,
     acknowledgedEliminations: state.acknowledgedEliminations,
     outcome: null,
-    activeEffects: (state as unknown as ActiveMatchState).activeEffects ?? [],
+    activeEffects: state.activeEffects,
     // Display Names live inside the Match record, so a reopened Match keeps
-    // the referee's Setup names (rules glossary; T01 persistence contract).
-    ...(state.displayNames ? { displayNames: state.displayNames } : {}),
+    // the referee's Setup names (rules glossary).
+    displayNames: state.displayNames,
   };
   return {
     state: active,

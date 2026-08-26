@@ -21,7 +21,8 @@
     const draft = state.current.actionDraft;
     if (!draft) return null;
     const activeLegIndex = draft.attackLegs.length - 1;
-    const activeLeg = draft.attackLegs[activeLegIndex]!;
+    const activeLeg = draft.attackLegs.at(activeLegIndex);
+    if (!activeLeg) return null;
     const closedCharacterIds = new Set(
       draft.attackLegs.slice(0, activeLegIndex).flatMap((leg) => leg),
     );
@@ -39,7 +40,8 @@
       if (!currentDraft) return;
       const checked = event.currentTarget.checked;
       const activeLegIndex = currentDraft.attackLegs.length - 1;
-      const activeLeg = currentDraft.attackLegs[activeLegIndex]!;
+      const activeLeg = currentDraft.attackLegs.at(activeLegIndex);
+      if (!activeLeg) return;
       const attackLegs = currentDraft.attackLegs.map((leg, index) =>
         index === activeLegIndex
           ? checked

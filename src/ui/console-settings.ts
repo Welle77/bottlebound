@@ -16,7 +16,7 @@ export type SettingsStorage = Pick<Storage, "getItem" | "setItem">;
 
 function resolveSettingsStorage(): SettingsStorage | null {
   try {
-    return globalThis.localStorage ?? null;
+    return globalThis.localStorage;
   } catch {
     return null;
   }

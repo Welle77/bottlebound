@@ -8,7 +8,6 @@ import {
   type ActiveMatchState,
   type CommandResult,
   type MatchEvent,
-  type MatchState,
 } from "../../src/domain/match";
 import { queuedRandom } from "./match-test-support";
 import { RULESET } from "../../src/domain/ruleset";
@@ -36,7 +35,7 @@ export class AuditRun {
     this.state = initialState;
   }
 
-  record(result: CommandResult<MatchState, MatchEvent>): ActiveMatchState {
+  record(result: CommandResult): ActiveMatchState {
     // Audit runs only replay commands whose results stay Active; the
     // constructor input and every recorded result satisfy that contract.
     this.state = result.state as ActiveMatchState;
@@ -90,7 +89,7 @@ export function stamp(step: number): string {
 
 export function play(
   run: AuditRun,
-  result: CommandResult<ActiveMatchState, MatchEvent>,
+  result: CommandResult<ActiveMatchState>,
 ): ActiveMatchState {
   return run.record(result);
 }

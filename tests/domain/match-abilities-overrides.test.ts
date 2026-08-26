@@ -37,7 +37,9 @@ function asResolution(result: {
   readonly event: unknown;
 }): ActionResolvedEvent {
   const event = result.event as ActionResolvedEvent;
-  if (event.type !== "ActionResolved" || event.actionType !== "Ability") {
+  // Widened tag view keeps the guard live for malformed fixture events.
+  const eventType: string = event.type;
+  if (eventType !== "ActionResolved" || event.actionType !== "Ability") {
     throw new Error("The command must record one Ability Action Resolution.");
   }
   return event;

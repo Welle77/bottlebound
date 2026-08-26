@@ -217,10 +217,14 @@ test("Continue skips every eliminated-team slot and preserves round wrap", async
   await page.getByRole("button", { name: "Continue" }).click();
 
   for (const characterId of TEAM_CHARACTERS[eliminatedTeam]) {
+    const familyName = characterId.split("-").at(-1);
+    if (familyName === undefined) {
+      throw new Error("The character id has no name segments.");
+    }
     await expect(
       page.locator(`[data-active-order-row]`, {
         has: page.locator(`th`, {
-          hasText: new RegExp(characterId.split("-").at(-1)!, "i"),
+          hasText: new RegExp(familyName, "i"),
         }),
       }),
     ).toContainText("Skipped · Downed");

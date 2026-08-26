@@ -10,7 +10,7 @@ import {
   startMatch,
   type ActiveMatchState,
 } from "../../src/domain/match";
-import { queuedRandom } from "../domain/match-test-support";
+import { initiativeCharacterId, queuedRandom } from "../domain/match-test-support";
 import type { MatchEvent } from "../../src/domain/match";
 import { assertCanonicalEvent } from "../../src/storage/match-store-canonical-event";
 
@@ -86,13 +86,19 @@ describe("canonical Action Resolution recorded Ability Override", () => {
       actionType: "Ability",
       abilityOverride: OVERRIDE,
     });
-    expect(() => assertCanonicalEvent(event)).not.toThrow();
+    expect(() => {
+      assertCanonicalEvent(event);
+    }).not.toThrow();
   });
 
-  it("admits persisted events from before the field existed", () => {
+  it("rejects persisted events that omit the recorded Override field", () => {
     const legacy: MatchEvent = { ...overriddenResolution() };
     delete (legacy as unknown as Record<string, unknown>).abilityOverride;
-    expect(() => assertCanonicalEvent(legacy)).not.toThrow();
+    expect(() => {
+      assertCanonicalEvent(legacy);
+    }).toThrow(
+      "The canonical Action Resolution Event is invalid.",
+    );
   });
 
   it("rejects a blank recorded Ability Override sentence", () => {
@@ -100,7 +106,9 @@ describe("canonical Action Resolution recorded Ability Override", () => {
       ...overriddenResolution(),
       abilityOverride: "   ",
     } as unknown as MatchEvent;
-    expect(() => assertCanonicalEvent(blank)).toThrow(
+    expect(() => {
+      assertCanonicalEvent(blank);
+    }).toThrow(
       "The canonical Action Resolution Event is invalid.",
     );
   });
@@ -125,7 +133,9 @@ describe("canonical Action Resolution effect damage bounds", () => {
       "2026-08-24T09:03:00.000Z",
     );
     expect(attacked.event.effects[0]).toMatchObject({ damage: 2 });
-    expect(() => assertCanonicalEvent(attacked.event)).not.toThrow();
+    expect(() => {
+      assertCanonicalEvent(attacked.event);
+    }).not.toThrow();
   });
 
   it("rejects per-character damage beyond every written card value", () => {
@@ -139,7 +149,7 @@ describe("canonical Action Resolution effect damage bounds", () => {
     const attack = resolveBasicAttack(
       started.state,
       {
-        sourceCharacterId: started.state.initiative[0]!.characterId,
+        sourceCharacterId: initiativeCharacterId(started.state, 0),
         affectedCharacterIds: ["drow-wizard"],
         physicalConfirmations: {
           range: true,
@@ -159,7 +169,9 @@ describe("canonical Action Resolution effect damage bounds", () => {
         hpAfter: Math.max(0, effect.hpBefore - 4),
       })),
     } as unknown as MatchEvent;
-    expect(() => assertCanonicalEvent(overbound)).toThrow(
+    expect(() => {
+      assertCanonicalEvent(overbound);
+    }).toThrow(
       "The canonical Action Resolution effect is invalid.",
     );
   });

@@ -1,5 +1,4 @@
 export const MATCH_SCHEMA_VERSION = 3;
-export const LEGACY_MATCH_SCHEMA_VERSION = 2;
 
 export interface RandomSource {
   nextUint32(): number;
@@ -90,7 +89,8 @@ export interface SetupMatchState extends CombatMatchState {
   readonly sequence: number;
   readonly characters: readonly MatchCharacter[];
   readonly initiative: readonly InitiativeEntry[] | null;
-  readonly displayNames?: DisplayNames;
+  /** Complete Display Name map; empty when the referee assigned none. */
+  readonly displayNames: DisplayNames;
 }
 
 export interface ActiveMatchState extends CombatMatchState {
@@ -103,7 +103,8 @@ export interface ActiveMatchState extends CombatMatchState {
   readonly initiative: readonly InitiativeEntry[];
   readonly round: number;
   readonly activeSlot: number;
-  readonly displayNames?: DisplayNames;
+  /** Complete Display Name map; empty when the referee assigned none. */
+  readonly displayNames: DisplayNames;
 }
 
 export interface EndedMatchState extends CombatMatchState {
@@ -119,34 +120,16 @@ export interface EndedMatchState extends CombatMatchState {
   readonly outcome: Exclude<MatchOutcome, null>;
   readonly endedAt: string;
   readonly endedSequence: number;
-  readonly displayNames?: DisplayNames;
-  readonly decisionBasis?: DecisionBasis;
-  readonly finalCounts?: FinalTeamCounts;
-  readonly finalHpTotals?: FinalTeamCounts;
-  readonly coinFlipResult?: "Drow" | "Duergar";
+  /** Complete Display Name map; empty when the referee assigned none. */
+  readonly displayNames: DisplayNames;
+  readonly decisionBasis: DecisionBasis;
+  readonly finalCounts: FinalTeamCounts;
+  readonly finalHpTotals: FinalTeamCounts;
+  /** The recorded Coin Flip; null whenever the Decision Basis is not coinFlip. */
+  readonly coinFlipResult: "Drow" | "Duergar" | null;
 }
 
 export type MatchState = SetupMatchState | ActiveMatchState | EndedMatchState;
-
-export type LegacySetupMatchState = Omit<
-  SetupMatchState,
-  | "schemaVersion"
-  | "spentReactionIds"
-  | "majorActionUsed"
-  | "eliminatedTeams"
-  | "acknowledgedEliminations"
-  | "outcome"
-> & { readonly schemaVersion: typeof LEGACY_MATCH_SCHEMA_VERSION };
-export type LegacyActiveMatchState = Omit<
-  ActiveMatchState,
-  | "schemaVersion"
-  | "spentReactionIds"
-  | "majorActionUsed"
-  | "eliminatedTeams"
-  | "acknowledgedEliminations"
-  | "outcome"
-> & { readonly schemaVersion: typeof LEGACY_MATCH_SCHEMA_VERSION };
-export type LegacyMatchState = LegacySetupMatchState | LegacyActiveMatchState;
 
 interface EventBase {
   readonly matchId: string;
@@ -183,7 +166,8 @@ export interface TurnFinishedEvent extends EventBase {
   readonly round: number;
   readonly activeSlot: number;
   readonly skippedSlots: readonly number[];
-  readonly expiredEffects?: readonly ActiveEffect[];
+  /** Every effect that expired at this turn boundary; empty when none did. */
+  readonly expiredEffects: readonly ActiveEffect[];
 }
 
 export interface EliminationContinuedEvent extends EventBase {
@@ -229,21 +213,16 @@ export interface MatchEndedEvent extends EventBase {
   readonly type: "MatchEnded";
   readonly outcome: Exclude<MatchOutcome, null>;
   readonly eliminatedTeams: readonly ("Drow" | "Duergar")[];
-  readonly decisionBasis?: DecisionBasis;
-  readonly finalCounts?: FinalTeamCounts;
-  readonly finalHpTotals?: FinalTeamCounts;
-  readonly coinFlipResult?: "Drow" | "Duergar";
+  readonly decisionBasis: DecisionBasis;
+  readonly finalCounts: FinalTeamCounts;
+  readonly finalHpTotals: FinalTeamCounts;
+  /** The recorded Coin Flip; null whenever the Decision Basis is not coinFlip. */
+  readonly coinFlipResult: "Drow" | "Duergar" | null;
 }
 
 export interface MatchReopenedEvent extends EventBase {
   readonly type: "MatchReopened";
   readonly endedSequence: number;
-}
-
-export interface MatchMigratedEvent extends EventBase {
-  readonly type: "MatchMigrated";
-  readonly fromSchemaVersion: typeof LEGACY_MATCH_SCHEMA_VERSION;
-  readonly toSchemaVersion: typeof MATCH_SCHEMA_VERSION;
 }
 
 export interface PhysicalConfirmations {
@@ -338,13 +317,13 @@ export interface ActionResolvedEvent extends EventBase {
   readonly targetCharacterIds?: readonly string[];
   readonly spentAbilityIds?: readonly string[];
   readonly appliedEffects?: readonly ActiveEffect[];
-  readonly expiredEffects?: readonly ActiveEffect[];
+  /** Every effect that expired through this resolution; empty when none did. */
+  readonly expiredEffects: readonly ActiveEffect[];
   /**
-   * The recorded Override sentence for a state-invalid Ability choice.
-   * Optional so persisted events from before this field replay unchanged;
-   * fresh resolutions always carry it (null when no Override was needed).
+   * The recorded Override sentence for a state-invalid Ability choice; null
+   * when the resolution needed no Override.
    */
-  readonly abilityOverride?: string | null;
+  readonly abilityOverride: string | null;
 }
 
 export interface BasicAttackInput {
@@ -390,7 +369,6 @@ export type MatchEvent =
   | SimultaneousEliminationRuledEvent
   | MatchEndedEvent
   | MatchReopenedEvent
-  | MatchMigratedEvent
   | UndoAppliedEvent;
 export type SetupMatchEvent = SetupCreatedEvent | InitiativeEvent;
 

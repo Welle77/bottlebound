@@ -16,7 +16,7 @@ import {
   type MatchEvent,
 } from "../../src/domain/match";
 import { RULESET } from "../../src/domain/ruleset";
-import { queuedRandom, simultaneousEliminationRun } from "./match-test-support";
+import { initiativeCharacterId, queuedRandom, simultaneousEliminationRun } from "./match-test-support";
 
 describe("Active Match commands", () => {
   it("needs a complete initiative order and starts Round 1 at slot 1", () => {
@@ -32,7 +32,7 @@ describe("Active Match commands", () => {
       "2026-08-22T14:01:00.000Z",
     );
     const firstEntry = generated.state.initiative?.[0];
-    if (!firstEntry || !generated.state.initiative) {
+    if (!firstEntry) {
       throw new Error("The test expected complete initiative.");
     }
     const initiative = generated.state.initiative;
@@ -77,8 +77,12 @@ describe("Active Match commands", () => {
     ).reduce<readonly ActiveMatchState[]>(
       (states, step) => {
         const expectedSlot = step + 2;
+        const previousState = states.at(-1);
+        if (previousState === undefined) {
+          throw new Error("The test turn sequence is empty.");
+        }
         const result = finishTurn(
-          states.at(-1)!,
+          previousState,
           `2026-08-22T14:${String(expectedSlot + 1).padStart(2, "0")}:00.000Z`,
         );
         expect(result.state).toMatchObject({
@@ -96,7 +100,10 @@ describe("Active Match commands", () => {
       },
       [startMatch(generated.state, "2026-08-22T14:02:00.000Z").state],
     );
-    const currentState = statesAfterTurns.at(-1)!;
+    const currentState = statesAfterTurns.at(-1);
+    if (currentState === undefined) {
+      throw new Error("The test turn sequence produced no states.");
+    }
 
     const wrapped = finishTurn(currentState, "2026-08-22T14:14:00.000Z");
     expect(wrapped.state).toMatchObject({ round: 2, activeSlot: 1 });
@@ -117,16 +124,16 @@ describe("Active Match commands", () => {
       "2026-08-22T14:01:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
-    const activeId = started.state.initiative[0]!.characterId;
+    const activeId = initiativeCharacterId(started.state, 0);
     const downed = {
       ...started.state,
       activeSlot: 11,
       majorActionUsed: true,
       characters: started.state.characters.map((character) =>
         [
-          started.state.initiative[10]!.characterId,
-          started.state.initiative[11]!.characterId,
-          started.state.initiative[0]!.characterId,
+          initiativeCharacterId(started.state, 10),
+          initiativeCharacterId(started.state, 11),
+          initiativeCharacterId(started.state, 0),
         ].includes(character.characterId)
           ? { ...character, hp: 0 }
           : character,
@@ -181,7 +188,7 @@ describe("Active Match commands", () => {
       "2026-08-22T14:01:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
-    const sourceCharacterId = started.state.initiative[0]!.characterId;
+    const sourceCharacterId = initiativeCharacterId(started.state, 0);
     const nearlyEliminated = {
       ...started.state,
       characters: started.state.characters.map((character) =>
@@ -263,7 +270,7 @@ describe("Active Match commands", () => {
       "2026-08-22T14:01:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
-    const sourceCharacterId = started.state.initiative[0]!.characterId;
+    const sourceCharacterId = initiativeCharacterId(started.state, 0);
     const baseHistory: readonly MatchEvent[] = [
       setup.event,
       generated.event,
@@ -293,7 +300,7 @@ describe("Active Match commands", () => {
             majorActionOverride:
               attackIndex === 0 ? null : "Referee confirmed repeated attack.",
           },
-          `2026-08-22T14:0${attackIndex + 3}:00.000Z`,
+          `2026-08-22T14:0${String(attackIndex + 3)}:00.000Z`,
         );
         return {
           history: [...progress.history, attack.event],
@@ -353,7 +360,7 @@ describe("Active Match commands", () => {
       "2026-08-22T14:01:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
-    const sourceCharacterId = started.state.initiative[0]!.characterId;
+    const sourceCharacterId = initiativeCharacterId(started.state, 0);
     const finalCharacters = ["drow-paladin", "duergar-ranger"];
     const nearlyEliminated = {
       ...started.state,

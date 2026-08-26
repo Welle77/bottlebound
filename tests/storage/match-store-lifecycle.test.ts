@@ -17,6 +17,7 @@ import {
   type ActiveMatchState,
 } from "../../src/domain/match";
 import { IndexedDbMatchStore } from "../../src/storage/match-store";
+import { initiativeCharacterId } from "../domain/match-test-support";
 import {
   randomQueue,
   simultaneousEliminationRun,
@@ -87,7 +88,7 @@ describe("IndexedDbMatchStore", () => {
         const attack = resolveBasicAttack(
           progress.current,
           {
-            sourceCharacterId: started.state.initiative[0]!.characterId,
+            sourceCharacterId: initiativeCharacterId(started.state, 0),
             affectedCharacterIds: started.state.characters
               .filter(({ characterId }) => characterId.startsWith("duergar-"))
               .map(({ characterId }) => characterId),
@@ -100,7 +101,7 @@ describe("IndexedDbMatchStore", () => {
             majorActionOverride:
               attackIndex === 0 ? null : "Referee confirmed repeated attack.",
           },
-          `2026-08-22T14:0${attackIndex + 3}:00.000Z`,
+          `2026-08-22T14:0${String(attackIndex + 3)}:00.000Z`,
         );
         return {
           results: [...progress.results, attack],

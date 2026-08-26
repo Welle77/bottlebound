@@ -24,12 +24,15 @@ export function assertCanonicalState(
   ) {
     throw new Error("The canonical snapshot rules version is incompatible.");
   }
+  // Widened phase view keeps every literal comparison live for persisted
+  // snapshots without collapsing the modeled phase union downstream.
+  const snapshotPhase: string = value.phase;
   if (
     typeof value.matchId !== "string" ||
     value.matchId.length === 0 ||
-    (value.phase !== "setup" &&
-      value.phase !== "active" &&
-      value.phase !== "ended") ||
+    (snapshotPhase !== "setup" &&
+      snapshotPhase !== "active" &&
+      snapshotPhase !== "ended") ||
     !Number.isSafeInteger(value.sequence) ||
     value.sequence < 1
   ) {
@@ -116,15 +119,13 @@ export function assertCanonicalState(
       value.endedAt.length === 0 ||
       !Number.isSafeInteger(value.endedSequence) ||
       value.endedSequence < 2 ||
-      value.endedSequence > value.sequence ||
-      value.outcome === null)
+      value.endedSequence > value.sequence)
   ) {
     throw new Error("The Ended Match is structurally invalid.");
   }
   if (value.phase === "ended") {
     const ended = value as Record<string, unknown>;
     if (
-      ended.decisionBasis !== undefined &&
       ended.decisionBasis !== "elimination" &&
       ended.decisionBasis !== "activeCount" &&
       ended.decisionBasis !== "activeHpTotal" &&
@@ -133,38 +134,29 @@ export function assertCanonicalState(
       throw new Error("The Ended Match is structurally invalid.");
     }
     if (
-      (ended.decisionBasis !== undefined ||
-        ended.finalCounts !== undefined ||
-        ended.finalHpTotals !== undefined) &&
-      (!isRecord(ended.finalCounts) ||
-        !Number.isInteger(ended.finalCounts.Drow) ||
-        !Number.isInteger(ended.finalCounts.Duergar) ||
-        (ended.finalCounts.Drow as number) < 0 ||
-        (ended.finalCounts.Duergar as number) < 0 ||
-        !isRecord(ended.finalHpTotals) ||
-        !Number.isInteger(ended.finalHpTotals.Drow) ||
-        !Number.isInteger(ended.finalHpTotals.Duergar) ||
-        (ended.finalHpTotals.Drow as number) < 0 ||
-        (ended.finalHpTotals.Duergar as number) < 0)
+      !isRecord(ended.finalCounts) ||
+      !Number.isInteger(ended.finalCounts.Drow) ||
+      !Number.isInteger(ended.finalCounts.Duergar) ||
+      (ended.finalCounts.Drow as number) < 0 ||
+      (ended.finalCounts.Duergar as number) < 0 ||
+      !isRecord(ended.finalHpTotals) ||
+      !Number.isInteger(ended.finalHpTotals.Drow) ||
+      !Number.isInteger(ended.finalHpTotals.Duergar) ||
+      (ended.finalHpTotals.Drow as number) < 0 ||
+      (ended.finalHpTotals.Duergar as number) < 0
     ) {
       throw new Error("The Ended Match is structurally invalid.");
     }
     if (
-      ended.coinFlipResult !== undefined &&
+      ended.coinFlipResult !== null &&
       ended.coinFlipResult !== "Drow" &&
       ended.coinFlipResult !== "Duergar"
     ) {
       throw new Error("The Ended Match is structurally invalid.");
     }
     if (
-      ended.decisionBasis === "coinFlip" &&
-      ended.coinFlipResult === undefined
-    ) {
-      throw new Error("The Ended Match is structurally invalid.");
-    }
-    if (
-      ended.coinFlipResult !== undefined &&
-      ended.decisionBasis !== "coinFlip"
+      (ended.decisionBasis === "coinFlip") !==
+      (ended.coinFlipResult !== null)
     ) {
       throw new Error("The Ended Match is structurally invalid.");
     }

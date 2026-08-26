@@ -1,23 +1,18 @@
 import {
-  LEGACY_MATCH_SCHEMA_VERSION,
   MATCH_SCHEMA_VERSION,
-  assertMatchStateStructure,
   assertMatchSummaryStructure,
   canonicalMatchRecordsEqual,
   getUndoPreview,
-  migrateLegacyMatch,
   restoreStateFromEvents,
   toMatchSummary,
   type MatchEvent,
   type MatchState,
   type MatchSummary,
 } from "../domain/match";
-import { assertCanonicalEvent } from "./match-store-canonical-event";
 import {
   assertCommit,
   assertRestoredMatch,
 } from "./match-store-canonical-commit";
-import { isRecord } from "./match-store-canonical-state";
 
 const DEFAULT_DATABASE_NAME = "bottlebound-match";
 const DATABASE_VERSION = 2;
@@ -43,12 +38,18 @@ export interface RestoredMatch {
 
 function requestResult<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
-    request.addEventListener("success", () => resolve(request.result), {
-      once: true,
-    });
+    request.addEventListener(
+      "success",
+      () => {
+        resolve(request.result);
+      },
+      { once: true },
+    );
     request.addEventListener(
       "error",
-      () => reject(request.error ?? new Error("IndexedDB request failed.")),
+      () => {
+        reject(request.error ?? new Error("IndexedDB request failed."));
+      },
       { once: true },
     );
   });
@@ -76,32 +77,28 @@ function getAllRecords<T>(
 
 function transactionComplete(transaction: IDBTransaction): Promise<void> {
   return new Promise((resolve, reject) => {
-    transaction.addEventListener("complete", () => resolve(), { once: true });
+    transaction.addEventListener(
+      "complete",
+      () => {
+        resolve();
+      },
+      { once: true },
+    );
     transaction.addEventListener(
       "abort",
-      () =>
-        reject(
-          transaction.error ?? new Error("IndexedDB transaction aborted."),
-        ),
+      () => {
+        reject(transaction.error ?? new Error("IndexedDB transaction aborted."));
+      },
       { once: true },
     );
     transaction.addEventListener(
       "error",
-      () =>
-        reject(transaction.error ?? new Error("IndexedDB transaction failed.")),
+      () => {
+        reject(transaction.error ?? new Error("IndexedDB transaction failed."));
+      },
       { once: true },
     );
   });
-}
-
-function recordWithout(
-  value: object,
-  omittedKeys: readonly string[],
-): Record<string, unknown> {
-  const omitted = new Set(omittedKeys);
-  return Object.fromEntries(
-    Object.entries(value).filter(([key]) => !omitted.has(key)),
-  );
 }
 
 export class IndexedDbMatchStore {
@@ -133,15 +130,22 @@ export class IndexedDbMatchStore {
           database.createObjectStore(SUMMARY_STORE);
         }
       });
-      request.addEventListener("success", () => resolve(request.result), {
-        once: true,
-      });
+      request.addEventListener(
+        "success",
+        () => {
+          resolve(request.result);
+        },
+        {
+          once: true,
+        },
+      );
       request.addEventListener(
         "error",
-        () =>
+        () => {
           reject(
             request.error ?? new Error("The Match database could not open."),
-          ),
+          );
+        },
         { once: true },
       );
     }));
@@ -313,81 +317,8 @@ export class IndexedDbMatchStore {
       await completion.catch(() => undefined);
       throw new Error("Saved canonical data has an invalid snapshot count.");
     }
-    if (
-      isRecord(metadata) &&
-      metadata.schemaVersion === LEGACY_MATCH_SCHEMA_VERSION
-    ) {
-      try {
-        assertMatchStateStructure(state, LEGACY_MATCH_SCHEMA_VERSION);
-        if (
-          metadata.matchId !== state.matchId ||
-          metadata.sequence !== state.sequence ||
-          metadata.rulesVersion !== state.rulesVersion ||
-          allEvents.length !== state.sequence
-        ) {
-          throw new Error("Saved canonical data has a partial sequence.");
-        }
-        allEvents.forEach((event, index) => {
-          assertCanonicalEvent(event, state.rulesVersion);
-          if (
-            !isRecord(event) ||
-            event.matchId !== state.matchId ||
-            event.sequence !== index + 1 ||
-            (index === 0 && event.type !== "SetupCreated")
-          ) {
-            throw new Error("Saved canonical data has a partial sequence.");
-          }
-        });
-        const replayed = restoreStateFromEvents(
-          allEvents as readonly MatchEvent[],
-        );
-        const legacyState = recordWithout(state, ["schemaVersion", "sequence"]);
-        const replayedLegacy = recordWithout(replayed, [
-          "schemaVersion",
-          "sequence",
-          "spentReactionIds",
-          "majorActionUsed",
-          "eliminatedTeams",
-          "acknowledgedEliminations",
-          "outcome",
-        ]);
-        if (!canonicalMatchRecordsEqual(legacyState, replayedLegacy)) {
-          throw new Error(
-            "Saved canonical data does not match its event history.",
-          );
-        }
-        const lastEvent = allEvents.at(-1) as MatchEvent | undefined;
-        if (!lastEvent)
-          throw new Error("Saved canonical data has no Match Event.");
-        const migrated = migrateLegacyMatch(state, lastEvent.occurredAt);
-        const migratedEvents = [
-          ...(allEvents as readonly MatchEvent[]),
-          migrated.event,
-        ];
-        const migratedMetadata = {
-          matchId: migrated.state.matchId,
-          sequence: migrated.state.sequence,
-          schemaVersion: MATCH_SCHEMA_VERSION,
-          rulesVersion: migrated.state.rulesVersion,
-        } satisfies CurrentMatchMetadata;
-        assertRestoredMatch(migratedMetadata, migrated.state, migratedEvents);
-        transaction.objectStore(EVENT_STORE).add(migrated.event);
-        transaction.objectStore(SNAPSHOT_STORE).put(migrated.state);
-        transaction
-          .objectStore(METADATA_STORE)
-          .put(migratedMetadata, CURRENT_MATCH_KEY);
-        await completion;
-        return { state: migrated.state, events: migratedEvents, summary };
-      } catch (error) {
-        try {
-          transaction.abort();
-        } catch {
-          // The transaction may already have aborted after a failed write.
-        }
-        await completion.catch(() => undefined);
-        throw error;
-      }
-    }
+    // Single-schema persistence: anything that does not validate as the
+    // current schema is rejected through the existing restore error path.
     assertRestoredMatch(metadata, state, allEvents);
     await completion;
     return {

@@ -15,7 +15,7 @@ import {
   overwriteStoredEvent,
   randomQueue,
   readRawMatch,
-  rewriteCurrentSnapshotAsLegacy,
+  rewriteCurrentSnapshotAsRetiredSchema,
   rewriteStoredRulesVersion,
 } from "./match-store.test-helpers";
 
@@ -29,7 +29,11 @@ describe("IndexedDbMatchStore", () => {
       "2026-08-22T14:01:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
-    const sourceCharacterId = started.state.initiative[0]!.characterId;
+    const firstInitiativeEntry = started.state.initiative.at(0);
+    if (firstInitiativeEntry === undefined) {
+      throw new Error("The test Match has no initiative entries.");
+    }
+    const sourceCharacterId = firstInitiativeEntry.characterId;
     const action = resolveBasicAttack(
       started.state,
       {
@@ -105,10 +109,14 @@ describe("IndexedDbMatchStore", () => {
       "2026-08-22T14:01:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
+    const firstInitiativeEntry = started.state.initiative.at(0);
+    if (firstInitiativeEntry === undefined) {
+      throw new Error("The test Match has no initiative entries.");
+    }
     const action = resolveBasicAttack(
       started.state,
       {
-        sourceCharacterId: started.state.initiative[0]!.characterId,
+        sourceCharacterId: firstInitiativeEntry.characterId,
         affectedCharacterIds: ["duergar-ranger"],
         physicalConfirmations: {
           range: true,
@@ -182,12 +190,16 @@ describe("IndexedDbMatchStore", () => {
       "2026-08-22T14:01:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
+    const firstInitiativeEntry = started.state.initiative.at(0);
+    if (firstInitiativeEntry === undefined) {
+      throw new Error("The test Match has no initiative entries.");
+    }
     for (const result of [setup, generated, started])
       await store.commit(result.event, result.state);
     const action = resolveBasicAttack(
       started.state,
       {
-        sourceCharacterId: started.state.initiative[0]!.characterId,
+        sourceCharacterId: firstInitiativeEntry.characterId,
         affectedCharacterIds: ["duergar-ranger"],
         physicalConfirmations: {
           range: true,
@@ -261,10 +273,14 @@ describe("IndexedDbMatchStore", () => {
       "2026-08-22T14:01:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
+    const firstInitiativeEntry = started.state.initiative.at(0);
+    if (firstInitiativeEntry === undefined) {
+      throw new Error("The test Match has no initiative entries.");
+    }
     const action = resolveBasicAttack(
       started.state,
       {
-        sourceCharacterId: started.state.initiative[0]!.characterId,
+        sourceCharacterId: firstInitiativeEntry.characterId,
         affectedCharacterIds: ["duergar-ranger"],
         physicalConfirmations: {
           range: true,
@@ -281,27 +297,28 @@ describe("IndexedDbMatchStore", () => {
     await rewriteStoredRulesVersion(factory, databaseName, "BB-prior-release");
 
     const restored = await store.restore();
+    if (!restored) throw new Error("The Match did not restore.");
 
-    expect(restored?.state.rulesVersion).toBe("BB-prior-release");
-    expect(restored?.events).toHaveLength(4);
+    expect(restored.state.rulesVersion).toBe("BB-prior-release");
+    expect(restored.events).toHaveLength(4);
     expect(
-      restored?.events.every(
+      restored.events.every(
         ({ rulesVersion }) => rulesVersion === "BB-prior-release",
       ),
     ).toBe(true);
-    expect(restored?.state).toEqual({
+    expect(restored.state).toEqual({
       ...action.state,
       rulesVersion: "BB-prior-release",
     });
 
-    const undone = undoLastEvent(restored!.state, restored!.events, {
+    const undone = undoLastEvent(restored.state, restored.events, {
       occurredAt: "2026-08-22T14:04:00.000Z",
       confirmed: true,
     });
     await store.commit(undone.event, undone.state);
     await expect(store.restore()).resolves.toEqual({
       state: undone.state,
-      events: [...restored!.events, undone.event],
+      events: [...restored.events, undone.event],
       summary: null,
     });
     expect(undone.state).toMatchObject({
@@ -321,72 +338,21 @@ describe("IndexedDbMatchStore", () => {
     await store.commit(turned.event, turned.state);
     await expect(store.restore()).resolves.toEqual({
       state: turned.state,
-      events: [...restored!.events, undone.event, turned.event],
+      events: [...restored.events, undone.event, turned.event],
       summary: null,
     });
   });
 
-  it("atomically migrates Setup and Active schema-2 Matches without losing state or history", async () => {
-    for (const phase of ["setup", "active"] as const) {
-      const factory = new IDBFactory();
-      const databaseName = `migrate-${phase}`;
-      const store = new IndexedDbMatchStore(factory, databaseName);
-      const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
-      const generated = generateInitiative(
-        setup.state,
-        randomQueue([19, 19, 18, 18, 17, 14, 12, 11, 12, 11, 11, 10]),
-        "2026-08-22T14:01:00.000Z",
-      );
-      const results =
-        phase === "active"
-          ? [
-              setup,
-              generated,
-              startMatch(generated.state, "2026-08-22T14:02:00.000Z"),
-            ]
-          : [setup, generated];
-      for (const result of results)
-        await store.commit(result.event, result.state);
-      await rewriteCurrentSnapshotAsLegacy(factory, databaseName);
-
-      const restored = await store.restore();
-
-      expect(restored?.state).toMatchObject({
-        schemaVersion: 3,
-        phase,
-        sequence: results.length + 1,
-        spentReactionIds: [],
-        majorActionUsed: false,
-        eliminatedTeams: [],
-        acknowledgedEliminations: [],
-        outcome: null,
-      });
-      expect(restored?.events.slice(0, results.length)).toEqual(
-        results.map(({ event }) => event),
-      );
-      expect(restored?.events.at(-1)).toMatchObject({
-        type: "MatchMigrated",
-        sequence: results.length + 1,
-        fromSchemaVersion: 2,
-        toSchemaVersion: 3,
-      });
-      await expect(store.restore()).resolves.toEqual(restored);
-    }
-  });
-
-  it("leaves every schema-2 record unchanged when migration validation fails", async () => {
+  it("rejects retired-schema persisted data through the public restore API without altering records", async () => {
     const factory = new IDBFactory();
-    const databaseName = "failed-migration";
+    const databaseName = "retired-schema";
     const store = new IndexedDbMatchStore(factory, databaseName);
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     await store.commit(setup.event, setup.state);
-    await rewriteCurrentSnapshotAsLegacy(factory, databaseName, (snapshot) => ({
-      ...snapshot,
-      characters: [],
-    }));
+    await rewriteCurrentSnapshotAsRetiredSchema(factory, databaseName);
     const before = await readRawMatch(factory, databaseName);
 
-    await expect(store.restore()).rejects.toThrow("Match State");
+    await expect(store.restore()).rejects.toThrow(/canonical/i);
     await expect(readRawMatch(factory, databaseName)).resolves.toEqual(before);
   });
 

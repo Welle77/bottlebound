@@ -57,7 +57,9 @@ describe("service worker navigation responses", () => {
           addEventListener: (
             type: string,
             listener: (event: WorkerEvent) => void,
-          ) => listeners.set([...listeners.current, [type, listener]]),
+          ) => {
+            listeners.set([...listeners.current, [type, listener]]);
+          },
         },
         URL,
       },

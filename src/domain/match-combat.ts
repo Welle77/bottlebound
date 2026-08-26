@@ -119,10 +119,8 @@ export function resolveBasicAttack(
   const inputLegs = input.attackLegs ?? [
     { affectedCharacterIds: input.affectedCharacterIds ?? [] },
   ];
-  if (
-    inputLegs.length === 0 ||
-    inputLegs[0]!.affectedCharacterIds.length === 0
-  ) {
+  const [firstLeg] = inputLegs;
+  if (!firstLeg || firstLeg.affectedCharacterIds.length === 0) {
     throw new Error("Basic Attack needs at least one affected character.");
   }
   const affectedCharacterIds = inputLegs.flatMap(
@@ -142,7 +140,7 @@ export function resolveBasicAttack(
     throw new Error("Basic Attack references an unknown affected character.");
   }
   if (
-    Object.values(input.physicalConfirmations).some((value) => value !== true)
+    Object.values(input.physicalConfirmations).some((value) => !value)
   ) {
     throw new Error("Every manual physical confirmation is required.");
   }
@@ -195,20 +193,18 @@ export function resolveBasicAttack(
                 type: operation.type,
                 characterId: reaction.ownerCharacterId,
                 maxPaces: operation.maxPaces,
-                instruction: `Move ${reaction.name}'s owner up to ${operation.maxPaces} paces immediately.`,
+                instruction: `Move ${reaction.name}'s owner up to ${String(operation.maxPaces)} paces immediately.`,
               },
             ];
           }
-          if (operation.type === "redirect-physical-attack") {
-            return [
-              {
-                type: operation.type,
-                fromCharacterId: reaction.ownerCharacterId,
-                towardCharacterId: input.sourceCharacterId,
-              },
-            ];
-          }
-          return [];
+          // Only "redirect-physical-attack" operations remain in this union.
+          return [
+            {
+              type: operation.type,
+              fromCharacterId: reaction.ownerCharacterId,
+              towardCharacterId: input.sourceCharacterId,
+            },
+          ];
         },
       );
       return {
@@ -239,7 +235,7 @@ export function resolveBasicAttack(
   }
   if (
     redirectReaction &&
-    !inputLegs[0]!.affectedCharacterIds.includes(
+    !firstLeg.affectedCharacterIds.includes(
       redirectReaction.ownerCharacterId,
     )
   ) {
@@ -421,13 +417,13 @@ export function resolveBasicAttack(
     reactions,
     effects: actionEffects,
     majorActionOverride: override,
+    // Basic Attacks never involve an Ability choice, so no Override applies.
+    abilityOverride: null,
     eliminatedTeams: resultingEliminations,
     ...(appliedFromEffects.length > 0
       ? { appliedEffects: appliedFromEffects }
       : {}),
-    ...(uniqueExpiredEffects.length > 0
-      ? { expiredEffects: uniqueExpiredEffects }
-      : {}),
+    expiredEffects: uniqueExpiredEffects,
   };
   return {
     event,

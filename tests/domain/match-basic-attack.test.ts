@@ -9,7 +9,7 @@ import {
   startMatch,
   type MatchEvent,
 } from "../../src/domain/match";
-import { queuedRandom } from "./match-test-support";
+import { initiativeCharacterId, queuedRandom } from "./match-test-support";
 
 describe("Active Match commands", () => {
   it("resolves one ordered Basic Attack as one reversible Match Event", () => {
@@ -106,7 +106,7 @@ describe("Active Match commands", () => {
       "2026-08-22T14:01:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
-    const sourceCharacterId = started.state.initiative[0]!.characterId;
+    const sourceCharacterId = initiativeCharacterId(started.state, 0);
     const input = {
       sourceCharacterId,
       affectedCharacterIds: ["duergar-ranger"],
@@ -175,7 +175,7 @@ describe("Active Match commands", () => {
       "2026-08-22T14:01:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
-    const sourceCharacterId = started.state.initiative[0]!.characterId;
+    const sourceCharacterId = initiativeCharacterId(started.state, 0);
 
     expect(() =>
       resolveBasicAttack(
@@ -214,7 +214,7 @@ describe("Active Match commands", () => {
     const attack = resolveBasicAttack(
       started.state,
       {
-        sourceCharacterId: started.state.initiative[0]!.characterId,
+        sourceCharacterId: initiativeCharacterId(started.state, 0),
         affectedCharacterIds: ["duergar-ranger"],
         physicalConfirmations: {
           range: true,

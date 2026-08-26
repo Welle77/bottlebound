@@ -1,5 +1,4 @@
 import {
-  LEGACY_MATCH_SCHEMA_VERSION,
   MATCH_SCHEMA_VERSION,
   type InitiativeEntry,
   type MatchEvent,
@@ -181,10 +180,9 @@ export function assertCanonicalEvent(
       (value.majorActionOverride !== null &&
         (typeof value.majorActionOverride !== "string" ||
           value.majorActionOverride.trim().length === 0)) ||
-      // Optional recorded Override for a state-invalid Ability choice; older
-      // persisted events omit the field entirely.
-      (value.abilityOverride !== undefined &&
-        value.abilityOverride !== null &&
+      // Recorded Override for a state-invalid Ability choice; null when the
+      // resolution needed no Override.
+      (value.abilityOverride !== null &&
         (typeof value.abilityOverride !== "string" ||
           value.abilityOverride.trim().length === 0))
     ) {
@@ -392,7 +390,6 @@ export function assertCanonicalEvent(
       throw new Error("The canonical End Game Event is invalid.");
     }
     if (
-      value.decisionBasis !== undefined &&
       value.decisionBasis !== "elimination" &&
       value.decisionBasis !== "activeCount" &&
       value.decisionBasis !== "activeHpTotal" &&
@@ -401,38 +398,29 @@ export function assertCanonicalEvent(
       throw new Error("The canonical End Game Event is invalid.");
     }
     if (
-      (value.decisionBasis !== undefined ||
-        value.finalCounts !== undefined ||
-        value.finalHpTotals !== undefined) &&
-      (!isRecord(value.finalCounts) ||
-        !Number.isInteger(value.finalCounts.Drow) ||
-        !Number.isInteger(value.finalCounts.Duergar) ||
-        (value.finalCounts.Drow as number) < 0 ||
-        (value.finalCounts.Duergar as number) < 0 ||
-        !isRecord(value.finalHpTotals) ||
-        !Number.isInteger(value.finalHpTotals.Drow) ||
-        !Number.isInteger(value.finalHpTotals.Duergar) ||
-        (value.finalHpTotals.Drow as number) < 0 ||
-        (value.finalHpTotals.Duergar as number) < 0)
+      !isRecord(value.finalCounts) ||
+      !Number.isInteger(value.finalCounts.Drow) ||
+      !Number.isInteger(value.finalCounts.Duergar) ||
+      (value.finalCounts.Drow as number) < 0 ||
+      (value.finalCounts.Duergar as number) < 0 ||
+      !isRecord(value.finalHpTotals) ||
+      !Number.isInteger(value.finalHpTotals.Drow) ||
+      !Number.isInteger(value.finalHpTotals.Duergar) ||
+      (value.finalHpTotals.Drow as number) < 0 ||
+      (value.finalHpTotals.Duergar as number) < 0
     ) {
       throw new Error("The canonical End Game Event is invalid.");
     }
     if (
-      value.coinFlipResult !== undefined &&
+      value.coinFlipResult !== null &&
       value.coinFlipResult !== "Drow" &&
       value.coinFlipResult !== "Duergar"
     ) {
       throw new Error("The canonical End Game Event is invalid.");
     }
     if (
-      value.decisionBasis === "coinFlip" &&
-      value.coinFlipResult === undefined
-    ) {
-      throw new Error("The canonical End Game Event is invalid.");
-    }
-    if (
-      value.coinFlipResult !== undefined &&
-      value.decisionBasis !== "coinFlip"
+      (value.decisionBasis === "coinFlip") !==
+      (value.coinFlipResult !== null)
     ) {
       throw new Error("The canonical End Game Event is invalid.");
     }
@@ -445,15 +433,6 @@ export function assertCanonicalEvent(
       (value.endedSequence as number) >= (value.sequence as number)
     ) {
       throw new Error("The canonical Reopen Match Event is invalid.");
-    }
-    return;
-  }
-  if (value.type === "MatchMigrated") {
-    if (
-      value.fromSchemaVersion !== LEGACY_MATCH_SCHEMA_VERSION ||
-      value.toSchemaVersion !== MATCH_SCHEMA_VERSION
-    ) {
-      throw new Error("The canonical Match Migration Event is invalid.");
     }
     return;
   }
@@ -496,11 +475,14 @@ export function assertCanonicalEvent(
       hp: baseHp,
     })),
     initiative: results,
+    displayNames: {},
     spentReactionIds: [],
+    spentAbilityIds: [],
     majorActionUsed: false,
     eliminatedTeams: [],
     acknowledgedEliminations: [],
     outcome: null,
+    activeEffects: [],
   });
   const expectedTies = [
     ...new Set(results.map((entry) => (entry as InitiativeEntry).total)),

@@ -12,10 +12,6 @@ import {
   finishTurn,
   ruleSimultaneousElimination,
 } from "./match-turn";
-import {
-  LEGACY_MATCH_SCHEMA_VERSION,
-  MATCH_SCHEMA_VERSION,
-} from "./match-types";
 import type {
   ActionResolvedEvent,
   ActiveMatchState,
@@ -24,7 +20,6 @@ import type {
   EndGamePreview,
   MatchEndedEvent,
   MatchEvent,
-  MatchOutcome,
   MatchState,
   RandomSource,
   ReversibleMatchEvent,
@@ -41,7 +36,10 @@ function applyHistoricalActionResolution(
       "The Action Resolution rules version does not follow Match State.",
     );
   }
-  if (event.actionType !== "Basic Attack" && event.actionType !== "Ability") {
+  // Widened view keeps this guard live for persisted values that bypass the
+  // typed event contract.
+  const actionType: string = event.actionType;
+  if (actionType !== "Basic Attack" && actionType !== "Ability") {
     throw new Error("The historical Action Resolution is unsupported.");
   }
   const activeCharacterId = state.initiative[state.activeSlot - 1]?.characterId;
@@ -71,21 +69,21 @@ function applyHistoricalActionResolution(
     if (effect.hpAfter < 0) {
       throw new Error("The Action Resolution damage evidence is invalid.");
     }
-    // For abilities, heal can increase HP; allow up to currentMaxHp
-    const expectedMax =
-      character.currentMaxHp ??
-      RULESET.characters.find((rule) => rule.id === character.characterId)
-        ?.baseHp ??
-      5;
+    // For abilities, heal can increase HP; allow up to currentMaxHp.
+    // currentMaxHp is required on every canonical character (single schema).
+    const expectedMax = character.currentMaxHp;
     if (effect.hpAfter > expectedMax) {
       throw new Error("The Action Resolution damage evidence is invalid.");
     }
   }
+  // Widened view keeps this guard live for persisted values that bypass the
+  // typed event contract.
+  const eliminatedTeamIds: readonly string[] = event.eliminatedTeams;
   if (
-    event.eliminatedTeams.some(
+    eliminatedTeamIds.some(
       (team) => team !== "Drow" && team !== "Duergar",
     ) ||
-    new Set(event.eliminatedTeams).size !== event.eliminatedTeams.length
+    new Set(eliminatedTeamIds).size !== eliminatedTeamIds.length
   ) {
     throw new Error("The Action Resolution eliminations are invalid.");
   }
@@ -106,7 +104,7 @@ function applyHistoricalActionResolution(
             toMaxHp: 4 as const,
           }))
       : []),
-    ...(event.actionType === "Ability" && event.expiredEffects
+    ...(event.actionType === "Ability"
       ? event.expiredEffects
           .filter((expired) => expired.kind === "shapeshift")
           .map((expired) => ({
@@ -136,7 +134,7 @@ function applyHistoricalActionResolution(
       : state.spentAbilityIds;
   const appliedEffects = event.appliedEffects ?? [];
   const expiredIds = new Set(
-    (event.expiredEffects ?? []).map((effect) => effect.effectId),
+    event.expiredEffects.map((effect) => effect.effectId),
   );
   const retained = state.activeEffects.filter(
     (effect) => !expiredIds.has(effect.effectId),
@@ -337,14 +335,8 @@ export function restoreStateFromEvents(
                   ),
                   majorActionOverride: event.majorActionOverride,
                   // Feed the recorded Override sentence back so the recompute
-                  // matches exactly; events from before the field keep the
-                  // historical fallback that only satisfies the gates.
-                  abilityOverride:
-                    event.abilityOverride !== undefined
-                      ? event.abilityOverride
-                      : event.spentAbilityIds?.length
-                        ? "historical-override"
-                        : null,
+                  // matches exactly.
+                  abilityOverride: event.abilityOverride,
                 },
                 event.occurredAt,
               );
@@ -417,115 +409,42 @@ export function restoreStateFromEvents(
           if (current.phase !== "active") {
             throw new Error("End Game cannot apply to this Match State.");
           }
-          if (event.decisionBasis === undefined) {
-            if (
-              event.outcome === "draw"
-                ? event.eliminatedTeams.length !== 2
-                : event.eliminatedTeams.length === 0
-            ) {
-              throw new Error("End Game does not follow Match State.");
-            }
-            const expectedLegacy: {
-              readonly outcome: Exclude<MatchOutcome, null>;
-              readonly eliminatedTeams: readonly ("Drow" | "Duergar")[];
-            } = (() => {
-              if (current.eliminatedTeams.length === 1) {
-                const expectedOutcome: Exclude<MatchOutcome, null> =
-                  current.eliminatedTeams[0] === "Drow" ? "Duergar" : "Drow";
-                if (
-                  event.outcome !== expectedOutcome ||
-                  !canonicalMatchRecordsEqual(
-                    [...current.eliminatedTeams],
-                    event.eliminatedTeams,
-                  )
-                ) {
-                  throw new Error("End Game does not follow Match State.");
-                }
-                return {
-                  outcome: expectedOutcome,
-                  eliminatedTeams: [...current.eliminatedTeams] as readonly (
-                    "Drow" | "Duergar"
-                  )[],
-                };
-              }
-              if (current.eliminatedTeams.length === 2) {
-                if (
-                  current.outcome === null ||
-                  event.outcome !== current.outcome ||
-                  !canonicalMatchRecordsEqual(
-                    [...current.eliminatedTeams],
-                    event.eliminatedTeams,
-                  )
-                ) {
-                  throw new Error("End Game does not follow Match State.");
-                }
-                return {
-                  outcome: current.outcome,
-                  eliminatedTeams: [...current.eliminatedTeams] as readonly (
-                    "Drow" | "Duergar"
-                  )[],
-                };
-              }
-              throw new Error("End Game does not follow Match State.");
-            })();
-            if (
-              event.outcome !== expectedLegacy.outcome ||
-              !canonicalMatchRecordsEqual(
-                [...event.eliminatedTeams],
-                expectedLegacy.eliminatedTeams,
-              )
-            ) {
-              throw new Error("End Game does not follow Match State.");
-            }
-            const legacyEndedState: EndedMatchState = {
-              ...current,
-              phase: "ended",
-              sequence: event.sequence,
-              outcome: event.outcome,
-              endedAt: event.occurredAt,
-              endedSequence: event.sequence,
-            };
-            return legacyEndedState;
-          } else {
-            const preview =
-              event.decisionBasis === "coinFlip"
-                ? coinFlipEndGamePreviewOrThrow(current, event)
-                : getEndGamePreview(current);
-            if (
-              preview.outcome !== event.outcome ||
-              preview.decisionBasis !== event.decisionBasis ||
-              !canonicalMatchRecordsEqual(
-                preview.finalCounts,
-                event.finalCounts,
-              ) ||
-              !canonicalMatchRecordsEqual(
-                preview.finalHpTotals,
-                event.finalHpTotals,
-              ) ||
-              preview.coinFlipResult !== event.coinFlipResult ||
-              !canonicalMatchRecordsEqual(
-                [...current.eliminatedTeams],
-                event.eliminatedTeams,
-              )
-            ) {
-              throw new Error("End Game does not follow Match State.");
-            }
-            const decidedEndedState: EndedMatchState = {
-              ...current,
-              phase: "ended",
-              sequence: event.sequence,
-              outcome: preview.outcome,
-              endedAt: event.occurredAt,
-              endedSequence: event.sequence,
-              decisionBasis: preview.decisionBasis,
-              finalCounts: preview.finalCounts,
-              finalHpTotals: preview.finalHpTotals,
-              ...(preview.coinFlipResult
-                ? { coinFlipResult: preview.coinFlipResult }
-                : {}),
-            };
-            return decidedEndedState;
+          const preview =
+            event.decisionBasis === "coinFlip"
+              ? coinFlipEndGamePreviewOrThrow(current, event)
+              : getEndGamePreview(current);
+          if (
+            preview.outcome !== event.outcome ||
+            preview.decisionBasis !== event.decisionBasis ||
+            !canonicalMatchRecordsEqual(
+              preview.finalCounts,
+              event.finalCounts,
+            ) ||
+            !canonicalMatchRecordsEqual(
+              preview.finalHpTotals,
+              event.finalHpTotals,
+            ) ||
+            (preview.coinFlipResult ?? null) !== event.coinFlipResult ||
+            !canonicalMatchRecordsEqual(
+              [...current.eliminatedTeams],
+              event.eliminatedTeams,
+            )
+          ) {
+            throw new Error("End Game does not follow Match State.");
           }
+          const decidedEndedState: EndedMatchState = {
+            ...current,
+            phase: "ended",
+            sequence: event.sequence,
+            outcome: preview.outcome,
+            endedAt: event.occurredAt,
+            endedSequence: event.sequence,
+            decisionBasis: preview.decisionBasis,
+            finalCounts: preview.finalCounts,
+            finalHpTotals: preview.finalHpTotals,
+            coinFlipResult: preview.coinFlipResult ?? null,
+          };
+          return decidedEndedState;
         } else if (event.type === "MatchReopened") {
           if (current.phase !== "ended") {
             throw new Error("Reopen Match cannot apply to this Match State.");
@@ -556,14 +475,6 @@ export function restoreStateFromEvents(
             ...restoreStateFromEvents(events.slice(0, targetIndex)),
             sequence: event.sequence,
           };
-        } else if (event.type === "MatchMigrated") {
-          if (
-            event.fromSchemaVersion !== LEGACY_MATCH_SCHEMA_VERSION ||
-            event.toSchemaVersion !== MATCH_SCHEMA_VERSION
-          ) {
-            throw new Error("The Match Migration Event is incompatible.");
-          }
-          return { ...current, sequence: event.sequence };
         } else {
           throw new Error("Setup creation can only be the first Match Event.");
         }

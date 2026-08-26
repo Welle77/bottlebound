@@ -2,7 +2,6 @@ import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it } from "vitest";
 
 import {
-  assertMatchStateStructure,
   createSetup,
   endMatch,
   finishTurn,
@@ -20,6 +19,8 @@ import {
   type MatchState,
 } from "../../src/domain/match";
 import { RULESET } from "../../src/domain/ruleset";
+import { assertCanonicalEvent } from "../../src/storage/match-store-canonical-event";
+import { initiativeCharacterId } from "../domain/match-test-support";
 import { IndexedDbMatchStore } from "../../src/storage/match-store";
 
 function queuedRandom(...values: number[]) {
@@ -143,7 +144,7 @@ describe("Manual End Game Decision Basis contract", () => {
       "2026-08-23T11:01:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-23T11:02:00.000Z");
-    const source = started.state.initiative[0]!.characterId;
+    const source = initiativeCharacterId(started.state, 0);
     let current = started.state;
     const history: MatchEvent[] = [setup.event, generated.event, started.event];
     // wound two Duergar (each 3->2) to equalize 20 vs 22 -> 20 vs 20, counts 6-6 => coinFlip
@@ -162,7 +163,7 @@ describe("Manual End Game Decision Basis contract", () => {
     const t1 = finishTurn(current, "2026-08-23T11:04:00.000Z");
     history.push(t1.event);
     current = t1.state;
-    const source2 = current.initiative[current.activeSlot - 1]!.characterId;
+    const source2 = initiativeCharacterId(current, current.activeSlot - 1);
     const a2 = resolveBasicAttack(
       current,
       {
@@ -199,7 +200,7 @@ describe("Manual End Game Decision Basis contract", () => {
       "2026-08-23T11:01:00.000Z",
     );
     const sStarted = startMatch(sGen.state, "2026-08-23T11:02:00.000Z");
-    const sSrc = sStarted.state.initiative[0]!.characterId;
+    const sSrc = initiativeCharacterId(sStarted.state, 0);
     const sA1 = resolveBasicAttack(
       sStarted.state,
       {
@@ -211,7 +212,7 @@ describe("Manual End Game Decision Basis contract", () => {
       "2026-08-23T11:03:00.000Z",
     );
     const sT1 = finishTurn(sA1.state, "2026-08-23T11:04:00.000Z");
-    const sSrc2 = sT1.state.initiative[sT1.state.activeSlot - 1]!.characterId;
+    const sSrc2 = initiativeCharacterId(sT1.state, sT1.state.activeSlot - 1);
     const sA2 = resolveBasicAttack(
       sT1.state,
       {
@@ -287,7 +288,7 @@ describe("Manual End Game Decision Basis contract", () => {
       resolveBasicAttack(
         ended.state as ActiveMatchState,
         {
-          sourceCharacterId: started.state.initiative[0]!.characterId,
+          sourceCharacterId: initiativeCharacterId(started.state, 0),
           affectedCharacterIds: ["duergar-ranger"],
           physicalConfirmations: {
             range: true,
@@ -351,7 +352,7 @@ describe("Manual End Game Decision Basis contract", () => {
     });
   });
 
-  it("stores legacy MatchEnded without decisionBasis and replays it without basis line", () => {
+  it("rejects a legacy MatchEnded event without the required decision fields", () => {
     const setup = createSetup("legacy-ended", "2026-08-23T15:00:00.000Z");
     const generated = generateInitiative(
       setup.state,
@@ -360,7 +361,7 @@ describe("Manual End Game Decision Basis contract", () => {
     );
     const started = startMatch(generated.state, "2026-08-23T15:02:00.000Z");
     // Create elimination via 5 consecutive Basic Attacks against all Duergar (proven valid in store tests)
-    const source = started.state.initiative[0]!.characterId;
+    const source = initiativeCharacterId(started.state, 0);
     const duergarIds = RULESET.characters
       .filter((c) => c.team === "Duergar")
       .map((c) => c.id);
@@ -387,28 +388,38 @@ describe("Manual End Game Decision Basis contract", () => {
       current = attack.state;
     }
     expect(current.eliminatedTeams).toEqual(["Duergar"]);
-    // legacy ended event without decisionBasis
-    const legacyEndedEvent: MatchEvent = {
-      type: "MatchEnded",
-      matchId: current.matchId,
-      sequence: current.sequence + 1,
-      rulesVersion: current.rulesVersion,
+    // A complete End Game event first, then strip it to the retired
+    // within-version shape that omitted the decision fields entirely.
+    const ended = endMatch(current, {
       occurredAt: "2026-08-23T15:04:00.000Z",
-      outcome: "Drow",
-      eliminatedTeams: ["Duergar"],
-    };
+      confirmed: true,
+    });
+    const legacyEnded: Record<string, unknown> = Object.fromEntries(
+      Object.entries(ended.event).filter(
+        ([key]) =>
+          ![
+            "decisionBasis",
+            "finalCounts",
+            "finalHpTotals",
+            "coinFlipResult",
+          ].includes(key),
+      ),
+    );
     const history = [
       setup.event,
       generated.event,
       started.event,
       ...elimEvents,
-      legacyEndedEvent,
     ];
-    const restored = restoreStateFromEvents(history);
-    expect(restored.phase).toBe("ended");
-    expect((restored as EndedMatchState).outcome).toBe("Drow");
-    expect((restored as EndedMatchState).decisionBasis).toBeUndefined();
-    assertMatchStateStructure(restored);
+    expect(() =>
+      restoreStateFromEvents([
+        ...history,
+        legacyEnded as unknown as MatchEvent,
+      ]),
+    ).toThrow("End Game does not follow Match State.");
+    expect(() => assertCanonicalEvent(legacyEnded)).toThrow(
+      "The canonical End Game Event is invalid.",
+    );
   });
 });
 

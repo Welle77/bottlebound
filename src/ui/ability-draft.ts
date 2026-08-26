@@ -341,8 +341,8 @@ export function attackPreviewRow(
     team: character.team,
     // One composed run so regex text probes see the exact legacy cell text
     // across its interpolated halves.
-    damageText: `${damage}${damage === 0 ? " (prevented)" : ""}${notes.length > 0 ? ` · ${notes.join(" · ")}` : ""}`,
-    hpText: `${hp} → ${after}`,
+    damageText: `${String(damage)}${damage === 0 ? " (prevented)" : ""}${notes.length > 0 ? ` · ${notes.join(" · ")}` : ""}`,
+    hpText: `${String(hp)} → ${String(after)}`,
     lifeStateText:
       hp === 0
         ? "Downed → Downed"
@@ -396,7 +396,7 @@ export function effectPreviewRow(
     character,
     team: character.team,
     effectLabel: label,
-    hpText: `${hp} → ${after}`,
+    hpText: `${String(hp)} → ${String(after)}`,
     lifeStateText: after === 0 ? "Downed" : "Active",
   };
 }

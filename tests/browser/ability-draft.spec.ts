@@ -5,7 +5,7 @@ const CHECK_LABELS = [
   "Line of Sight is legal",
   "Every selected bottle was physically hit",
   "Terrain contact was resolved",
-];
+] as const;
 
 /** Fixed Ruleset roster facts the flows need: element id and printed HP. */
 const ROSTER = {
@@ -202,7 +202,7 @@ test("physical-attack ability honors the confirmation toggle and skips every man
     page.getByRole("heading", { name: "Record Backstab" }),
   ).toBeVisible();
   await page.getByLabel(/Paladin · Drow/).check();
-  await expect(page.getByLabel(CHECK_LABELS[0]!)).toBeHidden();
+  await expect(page.getByLabel(CHECK_LABELS[0])).toBeHidden();
   await expect(
     page.locator("fieldset legend").filter({
       hasText: "Manual physical confirmations",
