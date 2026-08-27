@@ -36,7 +36,7 @@ const immutableDataOptions = {
 };
 
 export default defineConfig(
-  globalIgnores(["dist", "playwright-report", "test-results"]),
+  globalIgnores(["dist", "playwright-report", "test-results", ".worktrees"]),
 
   // Enforce project policy: no inline disable comments and warnings are errors.
   {
