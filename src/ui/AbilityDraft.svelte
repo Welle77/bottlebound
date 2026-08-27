@@ -37,17 +37,17 @@
   const LEG_CONTACTS_NONE = "No later bottle contacts.";
   const WARNING_CODE_SEPARATOR = " — ";
 
-  interface NamedCharacter {
+  type NamedCharacter = {
     readonly id: CharacterId;
     readonly name: string;
   }
 
-  interface LegReview {
+  type LegReview = {
     readonly names: readonly NamedCharacter[];
     readonly redirect: boolean;
   }
 
-  interface ReactionReview {
+  type ReactionReview = {
     readonly key: string;
     readonly reactionName: string;
     readonly owner: NamedCharacter;
@@ -55,7 +55,7 @@
     readonly details: readonly string[];
   }
 
-  interface TargetRow {
+  type TargetRow = {
     readonly candidate: ReturnType<typeof targetCandidates>[number];
     readonly character: NamedCharacter & { readonly team: Team };
     readonly hp: number;

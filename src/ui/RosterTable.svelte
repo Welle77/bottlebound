@@ -13,7 +13,7 @@
   // the deleted legacy template (seven cells per row).
   let { match }: { match: SetupMatchState } = $props();
 
-  interface InitiativeRow {
+  type InitiativeRow = {
     readonly key: CharacterId;
     readonly slot: number;
     readonly character: RulesetCharacter;
@@ -23,7 +23,7 @@
     readonly total: number;
     readonly tieBreak: string;
   }
-  interface RosterRow {
+  type RosterRow = {
     readonly key: CharacterId;
     readonly character: RulesetCharacter;
     readonly team: Team;

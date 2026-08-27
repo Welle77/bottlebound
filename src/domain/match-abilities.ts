@@ -24,7 +24,7 @@ import type {
   Team,
 } from "./match-types";
 
-export interface AbilityInput {
+export type AbilityInput = {
   readonly abilityId: AbilityId;
   readonly targetCharacterIds?: readonly CharacterId[];
   readonly attackLegs?: readonly {
@@ -64,14 +64,14 @@ import {
   resolveAttackDamageAgainstCharacter,
 } from "./match-ability-effects";
 
-interface AbilityOutcome {
+type AbilityOutcome = {
   readonly characters: readonly MatchCharacter[];
   readonly effects: readonly ActionEffect[];
   readonly expired: readonly ActiveEffect[];
   readonly applied: readonly ActiveEffect[];
 }
 
-interface AbilityOutcomeContext {
+type AbilityOutcomeContext = {
   readonly state: ActiveMatchState;
   readonly ability: StructuredAbility;
   readonly affectedCharacterIds: readonly CharacterId[];
@@ -79,7 +79,7 @@ interface AbilityOutcomeContext {
   readonly sequence: number;
 }
 
-interface ActiveEffectLedger {
+type ActiveEffectLedger = {
   readonly activeEffects: readonly ActiveEffect[];
   readonly expiredEffects: readonly ActiveEffect[];
 }

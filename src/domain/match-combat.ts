@@ -24,20 +24,20 @@ type BasicAttack = (typeof RULESET.basicAttacks)[number];
 type BasicAttackLegInput = NonNullable<BasicAttackInput["attackLegs"]>[number];
 type ProtectiveReaction = (typeof RULESET.reactions)[number];
 
-interface ValidatedBasicAttack {
+type ValidatedBasicAttack = {
   readonly attack: BasicAttack;
   readonly inputLegs: readonly BasicAttackLegInput[];
   readonly affectedCharacterIds: readonly CharacterId[];
   readonly override: string | null;
 }
 
-interface ResolvedAttackEffect {
+type ResolvedAttackEffect = {
   readonly effect: ActionEffect;
   readonly expired: readonly ActiveEffect[];
   readonly applied: readonly ActiveEffect[];
 }
 
-interface BasicAttackOutcome {
+type BasicAttackOutcome = {
   readonly actionEffects: readonly ActionEffect[];
   readonly appliedEffects: readonly ActiveEffect[];
   readonly expiredEffects: readonly ActiveEffect[];

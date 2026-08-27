@@ -237,7 +237,7 @@ test("restores an older Match unchanged and opens its exact unavailable Rules su
   const restored = await persistedMatchData(page);
   expect(restored).toEqual(
     before.map((values) =>
-      (values as Array<Record<string, unknown>>).map((value) => ({
+      (values as Record<string, unknown>[]).map((value) => ({
         ...value,
         rulesVersion: "BB-prior-release",
       })),

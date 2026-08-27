@@ -1,12 +1,12 @@
 import type { RulesReferenceRecord, RulesReferenceRecordKind } from "./types";
 
-export interface RulesSearchHighlight {
+export type RulesSearchHighlight = {
   readonly start: number;
   readonly end: number;
   readonly text: string;
 }
 
-export interface RulesSearchResult {
+export type RulesSearchResult = {
   readonly kind: RulesReferenceRecordKind;
   readonly title: string;
   readonly anchor: string;
@@ -15,13 +15,13 @@ export interface RulesSearchResult {
   readonly highlights: readonly RulesSearchHighlight[];
 }
 
-interface NormalizedText {
+type NormalizedText = {
   readonly value: string;
   readonly sourceStarts: readonly number[];
   readonly sourceEnds: readonly number[];
 }
 
-interface SourceRange {
+type SourceRange = {
   readonly start: number;
   readonly end: number;
 }

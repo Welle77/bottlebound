@@ -42,7 +42,7 @@ export type Confirmation =
   | "remove-summary"
   | "start-new"
   | null;
-export interface ActionDraft {
+export type ActionDraft = {
   /** Which command opened this draft; ability drafts resolve through resolveAbility. */
   readonly kind: "basic" | "ability";
   readonly sourceCharacterId: CharacterId;
@@ -65,9 +65,9 @@ export interface ActionDraft {
   readonly physicalConfirmations: Readonly<
     Record<PhysicalAttackCheck, boolean>
   >;
-  readonly reactions: ReadonlyArray<
-    ProtectiveReactionInput & { readonly override: string | null }
-  >;
+  readonly reactions: readonly (ProtectiveReactionInput & {
+    readonly override: string | null;
+  })[];
   /** Records a state-invalid ability choice (spent, wrong active character, invalid target). */
   readonly abilityOverride: boolean;
   /**
@@ -100,7 +100,7 @@ export function createPhysicalConfirmations(
         "terrain-contact": true,
       };
 }
-export interface ShellState {
+export type ShellState = {
   readonly network: NetworkState;
   readonly serviceWorker: ServiceWorkerState;
   readonly appShellCache: AppShellCacheState;

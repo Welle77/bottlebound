@@ -13,14 +13,14 @@ export const ABILITY_FIELDS = [
 
 export type AbilityField = (typeof ABILITY_FIELDS)[number];
 
-export interface RulesAbilityReference {
+export type RulesAbilityReference = {
   readonly name: string;
   readonly characterName: string;
   readonly anchor: string;
   readonly fields: Readonly<Record<AbilityField, string>>;
 }
 
-export interface RulesCharacterReference {
+export type RulesCharacterReference = {
   readonly id: string;
   readonly name: string;
   readonly team: Team;
@@ -32,13 +32,13 @@ export interface RulesCharacterReference {
   readonly abilities: readonly RulesAbilityReference[];
 }
 
-export interface RulesSectionReference {
+export type RulesSectionReference = {
   readonly title: string;
   readonly anchor: string;
   readonly sourceOrder: number;
 }
 
-export interface RulesQuickReference {
+export type RulesQuickReference = {
   readonly rule: string;
   readonly summary: string;
   readonly anchor: string;
@@ -47,7 +47,7 @@ export interface RulesQuickReference {
 export type RulesReferenceRecordKind =
   "section" | "character" | "ability" | "quick-reference";
 
-export interface RulesReferenceRecord {
+export type RulesReferenceRecord = {
   readonly kind: RulesReferenceRecordKind;
   readonly title: string;
   readonly anchor: string;
@@ -55,7 +55,7 @@ export interface RulesReferenceRecord {
   readonly text: string;
 }
 
-export interface RulesReference {
+export type RulesReference = {
   readonly version: string;
   readonly html: string;
   readonly sections: readonly RulesSectionReference[];

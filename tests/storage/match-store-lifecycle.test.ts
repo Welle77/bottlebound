@@ -70,18 +70,18 @@ describe("IndexedDbMatchStore", () => {
       "2026-08-22T14:01:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
-    const initialResults: ReadonlyArray<{
+    const initialResults: readonly {
       readonly event: MatchEvent;
       readonly state: MatchState;
-    }> = [setup, generated, started];
+    }[] = [setup, generated, started];
     const { results, current } = Array.from(
       { length: 5 },
       (_, attackIndex) => attackIndex,
     ).reduce<{
-      readonly results: ReadonlyArray<{
+      readonly results: readonly {
         readonly event: MatchEvent;
         readonly state: MatchState;
-      }>;
+      }[];
       readonly current: ActiveMatchState;
     }>(
       (progress, attackIndex) => {
@@ -165,7 +165,10 @@ describe("IndexedDbMatchStore", () => {
     "atomically restores a %s simultaneous ruling, End Game, Reopen, and Undo",
     async (outcome) => {
       const factory = new IDBFactory();
-      const store = createIndexedDbMatchStore(factory, `simultaneous-${outcome}`);
+      const store = createIndexedDbMatchStore(
+        factory,
+        `simultaneous-${outcome}`,
+      );
       const { results, finalState } = simultaneousEliminationRun(
         `match-simultaneous-${outcome}`,
       );

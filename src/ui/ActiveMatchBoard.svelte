@@ -31,7 +31,7 @@
   // Draft flow or the ability picker holds the surface (both component-owned
   // since T07), this component does not render; the App shell owns that
   // branching.
-  interface BoardRow {
+  type BoardRow = {
     readonly key: CharacterId;
     readonly slot: number;
     readonly character: RulesetCharacter;

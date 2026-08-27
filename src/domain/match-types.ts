@@ -217,11 +217,11 @@ export function isDecisionBasis(value: string): value is DecisionBasis {
   return (DECISION_BASES as readonly string[]).includes(value);
 }
 
-export interface RandomSource {
+export type RandomSource = {
   nextUint32(): number;
 }
 
-export interface MatchCharacter {
+export type MatchCharacter = {
   readonly characterId: CharacterId;
   readonly hp: number;
   readonly currentMaxHp: number;
@@ -291,7 +291,7 @@ export function isEffectOperation(value: string): value is EffectOperation {
   return (EFFECT_OPERATIONS as readonly string[]).includes(value);
 }
 
-export interface ActiveEffect {
+export type ActiveEffect = {
   readonly effectId: string;
   readonly abilityId: AbilityId;
   readonly kind: ActiveEffectKind;
@@ -307,7 +307,7 @@ export interface ActiveEffect {
   readonly appliedSequence: number;
 }
 
-interface CombatMatchState {
+type CombatMatchState = {
   readonly spentReactionIds: readonly ReactionId[];
   readonly spentAbilityIds: readonly AbilityId[];
   readonly majorActionUsed: boolean;
@@ -317,7 +317,7 @@ interface CombatMatchState {
   readonly activeEffects: readonly ActiveEffect[];
 }
 
-export interface InitiativeEntry {
+export type InitiativeEntry = {
   readonly characterId: CharacterId;
   readonly roll: number;
   readonly modifier: number;
@@ -325,7 +325,7 @@ export interface InitiativeEntry {
   readonly slot: number;
 }
 
-export interface TieOrder {
+export type TieOrder = {
   readonly total: number;
   readonly initialCharacterIds: readonly CharacterId[];
   readonly steps: readonly CoinFlipTieBreakStep[];
@@ -334,13 +334,13 @@ export interface TieOrder {
 
 export type DigitalCoinFlipResult = "heads" | "tails";
 
-export interface CoinFlipAttempt {
+export type CoinFlipAttempt = {
   readonly flips: readonly DigitalCoinFlipResult[];
   readonly candidate: number;
   readonly accepted: boolean;
 }
 
-export interface CoinFlipTieBreakStep {
+export type CoinFlipTieBreakStep = {
   readonly position: number;
   readonly upperExclusive: number;
   readonly attempts: readonly CoinFlipAttempt[];
@@ -353,7 +353,7 @@ export interface CoinFlipTieBreakStep {
  */
 export type DisplayNames = Readonly<Partial<Record<CharacterId, string>>>;
 
-export interface SetupMatchState extends CombatMatchState {
+export type SetupMatchState = {
   readonly schemaVersion: typeof MATCH_SCHEMA_VERSION;
   readonly rulesVersion: string;
   readonly matchId: string;
@@ -363,9 +363,9 @@ export interface SetupMatchState extends CombatMatchState {
   readonly initiative: readonly InitiativeEntry[] | null;
   /** Complete Display Name map; empty when the referee assigned none. */
   readonly displayNames: DisplayNames;
-}
+} & CombatMatchState
 
-export interface ActiveMatchState extends CombatMatchState {
+export type ActiveMatchState = {
   readonly schemaVersion: typeof MATCH_SCHEMA_VERSION;
   readonly rulesVersion: string;
   readonly matchId: string;
@@ -377,9 +377,9 @@ export interface ActiveMatchState extends CombatMatchState {
   readonly activeSlot: number;
   /** Complete Display Name map; empty when the referee assigned none. */
   readonly displayNames: DisplayNames;
-}
+} & CombatMatchState
 
-export interface EndedMatchState extends CombatMatchState {
+export type EndedMatchState = {
   readonly schemaVersion: typeof MATCH_SCHEMA_VERSION;
   readonly rulesVersion: string;
   readonly matchId: string;
@@ -399,39 +399,39 @@ export interface EndedMatchState extends CombatMatchState {
   readonly finalHpTotals: FinalTeamCounts;
   /** The recorded Coin Flip; null whenever the Decision Basis is not coinFlip. */
   readonly coinFlipResult: Team | null;
-}
+} & CombatMatchState
 
 export type MatchState = SetupMatchState | ActiveMatchState | EndedMatchState;
 
-interface EventBase {
+type EventBase = {
   readonly matchId: string;
   readonly sequence: number;
   readonly rulesVersion: string;
   readonly occurredAt: string;
 }
 
-export interface SetupCreatedEvent extends EventBase {
+export type SetupCreatedEvent = {
   readonly type: "SetupCreated";
-}
+} & EventBase
 
-export interface DisplayNamesAssignedEvent extends EventBase {
+export type DisplayNamesAssignedEvent = {
   readonly type: "DisplayNamesAssigned";
   readonly displayNames: DisplayNames;
-}
+} & EventBase
 
-export interface InitiativeEvent extends EventBase {
+export type InitiativeEvent = {
   readonly type: "InitiativeGenerated" | "InitiativeRerolled";
   readonly results: readonly InitiativeEntry[];
   readonly tieOrder: readonly TieOrder[];
-}
+} & EventBase
 
-export interface MatchStartedEvent extends EventBase {
+export type MatchStartedEvent = {
   readonly type: "MatchStarted";
   readonly round: 1;
   readonly activeSlot: 1;
-}
+} & EventBase
 
-export interface TurnFinishedEvent extends EventBase {
+export type TurnFinishedEvent = {
   readonly type: "TurnFinished";
   readonly fromRound: number;
   readonly fromSlot: number;
@@ -440,27 +440,27 @@ export interface TurnFinishedEvent extends EventBase {
   readonly skippedSlots: readonly number[];
   /** Every effect that expired at this turn boundary; empty when none did. */
   readonly expiredEffects: readonly ActiveEffect[];
-}
+} & EventBase
 
-export interface EliminationContinuedEvent extends EventBase {
+export type EliminationContinuedEvent = {
   readonly type: "EliminationContinued";
   readonly eliminatedTeam: Team;
   readonly outcome: Team;
-}
+} & EventBase
 
-export interface SimultaneousEliminationRuledEvent extends EventBase {
+export type SimultaneousEliminationRuledEvent = {
   readonly type: "SimultaneousEliminationRuled";
   readonly eliminatedTeams: readonly [Team, Team];
   readonly outcome: Exclude<MatchOutcome, null>;
   readonly overrideEvidence: string;
-}
+} & EventBase
 
-export interface FinalTeamCounts {
+export type FinalTeamCounts = {
   readonly Drow: number;
   readonly Duergar: number;
 }
 
-export interface EndGamePreview {
+export type EndGamePreview = {
   readonly outcome: Exclude<MatchOutcome, null>;
   readonly decisionBasis: DecisionBasis;
   readonly finalCounts: FinalTeamCounts;
@@ -468,7 +468,7 @@ export interface EndGamePreview {
   readonly coinFlipResult?: Team;
 }
 
-export interface MatchSummary {
+export type MatchSummary = {
   readonly outcome: Exclude<MatchOutcome, null>;
   readonly decisionBasis: DecisionBasis;
   readonly finalCounts: FinalTeamCounts;
@@ -478,7 +478,7 @@ export interface MatchSummary {
   readonly coinFlipResult?: Team;
 }
 
-export interface MatchEndedEvent extends EventBase {
+export type MatchEndedEvent = {
   readonly type: "MatchEnded";
   readonly outcome: Exclude<MatchOutcome, null>;
   readonly eliminatedTeams: readonly Team[];
@@ -487,21 +487,21 @@ export interface MatchEndedEvent extends EventBase {
   readonly finalHpTotals: FinalTeamCounts;
   /** The recorded Coin Flip; null whenever the Decision Basis is not coinFlip. */
   readonly coinFlipResult: Team | null;
-}
+} & EventBase
 
-export interface MatchReopenedEvent extends EventBase {
+export type MatchReopenedEvent = {
   readonly type: "MatchReopened";
   readonly endedSequence: number;
-}
+} & EventBase
 
-export interface PhysicalConfirmations {
+export type PhysicalConfirmations = {
   readonly range: true;
   readonly lineOfSight: true;
   readonly legalBottleContact: true;
   readonly terrainContact: true;
 }
 
-export interface AttackLeg {
+export type AttackLeg = {
   readonly sequence: number;
   readonly kind: "initial" | "redirected";
   readonly sourceCharacterId: CharacterId;
@@ -513,7 +513,7 @@ export interface AttackLeg {
   readonly affectedCharacterIds: readonly CharacterId[];
 }
 
-export interface ActionEffect {
+export type ActionEffect = {
   readonly characterId: CharacterId;
   /**
    * Finalized damage for this affected character. Base attacks contribute 1;
@@ -544,7 +544,7 @@ export type ProtectiveReactionOperation =
       readonly towardCharacterId: CharacterId;
     };
 
-export interface ProtectiveReactionResolution {
+export type ProtectiveReactionResolution = {
   readonly reactionId: ReactionId;
   readonly ownerCharacterId: CharacterId;
   readonly protectedCharacterId: CharacterId;
@@ -553,13 +553,13 @@ export interface ProtectiveReactionResolution {
   readonly operations: readonly ProtectiveReactionOperation[];
 }
 
-export interface ProtectiveReactionInput {
+export type ProtectiveReactionInput = {
   readonly reactionId: ReactionId;
   readonly protectedCharacterId: CharacterId;
   readonly override: string | null;
 }
 
-export interface ProtectiveReactionChoice {
+export type ProtectiveReactionChoice = {
   readonly reactionId: ReactionId;
   readonly ownerCharacterId: CharacterId;
   readonly protectedCharacterId: CharacterId;
@@ -567,7 +567,7 @@ export interface ProtectiveReactionChoice {
   readonly warnings: readonly string[];
 }
 
-export interface ActionResolvedEvent extends EventBase {
+export type ActionResolvedEvent = {
   readonly type: "ActionResolved";
   readonly actionType: ActionKind;
   readonly sourceCharacterId: CharacterId;
@@ -593,9 +593,9 @@ export interface ActionResolvedEvent extends EventBase {
    * when the resolution needed no Override.
    */
   readonly abilityOverride: string | null;
-}
+} & EventBase
 
-export interface BasicAttackInput {
+export type BasicAttackInput = {
   readonly sourceCharacterId: CharacterId;
   readonly affectedCharacterIds?: readonly CharacterId[];
   readonly attackLegs?: readonly Readonly<{
@@ -621,11 +621,11 @@ export type ReversibleMatchEvent =
   | SimultaneousEliminationRuledEvent
   | MatchReopenedEvent;
 
-export interface UndoAppliedEvent extends EventBase {
+export type UndoAppliedEvent = {
   readonly type: "UndoApplied";
   readonly targetSequence: number;
   readonly targetType: ReversibleMatchEvent["type"];
-}
+} & EventBase
 
 export type MatchEvent =
   | SetupCreatedEvent
@@ -641,15 +641,15 @@ export type MatchEvent =
   | UndoAppliedEvent;
 export type SetupMatchEvent = SetupCreatedEvent | InitiativeEvent;
 
-export interface CommandResult<
+export type CommandResult<
   State extends MatchState = MatchState,
   Event extends MatchEvent = MatchEvent,
-> {
+> = {
   readonly state: State;
   readonly event: Event;
 }
 
-export interface UndoPreview {
+export type UndoPreview = {
   readonly target: ReversibleMatchEvent;
   readonly currentState: MatchState;
   readonly restoredState: MatchState;

@@ -129,7 +129,7 @@ export function advanceTo(
   return advanceStep(run.state, 0);
 }
 
-export interface CastRequest {
+export type CastRequest = {
   readonly abilityName: string;
   readonly input?: Omit<Parameters<typeof resolveAbility>[1], "abilityId">;
   readonly step: number;

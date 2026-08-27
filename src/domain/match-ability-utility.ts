@@ -2,7 +2,7 @@ import type { ActionEffect, CharacterId, MatchCharacter } from "./match-types";
 import type { StructuredAbility } from "./ruleset";
 import { isAbilityNamed } from "./match-ability-effects";
 
-export interface UtilityAbilityContext {
+export type UtilityAbilityContext = {
   readonly ability: StructuredAbility;
   readonly affectedCharacterIds: readonly CharacterId[];
   /** Pre-action snapshot backing the Lay on Hands revive-or-heal choice. */
@@ -11,14 +11,14 @@ export interface UtilityAbilityContext {
   readonly characters: readonly MatchCharacter[];
 }
 
-export interface UtilityAbilityResult {
+export type UtilityAbilityResult = {
   /** Updated working copy with every HP/maxHP change applied. */
   readonly characters: readonly MatchCharacter[];
   /** Output ledger; every touched character appends exactly one entry. */
   readonly effects: readonly ActionEffect[];
 }
 
-interface TargetOutcome {
+type TargetOutcome = {
   readonly character: MatchCharacter;
   readonly effect: ActionEffect;
 }

@@ -21,7 +21,7 @@
     affectedCharacterIds: readonly CharacterId[];
   } = $props();
 
-  interface ReactionRow {
+  type ReactionRow = {
     readonly reactionId: ReactionId;
     readonly protectedCharacterId: CharacterId;
     readonly reactionName: string;

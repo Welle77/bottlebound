@@ -71,3 +71,13 @@ Introduce one exact `AbilityName` union for the 24 structured Ability card names
 - [x] `AbilityName` contains all 24 authoritative names, has a runtime guard for untyped rules-reference input, and is re-exported through `src/domain/match.ts`
 - [x] Structured ability and reaction names plus name-based helper parameters use `AbilityName`; compile-only probes reject an invented ability name
 - [x] `tsc --noEmit`, `svelte-check`, scoped lint/format, and ability/domain tests pass with no runtime or persistence behavior changes
+
+## F02: Resolve stylistic type-definition diagnostics
+
+**Follow-up to:** F01
+
+Adopt the newly enabled stylistic ESLint rules by changing object-shaped interfaces to type aliases and replacing forbidden `Array<T>`/`ReadonlyArray<T>` syntax throughout the reported application and test files. Preserve test semantics and runtime behavior.
+
+- [x] All `@typescript-eslint/consistent-type-definitions` diagnostics use `type` aliases
+- [x] All reported `@typescript-eslint/array-type` and `@typescript-eslint/no-empty-function` diagnostics are resolved without inline disables or behavior changes
+- [x] Lint, build, focused tests, and formatting checks pass

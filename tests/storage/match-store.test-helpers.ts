@@ -104,9 +104,10 @@ export function rewriteStoredRulesVersion(
           const store = transaction.objectStore(storeName);
           const request = store.getAll();
           request.addEventListener("success", () => {
-            for (const value of request.result as ReadonlyArray<
-              Record<string, unknown>
-            >) {
+            for (const value of request.result as readonly Record<
+              string,
+              unknown
+            >[]) {
               const rewritten = { ...value, rulesVersion };
               if (storeName === "metadata") {
                 store.put(rewritten, "current-match");
@@ -273,10 +274,10 @@ export function readRawMatch(
 }
 
 export function simultaneousEliminationRun(matchId: string): {
-  readonly results: ReadonlyArray<{
+  readonly results: readonly {
     readonly event: MatchEvent;
     readonly state: MatchState;
-  }>;
+  }[];
   readonly finalState: ActiveMatchState;
 } {
   const setup = createSetup(matchId, "2026-08-22T14:00:00.000Z");
@@ -313,15 +314,15 @@ export function simultaneousEliminationRun(matchId: string): {
     ["drow-rogue", "drow-druid", "duergar-fighter", "drow-paladin"] as const,
     ["drow-paladin", "duergar-monk", "duergar-barbarian"] as const,
   ];
-  const initialResults: ReadonlyArray<{
+  const initialResults: readonly {
     readonly event: MatchEvent;
     readonly state: MatchState;
-  }> = [setup, generated, started];
+  }[] = [setup, generated, started];
   const { results, current } = affectedLists.reduce<{
-    readonly results: ReadonlyArray<{
+    readonly results: readonly {
       readonly event: MatchEvent;
       readonly state: MatchState;
-    }>;
+    }[];
     readonly current: ActiveMatchState;
   }>(
     (progress, affectedCharacterIds, index) => {

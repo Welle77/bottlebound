@@ -8,11 +8,15 @@ type WorkerRequestBody = {
   readonly url: string;
 };
 
-type WorkerEvent = {
+type WorkerEventRequest = {
   readonly request: WorkerRequestBody;
-} & {
+};
+
+type WorkerEventResponse = {
   readonly respondWith: (response: Promise<unknown>) => void;
 };
+
+type WorkerEvent = WorkerEventRequest & WorkerEventResponse;
 
 function createTestCell<T>(initialValue: T) {
   let value = initialValue;
@@ -29,7 +33,7 @@ function createTestCell<T>(initialValue: T) {
 describe("service worker navigation responses", () => {
   it("does not use a redirected cached response for a navigation", async () => {
     const listeners = createTestCell<
-      ReadonlyArray<readonly [string, (event: WorkerEvent) => void]>
+      readonly (readonly [string, (event: WorkerEvent) => void])[]
     >([]);
     const redirectedResponse = { redirected: true };
     const responsePromiseCell = createTestCell<Promise<unknown> | undefined>(

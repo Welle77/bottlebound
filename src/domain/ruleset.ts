@@ -1,10 +1,4 @@
 import { RULES_REFERENCE } from "virtual:rules-reference";
-import {
-  isAbilityId,
-  isBasicAttackId,
-  isCharacterId,
-  isReactionId,
-} from "./match-types";
 import type {
   AbilityId,
   BasicAttackId,
@@ -12,35 +6,16 @@ import type {
   ReactionId,
   Team,
 } from "./match-types";
+import {
+  isAbilityId,
+  isBasicAttackId,
+  isCharacterId,
+  isReactionId,
+} from "./match-types";
 
-export type { Team, CharacterId, AbilityId, BasicAttackId, ReactionId };
-export type AbilityName =
-  | "Backstab"
-  | "Vanish"
-  | "Shapeshift"
-  | "Nature’s Renewal"
-  | "Lay on Hands"
-  | "Divine Shield"
-  | "Frostbind"
-  | "Misty Escape"
-  | "Arcane Bolt"
-  | "Mirror Veil"
-  | "Inspiring Words"
-  | "Battle Hymn"
-  | "Hunter’s Mark"
-  | "Deadeye"
-  | "Stunning Strike"
-  | "Deflecting Palm"
-  | "Second Wind"
-  | "Shield Wall"
-  | "Brutal Shove"
-  | "Rage"
-  | "Hex"
-  | "Eldritch Blast"
-  | "Blessing of Battle"
-  | "Revivify";
+export type { AbilityId, BasicAttackId, CharacterId, ReactionId, Team };
 
-const ABILITY_NAMES: readonly AbilityName[] = [
+const ABILITY_NAMES = [
   "Backstab",
   "Vanish",
   "Shapeshift",
@@ -65,21 +40,23 @@ const ABILITY_NAMES: readonly AbilityName[] = [
   "Eldritch Blast",
   "Blessing of Battle",
   "Revivify",
-];
+] as const;
+
+export type AbilityName = (typeof ABILITY_NAMES)[number];
 
 export function isAbilityName(value: string): value is AbilityName {
   return (ABILITY_NAMES as readonly string[]).includes(value);
 }
 
-export type {
-  AttackKind,
-  Phase,
-  MatchEventType,
-  ActionKind,
-} from "./match-types";
 export { isCharacterId, isTeam } from "./match-types";
+export type {
+  ActionKind,
+  AttackKind,
+  MatchEventType,
+  Phase,
+} from "./match-types";
 
-export interface RulesetAbility {
+export type RulesetAbility = {
   readonly name: AbilityName;
   readonly sourceAnchor: string;
   readonly type: string;
@@ -90,20 +67,20 @@ export interface RulesetAbility {
   readonly ballRequired: string;
   readonly effect: string;
   readonly duration: string;
-}
+};
 
-export interface RulesetCharacter {
+export type RulesetCharacter = {
   readonly id: CharacterId;
   readonly name: string;
   readonly team: Team;
   readonly baseHp: number;
   readonly initiativeModifier: number;
-}
+};
 
 export type PhysicalAttackCheck =
   "range" | "line-of-sight" | "legal-bottle-contact" | "terrain-contact";
 
-export interface RulesetBasicAttack {
+export type RulesetBasicAttack = {
   readonly id: BasicAttackId;
   readonly characterId: CharacterId;
   readonly attackType: "melee" | "ranged";
@@ -112,7 +89,7 @@ export interface RulesetBasicAttack {
   readonly use: "unlimited";
   readonly physicalChecks: readonly PhysicalAttackCheck[];
   readonly sourceAnchor: string;
-}
+};
 
 export type ReactionOperation =
   | { readonly type: "prevent-damage-and-effects" }
@@ -126,7 +103,7 @@ export type ReactionOperation =
       readonly toward: "original-thrower";
     };
 
-export interface RulesetReaction {
+export type RulesetReaction = {
   readonly id: ReactionId;
   readonly ownerCharacterId: CharacterId;
   readonly name: AbilityName;
@@ -137,16 +114,16 @@ export interface RulesetReaction {
   readonly operations: readonly ReactionOperation[];
   readonly sourceAnchor: string;
   readonly source: RulesetAbility;
-}
+};
 
-export interface RulesetReferenceCharacter extends RulesetCharacter {
+export type RulesetReferenceCharacter = {
   readonly role: string;
   readonly basicAttack: string;
   readonly sourceAnchor: string;
   readonly abilities: readonly RulesetAbility[];
-}
+} & RulesetCharacter;
 
-export interface StructuredAbility {
+export type StructuredAbility = {
   readonly id: AbilityId;
   readonly name: AbilityName;
   readonly ownerCharacterId: CharacterId;
@@ -174,20 +151,20 @@ export interface StructuredAbility {
   readonly operations: readonly string[];
   readonly rulesText: string;
   readonly sourceAnchor: string;
-}
+};
 
 /** Printed Attack Type values retained exactly from the authoritative cards. */
 export type StructuredAbilityAttackType =
   "None" | "Ability Attack" | "Melee" | "Ranged";
 
-export interface Ruleset {
+export type Ruleset = {
   readonly version: string;
   readonly characters: readonly RulesetCharacter[];
   readonly referenceCharacters: readonly RulesetReferenceCharacter[];
   readonly basicAttacks: readonly RulesetBasicAttack[];
   readonly reactions: readonly RulesetReaction[];
   readonly abilities: readonly StructuredAbility[];
-}
+};
 
 export const RULES_VERSION = "BB20260822A1";
 
@@ -210,9 +187,7 @@ const referenceCharacters = RULES_REFERENCE.characters.map((character) => {
   const characterId = requiredCharacterId(character.id);
   const abilities = character.abilities.map((ability) => {
     if (!isAbilityName(ability.name)) {
-      throw new Error(
-        `Bundled Ruleset has an invalid ability name: ${ability.name}.`,
-      );
+      throw new Error("Bundled Ruleset has an invalid ability name.");
     }
     return Object.freeze({
       name: ability.name,

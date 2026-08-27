@@ -110,7 +110,7 @@ function assertCanonicalInitiative(value: MatchState): void {
   );
 }
 
-interface InitiativeValidationState {
+type InitiativeValidationState = {
   readonly seen: ReadonlySet<CharacterId>;
   readonly previousTotal: number;
 }

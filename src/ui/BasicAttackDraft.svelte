@@ -23,17 +23,17 @@
   // real markup through CharacterName instead of hosted template strings.
   type ActiveView = Extract<MatchState, { readonly phase: "active" }>;
 
-  interface NamedCharacter {
+  type NamedCharacter = {
     readonly id: CharacterId;
     readonly name: string;
   }
 
-  interface LegReview {
+  type LegReview = {
     readonly names: readonly NamedCharacter[];
     readonly redirect: boolean;
   }
 
-  interface ReactionReview {
+  type ReactionReview = {
     readonly key: string;
     readonly reactionName: string;
     readonly owner: NamedCharacter;

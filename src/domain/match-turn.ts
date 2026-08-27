@@ -14,14 +14,14 @@ import type {
   TurnFinishedEvent,
 } from "./match-types";
 
-interface TurnPosition {
+type TurnPosition = {
   readonly activeSlot: number;
   readonly round: number;
   readonly skippedSlots: readonly number[];
   readonly stopped: boolean;
 }
 
-interface EffectBoundaryContext {
+type EffectBoundaryContext = {
   readonly activeSlot: number;
   readonly fromSlot: number;
   readonly skippedSlots: readonly number[];

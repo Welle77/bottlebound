@@ -529,7 +529,7 @@ describe("Match Summary lifecycle contract", () => {
     });
     const badState = {
       ...failingEnded.state,
-      bad: () => {},
+      bad: () => undefined,
     } as unknown as MatchState;
     await expect(store.commit(failingEnded.event, badState)).rejects.toThrow();
     expect(await store.getSummary()).toEqual(prior);

@@ -46,7 +46,7 @@ describe("Match command persistence contract", () => {
     );
     const started = startMatch(rerolled.state, "2026-08-22T14:03:00.000Z");
     const finished = finishTurn(started.state, "2026-08-22T14:04:00.000Z");
-    const committed: Array<{ state: MatchState; event: MatchEvent }> = [];
+    const committed: { state: MatchState; event: MatchEvent }[] = [];
 
     for (const result of [setup, generated, rerolled, started, finished]) {
       await store.commit(result.event, result.state);

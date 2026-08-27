@@ -165,7 +165,7 @@ function buildAbilityEffects(
   return [];
 }
 
-interface AbilityTargetInput {
+type AbilityTargetInput = {
   readonly targetCharacterIds?: readonly CharacterId[];
   readonly attackLegs?: readonly Readonly<{
     readonly affectedCharacterIds: readonly CharacterId[];
@@ -179,7 +179,7 @@ interface AbilityTargetInput {
   readonly reactions?: readonly ProtectiveReactionInput[];
 }
 
-interface AbilityTargetContext {
+type AbilityTargetContext = {
   readonly state: ActiveMatchState;
   readonly ability: StructuredAbility;
   readonly input: AbilityTargetInput;
@@ -436,7 +436,7 @@ function hexTriggeredMovementCap(
   };
 }
 
-export interface AttackDamageInput {
+export type AttackDamageInput = {
   readonly baseDamage: number;
   readonly affectedCharacterId: CharacterId;
   /** Physical throws cannot affect a Vanish-protected character. */
@@ -447,7 +447,7 @@ export interface AttackDamageInput {
   readonly sequence: number;
 }
 
-export interface AttackDamageResolution {
+export type AttackDamageResolution = {
   readonly finalDamage: number;
   readonly expired: readonly ActiveEffect[];
   readonly applied: readonly ActiveEffect[];

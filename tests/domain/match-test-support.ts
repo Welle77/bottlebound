@@ -48,10 +48,10 @@ export function initiativeCharacterId(
 }
 
 export function simultaneousEliminationRun(matchId: string): {
-  readonly steps: ReadonlyArray<{
+  readonly steps: readonly {
     readonly event: MatchEvent;
     readonly state: MatchState;
-  }>;
+  }[];
   readonly finalState: ActiveMatchState;
 } {
   const setup = createSetup(matchId, "2026-08-22T14:00:00.000Z");
@@ -88,15 +88,15 @@ export function simultaneousEliminationRun(matchId: string): {
     ["drow-rogue", "drow-druid", "duergar-fighter", "drow-paladin"] as const,
     ["drow-paladin", "duergar-monk", "duergar-barbarian"] as const,
   ];
-  const initialSteps: ReadonlyArray<{
+  const initialSteps: readonly {
     readonly event: MatchEvent;
     readonly state: MatchState;
-  }> = [setup, generated, started];
+  }[] = [setup, generated, started];
   const { steps, current } = affectedLists.reduce<{
-    readonly steps: ReadonlyArray<{
+    readonly steps: readonly {
       readonly event: MatchEvent;
       readonly state: MatchState;
-    }>;
+    }[];
     readonly current: ActiveMatchState;
   }>(
     (progress, affectedCharacterIds, index) => {

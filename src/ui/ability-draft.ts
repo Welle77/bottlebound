@@ -121,7 +121,7 @@ export const CHECK_LABELS: readonly (readonly [PhysicalAttackCheck, string])[] =
 /* Shared draft-view helpers consumed by the converted T07 components   */
 /* ------------------------------------------------------------------ */
 
-interface TargetCandidate {
+type TargetCandidate = {
   readonly characterId: CharacterId;
   readonly blocked: boolean;
   readonly reasons: readonly string[];
@@ -183,7 +183,7 @@ export function targetCandidates(
  * markup through the CharacterName component (T10). A leading space in
  * `rest` separates a rendered character name from its sentence.
  */
-export interface DraftWarning {
+export type DraftWarning = {
   readonly code: string;
   readonly character: {
     readonly id: CharacterId;
@@ -277,7 +277,7 @@ export function draftWarnings(
   ];
 }
 
-interface AttackPreviewContext {
+type AttackPreviewContext = {
   readonly match: ActiveView;
   readonly draft: ActionDraft;
   /** Printed damage before effect modification (Basic Attacks and abilities both print 1). */
@@ -287,7 +287,7 @@ interface AttackPreviewContext {
 }
 
 /** One "Ordered hits and final changes" review row, rendered as real markup. */
-export interface AttackPreviewRow {
+export type AttackPreviewRow = {
   readonly contactLabel: string;
   readonly character: { readonly id: CharacterId; readonly name: string };
   readonly team: Team;
@@ -366,7 +366,7 @@ export function attackPreviewRow(
 }
 
 /** One "Expected changes" review row, rendered as real markup. */
-export interface EffectPreviewRow {
+export type EffectPreviewRow = {
   readonly character: { readonly id: CharacterId; readonly name: string };
   readonly team: Team;
   readonly effectLabel: string;
