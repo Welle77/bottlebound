@@ -160,211 +160,248 @@ function buildAbilityEffects(
   return [];
 }
 
-function resolveAffectedCharacterIds(context: {
+interface AbilityTargetInput {
+  readonly targetCharacterIds?: readonly string[];
+  readonly attackLegs?: readonly Readonly<{
+    readonly affectedCharacterIds: readonly string[];
+  }>[];
+  readonly physicalConfirmations?: Readonly<{
+    readonly range: boolean;
+    readonly lineOfSight: boolean;
+    readonly legalBottleContact: boolean;
+    readonly terrainContact: boolean;
+  }>;
+  readonly reactions?: readonly ProtectiveReactionInput[];
+}
+
+interface AbilityTargetContext {
   readonly state: ActiveMatchState;
   readonly ability: StructuredAbility;
-  readonly input: {
-    readonly targetCharacterIds?: readonly string[];
-    readonly attackLegs?: readonly Readonly<{
-      readonly affectedCharacterIds: readonly string[];
-    }>[];
-    readonly physicalConfirmations?: Readonly<{
-      readonly range: boolean;
-      readonly lineOfSight: boolean;
-      readonly legalBottleContact: boolean;
-      readonly terrainContact: boolean;
-    }>;
-    readonly reactions?: readonly ProtectiveReactionInput[];
-  };
+  readonly input: AbilityTargetInput;
   readonly abilityOverride: string | null;
-}): readonly string[] {
-  const { state, ability, input, abilityOverride } = context;
-  const attackLegsInput = input.attackLegs;
-  const targetIds = input.targetCharacterIds ?? [];
+}
 
-  if (ability.interaction === "targeted-attack") {
-    const [targetId] = targetIds;
-    if (targetIds.length !== 1 || targetId === undefined) {
-      throw new Error("A targeted Ability Attack needs exactly one target.");
-    }
-    const targetChar = state.characters.find(
-      (character) => character.characterId === targetId,
+function resolveTargetedAttackTargetIds(
+  context: AbilityTargetContext,
+): readonly string[] {
+  const { state, ability, input, abilityOverride } = context;
+  const targetIds = input.targetCharacterIds ?? [];
+  const [targetId] = targetIds;
+  if (targetIds.length !== 1 || targetId === undefined) {
+    throw new Error("A targeted Ability Attack needs exactly one target.");
+  }
+  const targetCharacter = state.characters.find(
+    (character) => character.characterId === targetId,
+  );
+  if (!targetCharacter) {
+    throw new Error("The ability references an unknown target.");
+  }
+  const sourceTeam = teamOfCharacter(ability.ownerCharacterId);
+  const targetTeam = teamOfCharacter(targetId);
+  if (targetTeam === sourceTeam && abilityOverride === null) {
+    throw new Error("invalid-target-relation");
+  }
+  if (targetCharacter.hp === 0 && abilityOverride === null) {
+    throw new Error("invalid-target-life-state");
+  }
+  if (
+    ability.targetPolicy.lifeState === "active" &&
+    targetCharacter.hp === 0 &&
+    abilityOverride === null
+  ) {
+    throw new Error("invalid-target-life-state");
+  }
+  return [targetId];
+}
+
+function hasDeflectingPalm(
+  selections: readonly ProtectiveReactionInput[],
+): boolean {
+  return selections.some((selection) => {
+    const reaction = RULESET.reactions.find(
+      ({ id }) => id === selection.reactionId,
     );
-    if (!targetChar)
-      throw new Error("The ability references an unknown target.");
-    const sourceTeam = teamOfCharacter(ability.ownerCharacterId);
-    const targetTeam = teamOfCharacter(targetId);
-    if (targetTeam === sourceTeam) {
-      const override = abilityOverride;
-      if (override === null) throw new Error("invalid-target-relation");
-    }
-    if (targetChar.hp === 0) {
-      const override = abilityOverride;
-      if (override === null) throw new Error("invalid-target-life-state");
-    }
-    // Enforce targetPolicy lifeState active unless either
-    if (ability.targetPolicy.lifeState === "active" && targetChar.hp === 0) {
-      const override = abilityOverride;
-      if (override === null) throw new Error("invalid-target-life-state");
-    }
-    return [targetId];
-  } else if (ability.interaction === "physical-attack") {
-    if (!attackLegsInput || attackLegsInput.length === 0) {
-      throw new Error("A physical ability needs ordered bottle contacts.");
-    }
-    const confirmations = input.physicalConfirmations;
-    if (
-      !confirmations ||
-      Object.values(confirmations).some((value) => !value)
-    ) {
-      throw new Error("Every manual physical confirmation is required.");
-    }
-    const flat = attackLegsInput.flatMap(
-      ({ affectedCharacterIds }) => affectedCharacterIds,
+    return reaction?.name === "Deflecting Palm";
+  });
+}
+
+function validatePhysicalTargets(
+  state: ActiveMatchState,
+  targetIds: readonly string[],
+): void {
+  if (targetIds.length === 0) {
+    throw new Error(
+      "A physical ability needs at least one affected character.",
     );
-    if (flat.length === 0)
+  }
+  if (new Set(targetIds).size !== targetIds.length) {
+    throw new Error("Basic Attack contacts must be unique.");
+  }
+  for (const characterId of targetIds) {
+    const known = state.characters.some(
+      (character) => character.characterId === characterId,
+    );
+    if (!known) {
       throw new Error(
-        "A physical ability needs at least one affected character.",
+        "Physical ability references an unknown affected character.",
       );
-    if (new Set(flat).size !== flat.length)
-      throw new Error("Basic Attack contacts must be unique.");
-    for (const characterId of flat) {
-      if (
-        !state.characters.some(
-          (character) => character.characterId === characterId,
-        )
-      ) {
-        throw new Error(
-          "Physical ability references an unknown affected character.",
-        );
-      }
-    }
-    // Deflecting Palm handling for physical ability (reuse)
-    const selectedReactions = input.reactions ?? [];
-    const redirectReaction = selectedReactions.find((selection) => {
-      const reaction = RULESET.reactions.find(
-        ({ id }) => id === selection.reactionId,
-      );
-      return reaction?.name === "Deflecting Palm";
-    });
-    if (redirectReaction && attackLegsInput.length !== 2) {
-      throw new Error(
-        "Deflecting Palm needs exactly one redirected Attack Leg.",
-      );
-    }
-    if (!redirectReaction && attackLegsInput.length !== 1) {
-      throw new Error("A redirected Attack Leg needs Deflecting Palm.");
-    }
-    return flat;
-  } else if (ability.interaction === "self") {
-    return [ability.ownerCharacterId];
-  } else {
-    // Only "utility" interactions remain in the union.
-    // For utility: use provided targetCharacterIds or default to self for self-targeting heals
-    if (targetIds.length === 0) {
-      // Some utilities are self (Second Wind, Rage) – default to owner
-      if (
-        ability.name === "Second Wind" ||
-        ability.name === "Rage" ||
-        ability.name === "Vanish" ||
-        ability.name === "Shapeshift"
-      ) {
-        return [ability.ownerCharacterId];
-      } else {
-        throw new Error("Utility ability needs target selection.");
-      }
-    } else {
-      // Card-level life-state gates with unambiguous rules text (rules §12
-      // and §15): ordinary healing cannot affect a Downed character, Nature's
-      // Renewal and Inspiring Words cannot target one, and Revivify needs a
-      // Downed ally. These absolute card prohibitions are checked before the
-      // overridable policy gates below.
-      if (
-        isAbilityNamed(ability, "Nature’s Renewal") ||
-        ability.name === "Inspiring Words"
-      ) {
-        for (const targetId of targetIds) {
-          const targetChar = state.characters.find(
-            (character) => character.characterId === targetId,
-          );
-          if (targetChar?.hp === 0) {
-            throw new Error(
-              "A Downed character cannot be targeted by this healing ability.",
-            );
-          }
-        }
-      }
-      if (ability.name === "Revivify") {
-        for (const targetId of targetIds) {
-          const targetChar = state.characters.find(
-            (character) => character.characterId === targetId,
-          );
-          if (targetChar && targetChar.hp !== 0) {
-            throw new Error("Revivify needs one Downed ally as its target.");
-          }
-        }
-      }
-      // Validate each target relation and lifeState
-      for (const targetId of targetIds) {
-        const targetChar = state.characters.find(
-          (character) => character.characterId === targetId,
-        );
-        if (!targetChar)
-          throw new Error("Utility ability references unknown target.");
-        const sourceTeam = teamOfCharacter(ability.ownerCharacterId);
-        const targetTeam = teamOfCharacter(targetId);
-        const relation = ability.targetPolicy.relation;
-        if (relation === "ally" && targetTeam !== sourceTeam) {
-          const override = abilityOverride;
-          if (override === null) throw new Error("invalid-target-relation");
-        }
-        if (relation === "enemy" && targetTeam === sourceTeam) {
-          const override = abilityOverride;
-          if (override === null) throw new Error("invalid-target-relation");
-        }
-        // lifeState
-        if (
-          ability.targetPolicy.lifeState === "active" &&
-          targetChar.hp === 0
-        ) {
-          const override = abilityOverride;
-          if (override === null) throw new Error("invalid-target-life-state");
-        }
-        if (
-          ability.targetPolicy.lifeState === "downed" &&
-          targetChar.hp !== 0
-        ) {
-          const override = abilityOverride;
-          if (override === null) throw new Error("invalid-target-life-state");
-        }
-      }
-      // Specific guards: Revivify and Lay on Hands revive blocked when the
-      // target's team is eliminated.
-      if (
-        (ability.name === "Revivify" || ability.name === "Lay on Hands") &&
-        targetIds.some((targetId) => {
-          const targetChar = state.characters.find(
-            (character) => character.characterId === targetId,
-          );
-          return targetChar?.hp === 0;
-        })
-      ) {
-        for (const targetId of targetIds) {
-          const targetChar = state.characters.find(
-            (character) => character.characterId === targetId,
-          );
-          if (targetChar?.hp === 0) {
-            const team = teamOfCharacter(targetId);
-            if (state.eliminatedTeams.includes(team)) {
-              throw new Error("eliminated-team");
-            }
-          }
-        }
-      }
-      return [...targetIds];
     }
   }
-  return [];
+}
+
+function resolvePhysicalAttackTargetIds(
+  context: AbilityTargetContext,
+): readonly string[] {
+  const { state, input } = context;
+  const attackLegs = input.attackLegs;
+  if (!attackLegs || attackLegs.length === 0) {
+    throw new Error("A physical ability needs ordered bottle contacts.");
+  }
+  const confirmations = input.physicalConfirmations;
+  if (!confirmations || Object.values(confirmations).some((value) => !value)) {
+    throw new Error("Every manual physical confirmation is required.");
+  }
+  const targetIds = attackLegs.flatMap(
+    ({ affectedCharacterIds }) => affectedCharacterIds,
+  );
+  validatePhysicalTargets(state, targetIds);
+  const redirected = hasDeflectingPalm(input.reactions ?? []);
+  if (redirected && attackLegs.length !== 2) {
+    throw new Error("Deflecting Palm needs exactly one redirected Attack Leg.");
+  }
+  if (!redirected && attackLegs.length !== 1) {
+    throw new Error("A redirected Attack Leg needs Deflecting Palm.");
+  }
+  return targetIds;
+}
+
+function selfDefaultTargetIds(ability: StructuredAbility): readonly string[] {
+  if (
+    ability.name === "Second Wind" ||
+    ability.name === "Rage" ||
+    ability.name === "Vanish" ||
+    ability.name === "Shapeshift"
+  ) {
+    return [ability.ownerCharacterId];
+  }
+  throw new Error("Utility ability needs target selection.");
+}
+
+function validateAbsoluteUtilityLifeState(
+  state: ActiveMatchState,
+  ability: StructuredAbility,
+  targetIds: readonly string[],
+): void {
+  if (
+    isAbilityNamed(ability, "Nature’s Renewal") ||
+    ability.name === "Inspiring Words"
+  ) {
+    for (const targetId of targetIds) {
+      const targetCharacter = state.characters.find(
+        (character) => character.characterId === targetId,
+      );
+      if (targetCharacter?.hp === 0) {
+        throw new Error(
+          "A Downed character cannot be targeted by this healing ability.",
+        );
+      }
+    }
+  }
+  if (ability.name === "Revivify") {
+    for (const targetId of targetIds) {
+      const targetCharacter = state.characters.find(
+        (character) => character.characterId === targetId,
+      );
+      if (targetCharacter && targetCharacter.hp !== 0) {
+        throw new Error("Revivify needs one Downed ally as its target.");
+      }
+    }
+  }
+}
+
+function validateUtilityTarget(context: {
+  readonly state: ActiveMatchState;
+  readonly ability: StructuredAbility;
+  readonly targetId: string;
+  readonly abilityOverride: string | null;
+}): void {
+  const { state, ability, targetId, abilityOverride } = context;
+  const targetCharacter = state.characters.find(
+    (character) => character.characterId === targetId,
+  );
+  if (!targetCharacter) {
+    throw new Error("Utility ability references unknown target.");
+  }
+  const sourceTeam = teamOfCharacter(ability.ownerCharacterId);
+  const targetTeam = teamOfCharacter(targetId);
+  const relation = ability.targetPolicy.relation;
+  if (
+    ((relation === "ally" && targetTeam !== sourceTeam) ||
+      (relation === "enemy" && targetTeam === sourceTeam)) &&
+    abilityOverride === null
+  ) {
+    throw new Error("invalid-target-relation");
+  }
+  const lifeState = ability.targetPolicy.lifeState;
+  if (
+    ((lifeState === "active" && targetCharacter.hp === 0) ||
+      (lifeState === "downed" && targetCharacter.hp !== 0)) &&
+    abilityOverride === null
+  ) {
+    throw new Error("invalid-target-life-state");
+  }
+}
+
+function validateEliminatedTeamRevival(
+  state: ActiveMatchState,
+  ability: StructuredAbility,
+  targetIds: readonly string[],
+): void {
+  if (ability.name !== "Revivify" && ability.name !== "Lay on Hands") {
+    return;
+  }
+  for (const targetId of targetIds) {
+    const targetCharacter = state.characters.find(
+      (character) => character.characterId === targetId,
+    );
+    if (targetCharacter?.hp !== 0) continue;
+    const team = teamOfCharacter(targetId);
+    if (state.eliminatedTeams.includes(team)) {
+      throw new Error("eliminated-team");
+    }
+  }
+}
+
+function resolveUtilityTargetIds(
+  context: AbilityTargetContext,
+): readonly string[] {
+  const { state, ability, input, abilityOverride } = context;
+  const targetIds = input.targetCharacterIds ?? [];
+  if (targetIds.length === 0) return selfDefaultTargetIds(ability);
+
+  // Absolute card prohibitions precede the overridable policy gates.
+  validateAbsoluteUtilityLifeState(state, ability, targetIds);
+  for (const targetId of targetIds) {
+    validateUtilityTarget({ state, ability, targetId, abilityOverride });
+  }
+  validateEliminatedTeamRevival(state, ability, targetIds);
+  return [...targetIds];
+}
+
+function resolveAffectedCharacterIds(
+  context: AbilityTargetContext,
+): readonly string[] {
+  if (context.ability.interaction === "targeted-attack") {
+    return resolveTargetedAttackTargetIds(context);
+  }
+  if (context.ability.interaction === "physical-attack") {
+    return resolvePhysicalAttackTargetIds(context);
+  }
+  if (context.ability.interaction === "self") {
+    return [context.ability.ownerCharacterId];
+  }
+  // Ally, enemy, and utility interactions all use card target selection.
+  return resolveUtilityTargetIds(context);
 }
 
 /**

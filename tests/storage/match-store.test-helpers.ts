@@ -194,9 +194,7 @@ export function rewriteCurrentSnapshotAsRetiredSchema(
             const source = rawSnapshot as Record<string, unknown>;
             const retiredSchemaSnapshot: Record<string, unknown> =
               Object.fromEntries(
-                Object.entries(source).filter(
-                  ([key]) => !retiredKeys.has(key),
-                ),
+                Object.entries(source).filter(([key]) => !retiredKeys.has(key)),
               );
             snapshots.put({ ...retiredSchemaSnapshot, schemaVersion: 2 });
           }

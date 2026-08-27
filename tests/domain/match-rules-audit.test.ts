@@ -282,9 +282,7 @@ describe("rules coverage audit: Basic Attacks carry character-based effects", ()
         downedAfter: false,
       },
     ]);
-    expect(resolution.expiredEffects.map(({ kind }) => kind)).toEqual([
-      "rage",
-    ]);
+    expect(resolution.expiredEffects.map(({ kind }) => kind)).toEqual(["rage"]);
     expect(run.state.activeEffects.some(({ kind }) => kind === "rage")).toBe(
       false,
     );

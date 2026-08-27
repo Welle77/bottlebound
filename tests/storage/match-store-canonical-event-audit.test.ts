@@ -10,7 +10,10 @@ import {
   startMatch,
   type ActiveMatchState,
 } from "../../src/domain/match";
-import { initiativeCharacterId, queuedRandom } from "../domain/match-test-support";
+import {
+  initiativeCharacterId,
+  queuedRandom,
+} from "../domain/match-test-support";
 import type { MatchEvent } from "../../src/domain/match";
 import { assertCanonicalEvent } from "../../src/storage/match-store-canonical-event";
 
@@ -96,9 +99,7 @@ describe("canonical Action Resolution recorded Ability Override", () => {
     delete (legacy as unknown as Record<string, unknown>).abilityOverride;
     expect(() => {
       assertCanonicalEvent(legacy);
-    }).toThrow(
-      "The canonical Action Resolution Event is invalid.",
-    );
+    }).toThrow("The canonical Action Resolution Event is invalid.");
   });
 
   it("rejects a blank recorded Ability Override sentence", () => {
@@ -108,9 +109,7 @@ describe("canonical Action Resolution recorded Ability Override", () => {
     } as unknown as MatchEvent;
     expect(() => {
       assertCanonicalEvent(blank);
-    }).toThrow(
-      "The canonical Action Resolution Event is invalid.",
-    );
+    }).toThrow("The canonical Action Resolution Event is invalid.");
   });
 });
 
@@ -171,8 +170,6 @@ describe("canonical Action Resolution effect damage bounds", () => {
     } as unknown as MatchEvent;
     expect(() => {
       assertCanonicalEvent(overbound);
-    }).toThrow(
-      "The canonical Action Resolution effect is invalid.",
-    );
+    }).toThrow("The canonical Action Resolution effect is invalid.");
   });
 });

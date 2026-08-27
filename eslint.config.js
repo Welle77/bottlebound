@@ -64,6 +64,11 @@ export default tseslint.config(
   // "typescript-eslint strict").
   eslint.configs.recommended,
   ...tseslint.configs.strict,
+  {
+    rules: {
+      complexity: "error",
+    },
+  },
   // Svelte-aware linting for .svelte files. Spread after the TypeScript
   // presets so the svelte-eslint-parser takes precedence for .svelte over
   // the typescript-eslint parser set above.

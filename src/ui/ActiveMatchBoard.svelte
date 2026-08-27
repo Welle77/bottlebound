@@ -3,6 +3,8 @@
     cryptoRandomSource,
     getEndGamePreview,
     getUndoPreview,
+    type ActiveMatchState,
+    type InitiativeEntry,
   } from "../domain/match";
   import { RULESET } from "../domain/ruleset";
   import {
@@ -38,11 +40,16 @@
     readonly turnKey: string;
   }
 
-  const view = $derived.by(() => {
-    const match = state.current.match;
-    if (match?.phase !== "active") return null;
-    const activeEntry = match.initiative[match.activeSlot - 1];
-    const nextScan = match.initiative.reduce<{
+  type RulesetCharacter = (typeof RULESET.characters)[number];
+  type PromptKind =
+    | "none"
+    | "normal"
+    | "acknowledged"
+    | "simultaneous-open"
+    | "simultaneous-resolved";
+
+  function findNextActiveSlot(match: ActiveMatchState): number {
+    return match.initiative.reduce<{
       readonly nextSlot: number;
       readonly found: boolean;
     }>(
@@ -66,32 +73,47 @@
           : { nextSlot: candidateSlot, found: false };
       },
       { nextSlot: match.activeSlot, found: false },
-    );
-    const nextSlot = nextScan.nextSlot;
-    const nextEntry = match.initiative[nextSlot - 1];
-    if (!activeEntry || !nextEntry) {
+    ).nextSlot;
+  }
+
+  function requireInitiativeEntry(
+    match: ActiveMatchState,
+    slot: number,
+  ): InitiativeEntry {
+    const entry = match.initiative[slot - 1];
+    if (!entry) {
       throw new Error("The Active Match initiative order is incomplete.");
     }
-    const activeCharacter = RULESET.characters.find(
-      ({ id }) => id === activeEntry.characterId,
-    );
-    const nextCharacter = RULESET.characters.find(
-      ({ id }) => id === nextEntry.characterId,
-    );
-    if (!activeCharacter || !nextCharacter) {
+    return entry;
+  }
+
+  function requireCharacter(characterId: string): RulesetCharacter {
+    const character = RULESET.characters.find(({ id }) => id === characterId);
+    if (!character) {
       throw new Error("The Active Match references an unknown character.");
     }
-    const hpByCharacter = new Map(
-      match.characters.map(({ characterId, hp }) => [characterId, hp]),
-    );
-    const rows: readonly BoardRow[] = match.initiative.map((entry) => {
-      const character = RULESET.characters.find(
-        ({ id }) => id === entry.characterId,
-      );
-      const hp = hpByCharacter.get(entry.characterId);
-      if (!character || hp === undefined) {
-        throw new Error("The Active Match references an unknown character.");
-      }
+    return character;
+  }
+
+  function requireHp(
+    hpByCharacter: ReadonlyMap<string, number>,
+    characterId: string,
+  ): number {
+    const hp = hpByCharacter.get(characterId);
+    if (hp === undefined) {
+      throw new Error("The Active Match references an unknown character.");
+    }
+    return hp;
+  }
+
+  function buildBoardRows(
+    match: ActiveMatchState,
+    nextSlot: number,
+    hpByCharacter: ReadonlyMap<string, number>,
+  ): readonly BoardRow[] {
+    return match.initiative.map((entry) => {
+      const character = requireCharacter(entry.characterId);
+      const hp = requireHp(hpByCharacter, entry.characterId);
       const turnLabel =
         entry.slot === match.activeSlot
           ? "Active"
@@ -111,11 +133,9 @@
         turnKey: turnLabel.toLowerCase(),
       };
     });
-    const saving = state.current.saving;
-    const canUndo =
-      !saving && getUndoPreview(match, state.current.events) !== null;
-    const combatAvailable = match.rulesVersion === RULESET.version;
-    const activeDowned = hpByCharacter.get(activeEntry.characterId) === 0;
+  }
+
+  function getPromptKind(match: ActiveMatchState): PromptKind {
     const [firstEliminatedTeam] = match.eliminatedTeams;
     const normalElimination =
       match.eliminatedTeams.length === 1 && match.outcome !== null;
@@ -123,7 +143,7 @@
       normalElimination &&
       firstEliminatedTeam !== undefined &&
       match.acknowledgedEliminations.includes(firstEliminatedTeam);
-    const promptKind = normalElimination
+    return normalElimination
       ? eliminationAcknowledged
         ? "acknowledged"
         : "normal"
@@ -132,11 +152,26 @@
         : match.eliminatedTeams.length === 2 && match.outcome !== null
           ? "simultaneous-resolved"
           : "none";
-    const activeHp = hpByCharacter.get(activeEntry.characterId);
-    const nextHp = hpByCharacter.get(nextEntry.characterId);
-    if (activeHp === undefined || nextHp === undefined) {
-      throw new Error("The Active Match references an unknown character.");
-    }
+  }
+
+  function buildActiveMatchView(match: ActiveMatchState) {
+    const activeEntry = requireInitiativeEntry(match, match.activeSlot);
+    const nextSlot = findNextActiveSlot(match);
+    const nextEntry = requireInitiativeEntry(match, nextSlot);
+    const activeCharacter = requireCharacter(activeEntry.characterId);
+    const nextCharacter = requireCharacter(nextEntry.characterId);
+    const hpByCharacter = new Map(
+      match.characters.map(({ characterId, hp }) => [characterId, hp]),
+    );
+    const rows = buildBoardRows(match, nextSlot, hpByCharacter);
+    const saving = state.current.saving;
+    const canUndo =
+      !saving && getUndoPreview(match, state.current.events) !== null;
+    const combatAvailable = match.rulesVersion === RULESET.version;
+    const activeDowned = hpByCharacter.get(activeEntry.characterId) === 0;
+    const promptKind = getPromptKind(match);
+    const activeHp = requireHp(hpByCharacter, activeEntry.characterId);
+    const nextHp = requireHp(hpByCharacter, nextEntry.characterId);
     return {
       match,
       activeSlot: activeEntry.slot,
@@ -158,13 +193,18 @@
         match.eliminatedTeams.length === 2 && match.outcome !== null
           ? outcomeLabel(match.outcome)
           : "",
-      showCommands: promptKind === "none" || eliminationAcknowledged,
+      showCommands: promptKind === "none" || promptKind === "acknowledged",
       showEndGameControl:
-        (promptKind === "none" || eliminationAcknowledged) &&
+        (promptKind === "none" || promptKind === "acknowledged") &&
         !(match.eliminatedTeams.length === 2 && match.outcome === null),
       matchError: state.current.matchError,
       summary: state.current.summary,
     };
+  }
+
+  const view = $derived.by(() => {
+    const match = state.current.match;
+    return match?.phase === "active" ? buildActiveMatchView(match) : null;
   });
 
   function requestUndo(): void {

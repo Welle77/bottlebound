@@ -30,6 +30,23 @@ interface CurrentMatchMetadata {
   readonly rulesVersion: string;
 }
 
+interface CommitContext {
+  readonly transaction: IDBTransaction;
+  readonly completion: Promise<void>;
+  readonly metadataStore: IDBObjectStore;
+  readonly current: CurrentMatchMetadata | undefined;
+  readonly event: MatchEvent;
+  readonly state: MatchState;
+}
+
+type DeepReadonly<T> = T extends (...args: infer Parameters) => infer Result
+  ? (...args: Parameters) => Result
+  : T extends object
+    ? { readonly [Key in keyof T]: DeepReadonly<T[Key]> }
+    : T;
+
+type ReadonlyDeepCommitContext = DeepReadonly<CommitContext>;
+
 export interface RestoredMatch {
   readonly state: MatchState;
   readonly events: readonly MatchEvent[];
@@ -87,7 +104,9 @@ function transactionComplete(transaction: IDBTransaction): Promise<void> {
     transaction.addEventListener(
       "abort",
       () => {
-        reject(transaction.error ?? new Error("IndexedDB transaction aborted."));
+        reject(
+          transaction.error ?? new Error("IndexedDB transaction aborted."),
+        );
       },
       { once: true },
     );
@@ -99,6 +118,165 @@ function transactionComplete(transaction: IDBTransaction): Promise<void> {
       { once: true },
     );
   });
+}
+
+function isReplacementCommit(
+  current: CurrentMatchMetadata | undefined,
+  event: MatchEvent,
+): boolean {
+  return (
+    current !== undefined &&
+    current.matchId !== event.matchId &&
+    event.type === "SetupCreated" &&
+    event.sequence === 1
+  );
+}
+
+async function abortCommit(
+  context: ReadonlyDeepCommitContext,
+  message: string,
+): Promise<never> {
+  context.transaction.abort();
+  await context.completion.catch(() => undefined);
+  throw new Error(message);
+}
+
+async function replaceExistingMatch(
+  context: ReadonlyDeepCommitContext,
+): Promise<void> {
+  const current = context.current;
+  if (current === undefined) return;
+  const oldSnapshotStore = context.transaction.objectStore(SNAPSHOT_STORE);
+  const eventStore = context.transaction.objectStore(EVENT_STORE);
+  const oldKeys = await requestResult(
+    eventStore.index("matchId").getAllKeys(current.matchId),
+  );
+  oldSnapshotStore.delete(current.matchId);
+  oldKeys.forEach((key) => eventStore.delete(key));
+}
+
+async function getCommittedHistory(
+  transaction: IDBTransaction,
+  matchId: string,
+): Promise<{
+  readonly state: MatchState | undefined;
+  readonly events: readonly MatchEvent[];
+}> {
+  const previousState = await getRecord<MatchState>(
+    transaction.objectStore(SNAPSHOT_STORE),
+    matchId,
+  );
+  const previousEvents = await getAllRecords<MatchEvent>(
+    transaction.objectStore(EVENT_STORE).index("matchId"),
+    matchId,
+  );
+  return { state: previousState, events: previousEvents };
+}
+
+async function validateUndoCommit(
+  context: ReadonlyDeepCommitContext,
+): Promise<void> {
+  if (context.event.type !== "UndoApplied") return;
+  const history = await getCommittedHistory(
+    context.transaction,
+    context.event.matchId,
+  );
+  const previousState = history.state;
+  if (previousState === undefined) {
+    return abortCommit(context, "Undo needs the last committed Match State.");
+  }
+  const preview = getUndoPreview(previousState, history.events);
+  if (
+    preview === null ||
+    preview.target.sequence !== context.event.targetSequence ||
+    preview.target.type !== context.event.targetType ||
+    !canonicalMatchRecordsEqual(preview.restoredState, context.state)
+  ) {
+    await abortCommit(
+      context,
+      "The Undo Event and restored snapshot do not match.",
+    );
+  }
+}
+
+async function validateDerivedCommit(
+  context: ReadonlyDeepCommitContext,
+): Promise<void> {
+  if (
+    context.event.type !== "ActionResolved" &&
+    context.event.type !== "SimultaneousEliminationRuled"
+  ) {
+    return;
+  }
+  const history = await getCommittedHistory(
+    context.transaction,
+    context.event.matchId,
+  );
+  if (
+    history.state === undefined ||
+    !canonicalMatchRecordsEqual(
+      restoreStateFromEvents([...history.events, context.event]),
+      context.state,
+    )
+  ) {
+    await abortCommit(
+      context,
+      "The Match Event and committed snapshot do not match.",
+    );
+  }
+}
+
+async function validateExistingCommit(
+  context: ReadonlyDeepCommitContext,
+): Promise<void> {
+  const expectedSequence = context.current ? context.current.sequence + 1 : 1;
+  if (
+    context.event.sequence !== expectedSequence ||
+    (context.current !== undefined &&
+      (context.current.matchId !== context.event.matchId ||
+        context.current.rulesVersion !== context.state.rulesVersion))
+  ) {
+    await abortCommit(
+      context,
+      "The new record must continue the committed sequence.",
+    );
+  }
+  await validateUndoCommit(context);
+  await validateDerivedCommit(context);
+}
+
+function writeEndedSummary(
+  transaction: IDBTransaction,
+  state: MatchState,
+): void {
+  const endedState = state as Extract<MatchState, { readonly phase: "ended" }>;
+  const summary = toMatchSummary(endedState);
+  assertMatchSummaryStructure(summary);
+  transaction.objectStore(SUMMARY_STORE).put(summary, LATEST_SUMMARY_KEY);
+}
+
+async function writeCommit(context: ReadonlyDeepCommitContext): Promise<void> {
+  try {
+    context.transaction.objectStore(EVENT_STORE).add(context.event);
+    context.transaction.objectStore(SNAPSHOT_STORE).put(context.state);
+    context.metadataStore.put(
+      {
+        matchId: context.state.matchId,
+        sequence: context.state.sequence,
+        schemaVersion: MATCH_SCHEMA_VERSION,
+        rulesVersion: context.state.rulesVersion,
+      } satisfies CurrentMatchMetadata,
+      CURRENT_MATCH_KEY,
+    );
+    if (context.event.type === "MatchEnded") {
+      writeEndedSummary(context.transaction, context.state);
+    }
+  } catch (error) {
+    context.transaction.abort();
+    await context.completion.catch(() => undefined);
+    throw error;
+  }
+  await context.completion;
 }
 
 export class IndexedDbMatchStore {
@@ -165,111 +343,20 @@ export class IndexedDbMatchStore {
       metadataStore,
       CURRENT_MATCH_KEY,
     );
-    const isReplacement =
-      current !== undefined &&
-      current.matchId !== event.matchId &&
-      event.type === "SetupCreated" &&
-      event.sequence === 1;
-    if (isReplacement) {
-      const oldSnapshotStore = transaction.objectStore(SNAPSHOT_STORE);
-      const eventStore = transaction.objectStore(EVENT_STORE);
-      const oldKeys = await requestResult(
-        eventStore.index("matchId").getAllKeys(current.matchId),
-      );
-      oldSnapshotStore.delete(current.matchId);
-      oldKeys.forEach((key) => eventStore.delete(key));
+    const context: CommitContext = {
+      transaction,
+      completion,
+      metadataStore,
+      current,
+      event,
+      state,
+    };
+    if (isReplacementCommit(current, event)) {
+      await replaceExistingMatch(context);
     } else {
-      const expectedSequence = current ? current.sequence + 1 : 1;
-      if (
-        event.sequence !== expectedSequence ||
-        (current !== undefined &&
-          (current.matchId !== event.matchId ||
-            current.rulesVersion !== state.rulesVersion))
-      ) {
-        transaction.abort();
-        await completion.catch(() => undefined);
-        throw new Error("The new record must continue the committed sequence.");
-      }
-      if (event.type === "UndoApplied") {
-        const previousState = await getRecord<MatchState>(
-          transaction.objectStore(SNAPSHOT_STORE),
-          event.matchId,
-        );
-        const previousEvents = await getAllRecords<MatchEvent>(
-          transaction.objectStore(EVENT_STORE).index("matchId"),
-          event.matchId,
-        );
-        if (previousState === undefined) {
-          transaction.abort();
-          await completion.catch(() => undefined);
-          throw new Error("Undo needs the last committed Match State.");
-        }
-        const preview = getUndoPreview(previousState, previousEvents);
-        if (
-          preview === null ||
-          preview.target.sequence !== event.targetSequence ||
-          preview.target.type !== event.targetType ||
-          !canonicalMatchRecordsEqual(preview.restoredState, state)
-        ) {
-          transaction.abort();
-          await completion.catch(() => undefined);
-          throw new Error("The Undo Event and restored snapshot do not match.");
-        }
-      }
-      if (
-        event.type === "ActionResolved" ||
-        event.type === "SimultaneousEliminationRuled"
-      ) {
-        const previousState = await getRecord<MatchState>(
-          transaction.objectStore(SNAPSHOT_STORE),
-          event.matchId,
-        );
-        const previousEvents = await getAllRecords<MatchEvent>(
-          transaction.objectStore(EVENT_STORE).index("matchId"),
-          event.matchId,
-        );
-        if (
-          previousState === undefined ||
-          !canonicalMatchRecordsEqual(
-            restoreStateFromEvents([...previousEvents, event]),
-            state,
-          )
-        ) {
-          transaction.abort();
-          await completion.catch(() => undefined);
-          throw new Error(
-            "The Match Event and committed snapshot do not match.",
-          );
-        }
-      }
+      await validateExistingCommit(context);
     }
-    try {
-      transaction.objectStore(EVENT_STORE).add(event);
-      transaction.objectStore(SNAPSHOT_STORE).put(state);
-      metadataStore.put(
-        {
-          matchId: state.matchId,
-          sequence: state.sequence,
-          schemaVersion: MATCH_SCHEMA_VERSION,
-          rulesVersion: state.rulesVersion,
-        } satisfies CurrentMatchMetadata,
-        CURRENT_MATCH_KEY,
-      );
-      if (event.type === "MatchEnded") {
-        const endedState = state as Extract<
-          MatchState,
-          { readonly phase: "ended" }
-        >;
-        const summary = toMatchSummary(endedState);
-        assertMatchSummaryStructure(summary);
-        transaction.objectStore(SUMMARY_STORE).put(summary, LATEST_SUMMARY_KEY);
-      }
-    } catch (error) {
-      transaction.abort();
-      await completion.catch(() => undefined);
-      throw error;
-    }
-    await completion;
+    await writeCommit(context);
   }
 
   async restore(): Promise<RestoredMatch | null> {

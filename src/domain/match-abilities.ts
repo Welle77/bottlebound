@@ -60,34 +60,43 @@ import {
   resolveAttackDamageAgainstCharacter,
 } from "./match-ability-effects";
 
-export function resolveAbility(
-  state: ActiveMatchState,
-  input: AbilityInput,
-  occurredAt: string,
-): CommandResult<ActiveMatchState, ActionResolvedEvent> {
-  if ((state as MatchState).phase === "ended") {
-    throw new Error("The Ended Match is read-only.");
-  }
-  if (state.rulesVersion !== RULESET.version) {
-    throw new Error("Ability needs the exact bundled Ruleset.");
-  }
-  const ability = getAbilityOrThrow(input.abilityId);
+interface AbilityOutcome {
+  readonly characters: readonly MatchCharacter[];
+  readonly effects: readonly ActionEffect[];
+  readonly expired: readonly ActiveEffect[];
+  readonly applied: readonly ActiveEffect[];
+}
+
+interface AbilityOutcomeContext {
+  readonly state: ActiveMatchState;
+  readonly ability: StructuredAbility;
+  readonly affectedCharacterIds: readonly string[];
+  readonly reactions: readonly ProtectiveReactionResolution[];
+  readonly sequence: number;
+}
+
+interface ActiveEffectLedger {
+  readonly activeEffects: readonly ActiveEffect[];
+  readonly expiredEffects: readonly ActiveEffect[];
+}
+
+function normalizedOverride(value: string | null | undefined): string | null {
+  return value?.trim() || null;
+}
+
+function validateAbilityUse(context: {
+  readonly state: ActiveMatchState;
+  readonly ability: StructuredAbility;
+  readonly abilityOverride: string | null;
+  readonly majorActionOverride: string | null;
+}): void {
+  const { state, ability, abilityOverride, majorActionOverride } = context;
   const activeCharacterId = state.initiative[state.activeSlot - 1]?.characterId;
-  if (input.abilityId && ability.ownerCharacterId !== activeCharacterId) {
-    // ability must be owned by active character
-    // This is a structural check that can be overridden? Spec says wrong-active-character is overridable? Use warning logic.
-    // For now hard error unless abilityOverride provided that mentions wrong-active-character
-    const override = input.abilityOverride?.trim() || null;
-    if (override === null) {
-      throw new Error("wrong-active-character");
-    }
-  }
-  if (ability.ownerCharacterId !== activeCharacterId) {
-    const override = input.abilityOverride?.trim() || null;
-    if (override === null) {
-      // collect warning path similar to spent - require override
-      throw new Error("wrong-active-character");
-    }
+  if (
+    ability.ownerCharacterId !== activeCharacterId &&
+    abilityOverride === null
+  ) {
+    throw new Error("wrong-active-character");
   }
   const sourceCharacter = state.characters.find(
     ({ characterId }) => characterId === ability.ownerCharacterId,
@@ -95,8 +104,6 @@ export function resolveAbility(
   if (!sourceCharacter || sourceCharacter.hp === 0) {
     throw new Error("A Downed character cannot use an ability.");
   }
-  // Card gate: Shapeshift may be activated only while the Druid is active at
-  // exactly 2 or 3 HP (rules §15 Druid card).
   if (
     ability.name === "Shapeshift" &&
     sourceCharacter.hp !== 2 &&
@@ -106,44 +113,66 @@ export function resolveAbility(
       "Shapeshift may be activated only while the Druid is at 2 or 3 HP.",
     );
   }
-  const spentWarnings = abilityWarnings(state, ability.id);
-  const abilityOverride = input.abilityOverride?.trim() || null;
-  if (spentWarnings.length > 0 && abilityOverride === null) {
+  if (
+    abilityWarnings(state, ability.id).length > 0 &&
+    abilityOverride === null
+  ) {
     throw new Error("ability-already-spent");
   }
-  const majorOverride = input.majorActionOverride?.trim() || null;
-  if (state.majorActionUsed && majorOverride === null) {
+  if (state.majorActionUsed && majorActionOverride === null) {
     throw new Error("A second ability needs a recorded referee override.");
   }
-  // A character hit by Backstab or Stunning Strike cannot use a Powerful
-  // Ability on its next turn (rules §15 card effects).
-  if (ability.actionType === "powerful") {
-    const prohibited = state.activeEffects.some(
-      (effect) =>
-        effect.kind === "prohibit-powerful" &&
-        effect.affectedCharacterId === ability.ownerCharacterId,
+  const powerfulProhibited = state.activeEffects.some(
+    (effect) =>
+      effect.kind === "prohibit-powerful" &&
+      effect.affectedCharacterId === ability.ownerCharacterId,
+  );
+  if (ability.actionType === "powerful" && powerfulProhibited) {
+    throw new Error(
+      "A Powerful Ability is prohibited on this turn by a recorded card effect.",
     );
-    if (prohibited) {
-      throw new Error(
-        "A Powerful Ability is prohibited on this turn by a recorded card effect.",
-      );
-    }
   }
-  // Powerful check inherits majorActionUsed (0 movement) – already enforced via majorActionUsed
-  // For Powerful, same override required which we already check.
+}
 
-  // Determine affected / target ids based on interaction
-  const attackLegsInput = input.attackLegs;
-  const affectedCharacterIds = resolveAffectedCharacterIds({
-    state,
-    ability,
-    input,
-    abilityOverride,
-  });
+function reactionOperations(
+  reaction: (typeof RULESET.reactions)[number],
+  ability: StructuredAbility,
+  protectedCharacterId: string,
+): readonly ProtectiveReactionOperation[] {
+  return reaction.operations.flatMap(
+    (operation): readonly ProtectiveReactionOperation[] => {
+      if (operation.type === "prevent-damage-and-effects") {
+        return [{ type: operation.type, characterId: protectedCharacterId }];
+      }
+      if (operation.type === "manual-movement") {
+        return [
+          {
+            type: operation.type,
+            characterId: reaction.ownerCharacterId,
+            maxPaces: operation.maxPaces,
+            instruction: `Move ${reaction.name}'s owner up to ${String(operation.maxPaces)} paces immediately.`,
+          },
+        ];
+      }
+      return [
+        {
+          type: operation.type,
+          fromCharacterId: reaction.ownerCharacterId,
+          towardCharacterId: ability.ownerCharacterId,
+        },
+      ];
+    },
+  );
+}
 
-  // Reactions for targeted/physical abilities (reuse protective logic)
-  const selectedReactions = input.reactions ?? [];
-  const reactions = selectedReactions.reduce<{
+function resolveProtectiveReactions(context: {
+  readonly state: ActiveMatchState;
+  readonly ability: StructuredAbility;
+  readonly affectedCharacterIds: readonly string[];
+  readonly selections: readonly ProtectiveReactionInput[];
+}): readonly ProtectiveReactionResolution[] {
+  const { state, ability, affectedCharacterIds, selections } = context;
+  return selections.reduce<{
     readonly seen: ReadonlySet<string>;
     readonly results: readonly ProtectiveReactionResolution[];
   }>(
@@ -167,40 +196,10 @@ export function resolveAbility(
         reaction.id,
         selection.protectedCharacterId,
       );
-      const reactionOverride = selection.override?.trim() || null;
-      if (warnings.length > 0 && reactionOverride === null) {
+      const override = normalizedOverride(selection.override);
+      if (warnings.length > 0 && override === null) {
         throw new Error("A state-invalid Reaction needs a recorded Override.");
       }
-      const operations = reaction.operations.flatMap(
-        (operation): readonly ProtectiveReactionOperation[] => {
-          if (operation.type === "prevent-damage-and-effects") {
-            return [
-              {
-                type: operation.type,
-                characterId: selection.protectedCharacterId,
-              },
-            ];
-          }
-          if (operation.type === "manual-movement") {
-            return [
-              {
-                type: operation.type,
-                characterId: reaction.ownerCharacterId,
-                maxPaces: operation.maxPaces,
-                instruction: `Move ${reaction.name}'s owner up to ${String(operation.maxPaces)} paces immediately.`,
-              },
-            ];
-          }
-          // Only "redirect-physical-attack" operations remain in this union.
-          return [
-            {
-              type: operation.type,
-              fromCharacterId: reaction.ownerCharacterId,
-              towardCharacterId: ability.ownerCharacterId,
-            },
-          ];
-        },
-      );
       return {
         seen: new Set([...accumulated.seen, reaction.ownerCharacterId]),
         results: [
@@ -210,118 +209,117 @@ export function resolveAbility(
             ownerCharacterId: reaction.ownerCharacterId,
             protectedCharacterId: selection.protectedCharacterId,
             warnings,
-            override: reactionOverride,
-            operations,
+            override,
+            operations: reactionOperations(
+              reaction,
+              ability,
+              selection.protectedCharacterId,
+            ),
           } satisfies ProtectiveReactionResolution,
         ],
       };
     },
     { seen: new Set<string>(), results: [] },
   ).results;
+}
 
-  // Compute damage/effects for ability
-  const sequence = state.sequence + 1;
-  // Per-target HP changes feed effect expiry checks, so the update is
-  // computed as one pure fold: every intermediate snapshot stays immutable.
-  const initialApplied: readonly ActiveEffect[] = buildAbilityEffects(ability, {
-    affectedIds: affectedCharacterIds,
-    sequence,
-    anchorId: ability.ownerCharacterId,
+function attackAbilityOutcome(context: AbilityOutcomeContext): AbilityOutcome {
+  const { state, ability, affectedCharacterIds, reactions, sequence } = context;
+  const protectedIds = new Set(
+    reactions.flatMap(({ operations }) =>
+      operations.flatMap((operation) =>
+        operation.type === "prevent-damage-and-effects"
+          ? [operation.characterId]
+          : [],
+      ),
+    ),
+  );
+  const vanishProtected = new Set(
+    state.activeEffects
+      .filter((effect) => effect.operations.includes("ignore-physical-attack"))
+      .map((effect) => effect.affectedCharacterId),
+  );
+  return affectedCharacterIds.reduce<AbilityOutcome>(
+    (accumulated, targetId) => {
+      const character = accumulated.characters.find(
+        (candidate) => candidate.characterId === targetId,
+      );
+      if (!character) throw new Error("Ability references unknown character.");
+      const resolved = resolveAttackDamageAgainstCharacter({
+        baseDamage: 1,
+        affectedCharacterId: targetId,
+        physicalAttack: ability.interaction === "physical-attack",
+        prevented:
+          protectedIds.has(targetId) ||
+          (ability.interaction === "physical-attack" &&
+            vanishProtected.has(targetId)),
+        activeEffects: state.activeEffects,
+        sequence,
+      });
+      const hpBefore = character.hp;
+      const hpAfter = Math.max(0, hpBefore - resolved.finalDamage);
+      return {
+        characters: accumulated.characters.map((candidate) =>
+          candidate.characterId === targetId
+            ? { ...candidate, hp: hpAfter }
+            : candidate,
+        ),
+        effects: [
+          ...accumulated.effects,
+          {
+            characterId: targetId,
+            damage: resolved.finalDamage,
+            hpBefore,
+            hpAfter,
+            downedBefore: hpBefore === 0,
+            downedAfter: hpAfter === 0,
+          },
+        ],
+        expired: [...accumulated.expired, ...resolved.expired],
+        applied: [...accumulated.applied, ...resolved.applied],
+      };
+    },
+    {
+      characters: [...state.characters],
+      effects: [],
+      expired: [],
+      applied: [],
+    },
+  );
+}
+
+function utilityAbilityOutcome(
+  state: ActiveMatchState,
+  ability: StructuredAbility,
+  affectedCharacterIds: readonly string[],
+): AbilityOutcome {
+  const utility = applyUtilityAbility({
+    ability,
+    affectedCharacterIds,
+    priorCharacters: state.characters,
+    characters: [...state.characters],
   });
+  return { ...utility, expired: [], applied: [] };
+}
 
-  const isAttackInteraction =
+function resolveAbilityOutcome(context: AbilityOutcomeContext): AbilityOutcome {
+  const { state, ability, affectedCharacterIds } = context;
+  const attackInteraction =
     ability.interaction === "targeted-attack" ||
     ability.interaction === "physical-attack";
+  return attackInteraction
+    ? attackAbilityOutcome(context)
+    : utilityAbilityOutcome(state, ability, affectedCharacterIds);
+}
 
-  const attackOutcome = isAttackInteraction
-    ? (() => {
-        const protectedIds = new Set(
-          reactions.flatMap(({ operations }) =>
-            operations.flatMap((operation) =>
-              operation.type === "prevent-damage-and-effects"
-                ? [operation.characterId]
-                : [],
-            ),
-          ),
-        );
-        // Check Vanish ignore
-        const vanishProtected = new Set(
-          state.activeEffects
-            .filter((effect) =>
-              effect.operations.includes("ignore-physical-attack"),
-            )
-            .map((effect) => effect.affectedCharacterId),
-        );
-        const baseDamage = 1;
-        return affectedCharacterIds.reduce<{
-          readonly characters: readonly MatchCharacter[];
-          readonly effects: readonly ActionEffect[];
-          readonly expired: readonly ActiveEffect[];
-          readonly applied: readonly ActiveEffect[];
-        }>(
-          (accumulated, targetId) => {
-            const character = accumulated.characters.find(
-              (candidate) => candidate.characterId === targetId,
-            );
-            if (!character)
-              throw new Error("Ability references unknown character.");
-            const resolved = resolveAttackDamageAgainstCharacter({
-              baseDamage,
-              affectedCharacterId: targetId,
-              physicalAttack: ability.interaction === "physical-attack",
-              prevented:
-                protectedIds.has(targetId) ||
-                (ability.interaction === "physical-attack" &&
-                  vanishProtected.has(targetId)),
-              activeEffects: state.activeEffects,
-              sequence,
-            });
-            const hpBefore = character.hp;
-            const hpAfter = Math.max(0, hpBefore - resolved.finalDamage);
-            return {
-              characters: accumulated.characters.map((candidate) =>
-                candidate.characterId === targetId
-                  ? { ...candidate, hp: hpAfter }
-                  : candidate,
-              ),
-              effects: [
-                ...accumulated.effects,
-                {
-                  characterId: targetId,
-                  damage: resolved.finalDamage,
-                  hpBefore,
-                  hpAfter,
-                  downedBefore: hpBefore === 0,
-                  downedAfter: hpAfter === 0,
-                },
-              ],
-              expired: [...accumulated.expired, ...resolved.expired],
-              applied: [...accumulated.applied, ...resolved.applied],
-            };
-          },
-          {
-            characters: [...state.characters],
-            effects: [],
-            expired: [],
-            applied: [],
-          },
-        );
-      })()
-    : (() => {
-        const utility = applyUtilityAbility({
-          ability,
-          affectedCharacterIds,
-          priorCharacters: state.characters,
-          characters: [...state.characters],
-        });
-        return {
-          ...utility,
-          expired: [] as readonly ActiveEffect[],
-          applied: [] as readonly ActiveEffect[],
-        };
-      })();
-
-  const shapeshiftExpiry = [...state.activeEffects, ...initialApplied]
+function expireInvalidShapeshifts(
+  characters: readonly MatchCharacter[],
+  activeEffects: readonly ActiveEffect[],
+): {
+  readonly characters: readonly MatchCharacter[];
+  readonly expired: readonly ActiveEffect[];
+} {
+  return activeEffects
     .filter((effect) => effect.kind === "shapeshift")
     .reduce<{
       readonly characters: readonly MatchCharacter[];
@@ -343,24 +341,18 @@ export function resolveAbility(
           expired: [...accumulated.expired, effect],
         };
       },
-      {
-        characters: attackOutcome.characters,
-        expired: [],
-      },
+      { characters, expired: [] },
     );
+}
 
-  const characters = shapeshiftExpiry.characters;
-  const effects: readonly ActionEffect[] = attackOutcome.effects;
-  const pendingAppliedEffects: readonly ActiveEffect[] = [
-    ...initialApplied,
-    ...attackOutcome.applied,
-  ];
-  const expiredBeforeCleanup: readonly ActiveEffect[] = [
-    ...attackOutcome.expired,
-    ...shapeshiftExpiry.expired,
-  ];
-
-  // Downed cleanup after HP changes and immediate expiries
+function finalizeActiveEffects(context: {
+  readonly state: ActiveMatchState;
+  readonly characters: readonly MatchCharacter[];
+  readonly pendingAppliedEffects: readonly ActiveEffect[];
+  readonly expiredBeforeCleanup: readonly ActiveEffect[];
+}): ActiveEffectLedger {
+  const { state, characters, pendingAppliedEffects, expiredBeforeCleanup } =
+    context;
   const combinedEffects = [
     ...state.activeEffects,
     ...pendingAppliedEffects,
@@ -371,20 +363,24 @@ export function resolveAbility(
       ),
   );
   const downedCleanup = applyDownedCleanup(characters, combinedEffects);
-  const finalActiveEffects = downedCleanup.cleaned;
+  return {
+    activeEffects: downedCleanup.cleaned,
+    expiredEffects: [
+      ...new Map(
+        [...expiredBeforeCleanup, ...downedCleanup.expired].map((effect) => [
+          effect.effectId,
+          effect,
+        ]),
+      ).values(),
+    ],
+  };
+}
 
-  // Deduplicate expired
-  const uniqueExpired = [
-    ...new Map(
-      [...expiredBeforeCleanup, ...downedCleanup.expired].map((effect) => [
-        effect.effectId,
-        effect,
-      ]),
-    ).values(),
-  ];
-
-  // Eliminations
-  const eliminatedTeams = (["Drow", "Duergar"] as const).filter((team) =>
+function resultingEliminations(
+  state: ActiveMatchState,
+  characters: readonly MatchCharacter[],
+): readonly ("Drow" | "Duergar")[] {
+  const newlyEliminated = (["Drow", "Duergar"] as const).filter((team) =>
     RULESET.characters
       .filter((character) => character.team === team)
       .every(
@@ -393,65 +389,153 @@ export function resolveAbility(
             ?.hp === 0,
       ),
   );
-  const resultingEliminations: readonly ("Drow" | "Duergar")[] = [
-    ...new Set([...state.eliminatedTeams, ...eliminatedTeams]),
+  return [...new Set([...state.eliminatedTeams, ...newlyEliminated])];
+}
+
+function matchOutcome(
+  eliminatedTeams: readonly ("Drow" | "Duergar")[],
+): MatchOutcome {
+  if (eliminatedTeams.length !== 1) return null;
+  return eliminatedTeams[0] === "Drow" ? "Duergar" : "Drow";
+}
+
+function initialAbilityAttackLeg(
+  ability: StructuredAbility,
+  affectedCharacterIds: readonly string[],
+  rangePaces: 2 | 6 | 8,
+): AttackLeg {
+  return {
+    sequence: 1,
+    kind: "initial",
+    sourceCharacterId: ability.ownerCharacterId,
+    attackId: ability.id,
+    rangePaces,
+    redirectedByReactionId: null,
+    towardCharacterId: null,
+    affectedCharacterIds: [...affectedCharacterIds],
+  };
+}
+
+function buildAbilityAttackLegs(context: {
+  readonly ability: StructuredAbility;
+  readonly attackLegsInput: AbilityInput["attackLegs"];
+  readonly affectedCharacterIds: readonly string[];
+  readonly reactions: readonly ProtectiveReactionResolution[];
+  readonly rangePaces: 2 | 6 | 8;
+  readonly attackInteraction: boolean;
+}): readonly AttackLeg[] {
+  const {
+    ability,
+    attackLegsInput,
+    affectedCharacterIds,
+    reactions,
+    rangePaces,
+    attackInteraction,
+  } = context;
+  if (!attackInteraction) {
+    return [initialAbilityAttackLeg(ability, affectedCharacterIds, rangePaces)];
+  }
+  const mapped = (attackLegsInput ?? [{ affectedCharacterIds }]).map<AttackLeg>(
+    (leg, index) => ({
+      sequence: index + 1,
+      kind: index === 0 ? "initial" : "redirected",
+      sourceCharacterId: ability.ownerCharacterId,
+      attackId: ability.id,
+      rangePaces,
+      redirectedByReactionId:
+        index === 0 ? null : (reactions[0]?.reactionId ?? null),
+      towardCharacterId:
+        index === 0
+          ? null
+          : reactions[0]?.ownerCharacterId
+            ? ability.ownerCharacterId
+            : null,
+      affectedCharacterIds: [...leg.affectedCharacterIds],
+    }),
+  );
+  return mapped.length === 0
+    ? [initialAbilityAttackLeg(ability, affectedCharacterIds, rangePaces)]
+    : mapped;
+}
+
+export function resolveAbility(
+  state: ActiveMatchState,
+  input: AbilityInput,
+  occurredAt: string,
+): CommandResult<ActiveMatchState, ActionResolvedEvent> {
+  if ((state as MatchState).phase === "ended") {
+    throw new Error("The Ended Match is read-only.");
+  }
+  if (state.rulesVersion !== RULESET.version) {
+    throw new Error("Ability needs the exact bundled Ruleset.");
+  }
+  const ability = getAbilityOrThrow(input.abilityId);
+  const abilityOverride = normalizedOverride(input.abilityOverride);
+  const majorActionOverride = normalizedOverride(input.majorActionOverride);
+  validateAbilityUse({
+    state,
+    ability,
+    abilityOverride,
+    majorActionOverride,
+  });
+  const affectedCharacterIds = resolveAffectedCharacterIds({
+    state,
+    ability,
+    input,
+    abilityOverride,
+  });
+  const reactions = resolveProtectiveReactions({
+    state,
+    ability,
+    affectedCharacterIds,
+    selections: input.reactions ?? [],
+  });
+  const sequence = state.sequence + 1;
+  const initialApplied = buildAbilityEffects(ability, {
+    affectedIds: affectedCharacterIds,
+    sequence,
+    anchorId: ability.ownerCharacterId,
+  });
+  const attackInteraction =
+    ability.interaction === "targeted-attack" ||
+    ability.interaction === "physical-attack";
+  const abilityOutcome = resolveAbilityOutcome({
+    state,
+    ability,
+    affectedCharacterIds,
+    reactions,
+    sequence,
+  });
+  const shapeshiftExpiry = expireInvalidShapeshifts(abilityOutcome.characters, [
+    ...state.activeEffects,
+    ...initialApplied,
+  ]);
+  const characters = shapeshiftExpiry.characters;
+  const pendingAppliedEffects: readonly ActiveEffect[] = [
+    ...initialApplied,
+    ...abilityOutcome.applied,
   ];
-  const outcome: MatchOutcome =
-    resultingEliminations.length === 1
-      ? resultingEliminations[0] === "Drow"
-        ? "Duergar"
-        : "Drow"
-      : null;
-
-  // Build attackLegs for event
-  const cardRangePaces = isAttackInteraction ? attackRangePaces(ability) : 2;
-  const mappedLegs: readonly AttackLeg[] = isAttackInteraction
-    ? (attackLegsInput ?? [{ affectedCharacterIds: affectedCharacterIds }]).map(
-        (leg, index) => ({
-          sequence: index + 1,
-          kind: index === 0 ? "initial" : "redirected",
-          sourceCharacterId: ability.ownerCharacterId,
-          attackId: ability.id,
-          rangePaces: cardRangePaces,
-          redirectedByReactionId:
-            index === 0 ? null : (reactions[0]?.reactionId ?? null),
-          towardCharacterId:
-            index === 0
-              ? null
-              : reactions[0]?.ownerCharacterId
-                ? ability.ownerCharacterId
-                : null,
-          affectedCharacterIds: [...leg.affectedCharacterIds],
-        }),
-      )
-    : [
-        {
-          sequence: 1,
-          kind: "initial",
-          sourceCharacterId: ability.ownerCharacterId,
-          attackId: ability.id,
-          rangePaces: cardRangePaces,
-          redirectedByReactionId: null,
-          towardCharacterId: null,
-          affectedCharacterIds: [...affectedCharacterIds],
-        },
-      ];
-  const attackLegs: readonly AttackLeg[] =
-    isAttackInteraction && mappedLegs.length === 0
-      ? [
-          {
-            sequence: 1,
-            kind: "initial",
-            sourceCharacterId: ability.ownerCharacterId,
-            attackId: ability.id,
-            rangePaces: cardRangePaces,
-            redirectedByReactionId: null,
-            towardCharacterId: null,
-            affectedCharacterIds: [...affectedCharacterIds],
-          },
-        ]
-      : mappedLegs;
-
+  const expiredBeforeCleanup: readonly ActiveEffect[] = [
+    ...abilityOutcome.expired,
+    ...shapeshiftExpiry.expired,
+  ];
+  const effectLedger = finalizeActiveEffects({
+    state,
+    characters,
+    pendingAppliedEffects,
+    expiredBeforeCleanup,
+  });
+  const eliminatedTeams = resultingEliminations(state, characters);
+  const outcome = matchOutcome(eliminatedTeams);
+  const cardRangePaces = attackInteraction ? attackRangePaces(ability) : 2;
+  const attackLegs = buildAbilityAttackLegs({
+    ability,
+    attackLegsInput: input.attackLegs,
+    affectedCharacterIds,
+    reactions,
+    rangePaces: cardRangePaces,
+    attackInteraction,
+  });
   const event: ActionResolvedEvent = {
     type: "ActionResolved",
     matchId: state.matchId,
@@ -466,30 +550,22 @@ export function resolveAbility(
     damage: 1,
     rulesSourceAnchor: ability.sourceAnchor,
     attackLegs,
-    physicalConfirmations:
-      ability.interaction === "physical-attack"
-        ? {
-            range: true,
-            lineOfSight: true,
-            legalBottleContact: true,
-            terrainContact: true,
-          }
-        : {
-            range: true,
-            lineOfSight: true,
-            legalBottleContact: true,
-            terrainContact: true,
-          },
+    physicalConfirmations: {
+      range: true,
+      lineOfSight: true,
+      legalBottleContact: true,
+      terrainContact: true,
+    },
     reactions,
-    effects,
-    majorActionOverride: majorOverride,
+    effects: abilityOutcome.effects,
+    majorActionOverride,
     abilityOverride,
-    eliminatedTeams: resultingEliminations,
+    eliminatedTeams,
     abilityId: ability.id,
     targetCharacterIds: affectedCharacterIds,
     spentAbilityIds: [ability.id],
     appliedEffects: pendingAppliedEffects,
-    expiredEffects: uniqueExpired,
+    expiredEffects: effectLedger.expiredEffects,
   };
 
   return {
@@ -506,9 +582,9 @@ export function resolveAbility(
         ]),
       ],
       characters,
-      eliminatedTeams: resultingEliminations,
+      eliminatedTeams,
       outcome,
-      activeEffects: finalActiveEffects,
+      activeEffects: effectLedger.activeEffects,
     },
   };
 }
