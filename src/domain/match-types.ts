@@ -219,13 +219,13 @@ export function isDecisionBasis(value: string): value is DecisionBasis {
 
 export type RandomSource = {
   nextUint32(): number;
-}
+};
 
 export type MatchCharacter = {
   readonly characterId: CharacterId;
   readonly hp: number;
   readonly currentMaxHp: number;
-}
+};
 
 export type MatchOutcome = Team | "draw" | null;
 
@@ -305,7 +305,7 @@ export type ActiveEffect = {
   };
   readonly operations: readonly EffectOperation[];
   readonly appliedSequence: number;
-}
+};
 
 type CombatMatchState = {
   readonly spentReactionIds: readonly ReactionId[];
@@ -315,7 +315,7 @@ type CombatMatchState = {
   readonly acknowledgedEliminations: readonly Team[];
   readonly outcome: MatchOutcome;
   readonly activeEffects: readonly ActiveEffect[];
-}
+};
 
 export type InitiativeEntry = {
   readonly characterId: CharacterId;
@@ -323,14 +323,14 @@ export type InitiativeEntry = {
   readonly modifier: number;
   readonly total: number;
   readonly slot: number;
-}
+};
 
 export type TieOrder = {
   readonly total: number;
   readonly initialCharacterIds: readonly CharacterId[];
   readonly steps: readonly CoinFlipTieBreakStep[];
   readonly characterIds: readonly CharacterId[];
-}
+};
 
 export type DigitalCoinFlipResult = "heads" | "tails";
 
@@ -338,20 +338,20 @@ export type CoinFlipAttempt = {
   readonly flips: readonly DigitalCoinFlipResult[];
   readonly candidate: number;
   readonly accepted: boolean;
-}
+};
 
 export type CoinFlipTieBreakStep = {
   readonly position: number;
   readonly upperExclusive: number;
   readonly attempts: readonly CoinFlipAttempt[];
   readonly selectedIndex: number;
-}
+};
 
 /**
  * Optional referee-assigned Display Names keyed by Ruleset character id.
  * Absent keys mean the character keeps its Ruleset name alone.
  */
-export type DisplayNames = Readonly<Partial<Record<CharacterId, string>>>;
+export type DisplayNames = Readonly<Record<CharacterId, string>>;
 
 export type SetupMatchState = {
   readonly schemaVersion: typeof MATCH_SCHEMA_VERSION;
@@ -363,7 +363,7 @@ export type SetupMatchState = {
   readonly initiative: readonly InitiativeEntry[] | null;
   /** Complete Display Name map; empty when the referee assigned none. */
   readonly displayNames: DisplayNames;
-} & CombatMatchState
+} & CombatMatchState;
 
 export type ActiveMatchState = {
   readonly schemaVersion: typeof MATCH_SCHEMA_VERSION;
@@ -377,7 +377,7 @@ export type ActiveMatchState = {
   readonly activeSlot: number;
   /** Complete Display Name map; empty when the referee assigned none. */
   readonly displayNames: DisplayNames;
-} & CombatMatchState
+} & CombatMatchState;
 
 export type EndedMatchState = {
   readonly schemaVersion: typeof MATCH_SCHEMA_VERSION;
@@ -399,7 +399,7 @@ export type EndedMatchState = {
   readonly finalHpTotals: FinalTeamCounts;
   /** The recorded Coin Flip; null whenever the Decision Basis is not coinFlip. */
   readonly coinFlipResult: Team | null;
-} & CombatMatchState
+} & CombatMatchState;
 
 export type MatchState = SetupMatchState | ActiveMatchState | EndedMatchState;
 
@@ -408,28 +408,28 @@ type EventBase = {
   readonly sequence: number;
   readonly rulesVersion: string;
   readonly occurredAt: string;
-}
+};
 
 export type SetupCreatedEvent = {
   readonly type: "SetupCreated";
-} & EventBase
+} & EventBase;
 
 export type DisplayNamesAssignedEvent = {
   readonly type: "DisplayNamesAssigned";
   readonly displayNames: DisplayNames;
-} & EventBase
+} & EventBase;
 
 export type InitiativeEvent = {
   readonly type: "InitiativeGenerated" | "InitiativeRerolled";
   readonly results: readonly InitiativeEntry[];
   readonly tieOrder: readonly TieOrder[];
-} & EventBase
+} & EventBase;
 
 export type MatchStartedEvent = {
   readonly type: "MatchStarted";
   readonly round: 1;
   readonly activeSlot: 1;
-} & EventBase
+} & EventBase;
 
 export type TurnFinishedEvent = {
   readonly type: "TurnFinished";
@@ -440,25 +440,25 @@ export type TurnFinishedEvent = {
   readonly skippedSlots: readonly number[];
   /** Every effect that expired at this turn boundary; empty when none did. */
   readonly expiredEffects: readonly ActiveEffect[];
-} & EventBase
+} & EventBase;
 
 export type EliminationContinuedEvent = {
   readonly type: "EliminationContinued";
   readonly eliminatedTeam: Team;
   readonly outcome: Team;
-} & EventBase
+} & EventBase;
 
 export type SimultaneousEliminationRuledEvent = {
   readonly type: "SimultaneousEliminationRuled";
   readonly eliminatedTeams: readonly [Team, Team];
   readonly outcome: Exclude<MatchOutcome, null>;
   readonly overrideEvidence: string;
-} & EventBase
+} & EventBase;
 
 export type FinalTeamCounts = {
   readonly Drow: number;
   readonly Duergar: number;
-}
+};
 
 export type EndGamePreview = {
   readonly outcome: Exclude<MatchOutcome, null>;
@@ -466,7 +466,7 @@ export type EndGamePreview = {
   readonly finalCounts: FinalTeamCounts;
   readonly finalHpTotals: FinalTeamCounts;
   readonly coinFlipResult?: Team;
-}
+};
 
 export type MatchSummary = {
   readonly outcome: Exclude<MatchOutcome, null>;
@@ -476,7 +476,7 @@ export type MatchSummary = {
   readonly rulesVersion: string;
   readonly endedAt: string;
   readonly coinFlipResult?: Team;
-}
+};
 
 export type MatchEndedEvent = {
   readonly type: "MatchEnded";
@@ -487,19 +487,19 @@ export type MatchEndedEvent = {
   readonly finalHpTotals: FinalTeamCounts;
   /** The recorded Coin Flip; null whenever the Decision Basis is not coinFlip. */
   readonly coinFlipResult: Team | null;
-} & EventBase
+} & EventBase;
 
 export type MatchReopenedEvent = {
   readonly type: "MatchReopened";
   readonly endedSequence: number;
-} & EventBase
+} & EventBase;
 
 export type PhysicalConfirmations = {
   readonly range: true;
   readonly lineOfSight: true;
   readonly legalBottleContact: true;
   readonly terrainContact: true;
-}
+};
 
 export type AttackLeg = {
   readonly sequence: number;
@@ -511,7 +511,7 @@ export type AttackLeg = {
   readonly redirectedByReactionId: ReactionId | null;
   readonly towardCharacterId: CharacterId | null;
   readonly affectedCharacterIds: readonly CharacterId[];
-}
+};
 
 export type ActionEffect = {
   readonly characterId: CharacterId;
@@ -525,7 +525,7 @@ export type ActionEffect = {
   readonly hpAfter: number;
   readonly downedBefore: boolean;
   readonly downedAfter: boolean;
-}
+};
 
 export type ProtectiveReactionOperation =
   | {
@@ -551,13 +551,13 @@ export type ProtectiveReactionResolution = {
   readonly warnings: readonly string[];
   readonly override: string | null;
   readonly operations: readonly ProtectiveReactionOperation[];
-}
+};
 
 export type ProtectiveReactionInput = {
   readonly reactionId: ReactionId;
   readonly protectedCharacterId: CharacterId;
   readonly override: string | null;
-}
+};
 
 export type ProtectiveReactionChoice = {
   readonly reactionId: ReactionId;
@@ -565,7 +565,7 @@ export type ProtectiveReactionChoice = {
   readonly protectedCharacterId: CharacterId;
   readonly eligible: boolean;
   readonly warnings: readonly string[];
-}
+};
 
 export type ActionResolvedEvent = {
   readonly type: "ActionResolved";
@@ -593,7 +593,7 @@ export type ActionResolvedEvent = {
    * when the resolution needed no Override.
    */
   readonly abilityOverride: string | null;
-} & EventBase
+} & EventBase;
 
 export type BasicAttackInput = {
   readonly sourceCharacterId: CharacterId;
@@ -609,7 +609,7 @@ export type BasicAttackInput = {
   }>;
   readonly reactions?: readonly ProtectiveReactionInput[];
   readonly majorActionOverride: string | null;
-}
+};
 
 export type ReversibleMatchEvent =
   | DisplayNamesAssignedEvent
@@ -625,7 +625,7 @@ export type UndoAppliedEvent = {
   readonly type: "UndoApplied";
   readonly targetSequence: number;
   readonly targetType: ReversibleMatchEvent["type"];
-} & EventBase
+} & EventBase;
 
 export type MatchEvent =
   | SetupCreatedEvent
@@ -647,13 +647,13 @@ export type CommandResult<
 > = {
   readonly state: State;
   readonly event: Event;
-}
+};
 
 export type UndoPreview = {
   readonly target: ReversibleMatchEvent;
   readonly currentState: MatchState;
   readonly restoredState: MatchState;
-}
+};
 
 export const initialCombatState = Object.freeze({
   spentReactionIds: Object.freeze([]),

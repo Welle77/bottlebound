@@ -4,7 +4,7 @@ export type RulesSearchHighlight = {
   readonly start: number;
   readonly end: number;
   readonly text: string;
-}
+};
 
 export type RulesSearchResult = {
   readonly kind: RulesReferenceRecordKind;
@@ -13,18 +13,18 @@ export type RulesSearchResult = {
   readonly sourceOrder: number;
   readonly excerpt: string;
   readonly highlights: readonly RulesSearchHighlight[];
-}
+};
 
 type NormalizedText = {
   readonly value: string;
   readonly sourceStarts: readonly number[];
   readonly sourceEnds: readonly number[];
-}
+};
 
 type SourceRange = {
   readonly start: number;
   readonly end: number;
-}
+};
 
 const EXCERPT_CONTEXT = 48;
 const MAX_COMPLETE_EXCERPT = 180;

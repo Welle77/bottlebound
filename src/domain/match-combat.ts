@@ -29,13 +29,13 @@ type ValidatedBasicAttack = {
   readonly inputLegs: readonly BasicAttackLegInput[];
   readonly affectedCharacterIds: readonly CharacterId[];
   readonly override: string | null;
-}
+};
 
 type ResolvedAttackEffect = {
   readonly effect: ActionEffect;
   readonly expired: readonly ActiveEffect[];
   readonly applied: readonly ActiveEffect[];
-}
+};
 
 type BasicAttackOutcome = {
   readonly actionEffects: readonly ActionEffect[];
@@ -43,7 +43,7 @@ type BasicAttackOutcome = {
   readonly expiredEffects: readonly ActiveEffect[];
   readonly characters: readonly MatchCharacter[];
   readonly activeEffects: readonly ActiveEffect[];
-}
+};
 
 export const AUTOMATED_REACTION_NAMES: ReadonlySet<AbilityName> = new Set([
   "Divine Shield",

@@ -5,7 +5,7 @@ export type RulesUiState = {
   readonly selectedAnchor: string | null;
   readonly scrollTop: number;
   readonly openerId: string | null;
-}
+};
 
 export function createRulesUiState(version: string): RulesUiState {
   return {

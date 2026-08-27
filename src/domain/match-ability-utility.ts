@@ -9,19 +9,19 @@ export type UtilityAbilityContext = {
   readonly priorCharacters: readonly MatchCharacter[];
   /** Working copy the HP changes apply onto (already carries earlier legs). */
   readonly characters: readonly MatchCharacter[];
-}
+};
 
 export type UtilityAbilityResult = {
   /** Updated working copy with every HP/maxHP change applied. */
   readonly characters: readonly MatchCharacter[];
   /** Output ledger; every touched character appends exactly one entry. */
   readonly effects: readonly ActionEffect[];
-}
+};
 
 type TargetOutcome = {
   readonly character: MatchCharacter;
   readonly effect: ActionEffect;
-}
+};
 
 /**
  * Applies a resolved non-attack ability to its affected characters:

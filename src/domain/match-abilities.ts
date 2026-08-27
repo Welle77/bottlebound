@@ -39,7 +39,7 @@ export type AbilityInput = {
   readonly reactions?: readonly ProtectiveReactionInput[];
   readonly majorActionOverride?: string | null;
   readonly abilityOverride?: string | null;
-}
+};
 
 /**
  * Hard maximum range in paces parsed from the ability card's Range field
@@ -69,7 +69,7 @@ type AbilityOutcome = {
   readonly effects: readonly ActionEffect[];
   readonly expired: readonly ActiveEffect[];
   readonly applied: readonly ActiveEffect[];
-}
+};
 
 type AbilityOutcomeContext = {
   readonly state: ActiveMatchState;
@@ -77,12 +77,12 @@ type AbilityOutcomeContext = {
   readonly affectedCharacterIds: readonly CharacterId[];
   readonly reactions: readonly ProtectiveReactionResolution[];
   readonly sequence: number;
-}
+};
 
 type ActiveEffectLedger = {
   readonly activeEffects: readonly ActiveEffect[];
   readonly expiredEffects: readonly ActiveEffect[];
-}
+};
 
 function normalizedOverride(value: string | null | undefined): string | null {
   return value?.trim() || null;

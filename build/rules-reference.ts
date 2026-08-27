@@ -104,7 +104,7 @@ type RosterEntry = {
   readonly baseHp: number;
   readonly initiativeModifier: number;
   readonly basicAttack: string;
-}
+};
 
 function parseRoster(source: string): RosterEntry[] {
   const rows = tableRows(sectionBody(source, ROSTER_HEADING), "Roster");

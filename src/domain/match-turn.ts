@@ -19,7 +19,7 @@ type TurnPosition = {
   readonly round: number;
   readonly skippedSlots: readonly number[];
   readonly stopped: boolean;
-}
+};
 
 type EffectBoundaryContext = {
   readonly activeSlot: number;
@@ -28,7 +28,7 @@ type EffectBoundaryContext = {
   readonly pathSlots: readonly number[];
   readonly slotToCharacter: ReadonlyMap<number, CharacterId>;
   readonly stateSequence: number;
-}
+};
 
 function isSimultaneousEliminationOutcome(value: unknown): boolean {
   return value === "draw" || (typeof value === "string" && isTeam(value));

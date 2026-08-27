@@ -125,7 +125,7 @@ type TargetCandidate = {
   readonly characterId: CharacterId;
   readonly blocked: boolean;
   readonly reasons: readonly string[];
-}
+};
 export type { TargetCandidate };
 
 function reviveBlockedOnEliminatedTeam(
@@ -190,7 +190,7 @@ export type DraftWarning = {
     readonly name: string;
   } | null;
   readonly rest: string;
-}
+};
 
 export function draftWarnings(
   match: ActiveView,
@@ -284,7 +284,7 @@ type AttackPreviewContext = {
   readonly baseDamage: number;
   /** Physical throws cannot affect a Vanish-protected character. */
   readonly physicalAttack: boolean;
-}
+};
 
 /** One "Ordered hits and final changes" review row, rendered as real markup. */
 export type AttackPreviewRow = {
@@ -296,7 +296,7 @@ export type AttackPreviewRow = {
   /** Composed HP transition text, for example "3 → 1". */
   readonly hpText: string;
   readonly lifeStateText: string;
-}
+};
 
 /**
  * One "Ordered hits and final changes" review row computed through the same
@@ -373,7 +373,7 @@ export type EffectPreviewRow = {
   /** Composed HP transition text, for example "3 → 4". */
   readonly hpText: string;
   readonly lifeStateText: string;
-}
+};
 
 /**
  * One "Expected changes" review row for heal/revive/utility resolutions,

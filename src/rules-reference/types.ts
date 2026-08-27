@@ -18,7 +18,7 @@ export type RulesAbilityReference = {
   readonly characterName: string;
   readonly anchor: string;
   readonly fields: Readonly<Record<AbilityField, string>>;
-}
+};
 
 export type RulesCharacterReference = {
   readonly id: string;
@@ -30,19 +30,19 @@ export type RulesCharacterReference = {
   readonly basicAttack: string;
   readonly anchor: string;
   readonly abilities: readonly RulesAbilityReference[];
-}
+};
 
 export type RulesSectionReference = {
   readonly title: string;
   readonly anchor: string;
   readonly sourceOrder: number;
-}
+};
 
 export type RulesQuickReference = {
   readonly rule: string;
   readonly summary: string;
   readonly anchor: string;
-}
+};
 
 export type RulesReferenceRecordKind =
   "section" | "character" | "ability" | "quick-reference";
@@ -53,7 +53,7 @@ export type RulesReferenceRecord = {
   readonly anchor: string;
   readonly sourceOrder: number;
   readonly text: string;
-}
+};
 
 export type RulesReference = {
   readonly version: string;
@@ -63,4 +63,4 @@ export type RulesReference = {
   readonly abilities: readonly RulesAbilityReference[];
   readonly quickReference: readonly RulesQuickReference[];
   readonly records: readonly RulesReferenceRecord[];
-}
+};

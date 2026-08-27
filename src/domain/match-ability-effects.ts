@@ -177,14 +177,14 @@ type AbilityTargetInput = {
     readonly terrainContact: boolean;
   }>;
   readonly reactions?: readonly ProtectiveReactionInput[];
-}
+};
 
 type AbilityTargetContext = {
   readonly state: ActiveMatchState;
   readonly ability: StructuredAbility;
   readonly input: AbilityTargetInput;
   readonly abilityOverride: string | null;
-}
+};
 
 function resolveTargetedAttackTargetIds(
   context: AbilityTargetContext,
@@ -445,13 +445,13 @@ export type AttackDamageInput = {
   readonly prevented: boolean;
   readonly activeEffects: readonly ActiveEffect[];
   readonly sequence: number;
-}
+};
 
 export type AttackDamageResolution = {
   readonly finalDamage: number;
   readonly expired: readonly ActiveEffect[];
   readonly applied: readonly ActiveEffect[];
-}
+};
 
 /**
  * Resolves one attack against one affected character following rules §10(4):

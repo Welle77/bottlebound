@@ -28,7 +28,7 @@ type CurrentMatchMetadata = {
   readonly sequence: number;
   readonly schemaVersion: number;
   readonly rulesVersion: string;
-}
+};
 
 type CommitContext = {
   readonly transaction: IDBTransaction;
@@ -37,7 +37,7 @@ type CommitContext = {
   readonly current: CurrentMatchMetadata | undefined;
   readonly event: MatchEvent;
   readonly state: MatchState;
-}
+};
 
 type DeepReadonly<T> = T extends (...args: infer Parameters) => infer Result
   ? (...args: Parameters) => Result
@@ -51,7 +51,7 @@ export type RestoredMatch = {
   readonly state: MatchState;
   readonly events: readonly MatchEvent[];
   readonly summary: MatchSummary | null;
-}
+};
 
 function requestResult<T>(request: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {

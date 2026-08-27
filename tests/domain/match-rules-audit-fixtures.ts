@@ -133,7 +133,7 @@ export type CastRequest = {
   readonly abilityName: string;
   readonly input?: Omit<Parameters<typeof resolveAbility>[1], "abilityId">;
   readonly step: number;
-}
+};
 
 /** Advances to the source's turn and commits one Ability resolution. */
 export function cast(

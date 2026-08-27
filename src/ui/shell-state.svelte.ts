@@ -76,7 +76,7 @@ export type ActionDraft = {
    */
   readonly overrideRequired: string | null;
   readonly majorActionOverride: boolean;
-}
+};
 
 export function draftAffectedCharacterIds(
   draft: ActionDraft,
@@ -117,7 +117,7 @@ export type ShellState = {
   readonly requirePhysicalConfirmations: boolean;
   readonly saving: boolean;
   readonly summary: MatchSummary | null;
-}
+};
 
 function createInitialShellState(): ShellState {
   return {

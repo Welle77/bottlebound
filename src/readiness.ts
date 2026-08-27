@@ -9,7 +9,7 @@ export type ReadinessInputs = {
   readonly serviceWorker: ServiceWorkerState;
   readonly appShellCache: AppShellCacheState;
   readonly canonicalStorage: ProbeState;
-}
+};
 
 export type ReadinessState = {
   readonly network: NetworkState;
@@ -18,7 +18,7 @@ export type ReadinessState = {
   readonly offline: "checking" | "ready" | "unavailable";
   readonly matchCreation: "available" | "blocked";
   readonly blockingReason: string | null;
-}
+};
 
 export function deriveReadinessState(inputs: ReadinessInputs): ReadinessState {
   const offline =
