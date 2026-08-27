@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
     getProtectiveReactionChoices,
+    type CharacterId,
     type MatchState,
   } from "../domain/match";
   import { RULESET } from "../domain/ruleset";
@@ -22,17 +23,17 @@
   // real markup through CharacterName instead of hosted template strings.
   type ActiveView = Extract<MatchState, { readonly phase: "active" }>;
 
-  interface NamedCharacter {
-    readonly id: string;
+  type NamedCharacter = {
+    readonly id: CharacterId;
     readonly name: string;
   }
 
-  interface LegReview {
+  type LegReview = {
     readonly names: readonly NamedCharacter[];
     readonly redirect: boolean;
   }
 
-  interface ReactionReview {
+  type ReactionReview = {
     readonly key: string;
     readonly reactionName: string;
     readonly owner: NamedCharacter;
@@ -46,7 +47,7 @@
   const LEG_CONTACTS_NONE = "No later bottle contacts.";
 
   const rulesCharacterById = (
-    characterId: string,
+    characterId: CharacterId,
   ): NamedCharacter | null => {
     const character = RULESET.characters.find(
       ({ id }) => id === characterId,
@@ -68,10 +69,7 @@
         "The Action Draft does not match the Active Match Ruleset.",
       );
     }
-    const activeEntry = match.initiative[match.activeSlot - 1];
-    const sourceCharacter = rulesCharacterById(
-      activeEntry?.characterId ?? "",
-    );
+    const sourceCharacter = rulesCharacterById(draft.sourceCharacterId);
     if (!sourceCharacter) {
       throw new Error("The Active Match references an unknown character.");
     }
@@ -82,7 +80,7 @@
 
   // Display-name-aware plain label for review detail sentences, matching the
   // legacy primaryNameOf() fallback order.
-  function primaryNameOf(match: ActiveView, characterId: string): string {
+  function primaryNameOf(match: ActiveView, characterId: CharacterId): string {
     return (
       match.displayNames?.[characterId] ??
       rulesCharacterById(characterId)?.name ??

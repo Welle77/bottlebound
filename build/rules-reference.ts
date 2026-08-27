@@ -97,7 +97,7 @@ function parseSections(source: string): RulesSectionReference[] {
   });
 }
 
-interface RosterEntry {
+type RosterEntry = {
   readonly team: "Drow" | "Duergar";
   readonly name: string;
   readonly role: string;

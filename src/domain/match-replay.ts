@@ -1,4 +1,5 @@
 import { RULESET } from "./ruleset";
+import { isAbilityId, isActionKind, isTeam } from "./match-types";
 import { resolveAbility } from "./match-abilities";
 import { resolveBasicAttack } from "./match-combat";
 import { getEndGamePreview, reopenMatch } from "./match-endgame";
@@ -15,6 +16,7 @@ import {
 import type {
   ActionResolvedEvent,
   ActiveMatchState,
+  CharacterId,
   CommandResult,
   EndGamePreview,
   MatchEndedEvent,
@@ -24,6 +26,7 @@ import type {
   ReversibleMatchEvent,
   UndoAppliedEvent,
   UndoPreview,
+  Team,
 } from "./match-types";
 
 function applyHistoricalActionResolution(
@@ -54,7 +57,7 @@ function applyHistoricalActionResolution(
         ...event.reactions.map(({ reactionId }) => reactionId),
       ]),
     ],
-    spentAbilityIds,
+    spentAbilityIds: spentAbilityIds,
     characters,
     eliminatedTeams: [...event.eliminatedTeams],
     outcome:
@@ -76,10 +79,7 @@ function validateHistoricalActionResolution(
       "The Action Resolution rules version does not follow Match State.",
     );
   }
-  // Widened view keeps this guard live for persisted values that bypass the
-  // typed event contract.
-  const actionType: string = event.actionType;
-  if (actionType !== "Basic Attack" && actionType !== "Ability") {
+  if (!isActionKind(event.actionType)) {
     throw new Error("The historical Action Resolution is unsupported.");
   }
   const activeCharacterId = state.initiative[state.activeSlot - 1]?.characterId;
@@ -99,11 +99,11 @@ function validateHistoricalActionResolution(
   event.effects.forEach((effect) => {
     validateHistoricalEffect(state, affected, effect);
   });
-  // Widened view keeps this guard live for persisted values that bypass the
-  // typed event contract.
-  const eliminatedTeamIds: readonly string[] = event.eliminatedTeams;
+  const eliminatedTeamIds: readonly unknown[] = event.eliminatedTeams;
   if (
-    eliminatedTeamIds.some((team) => team !== "Drow" && team !== "Duergar") ||
+    !eliminatedTeamIds.every(
+      (team): team is Team => typeof team === "string" && isTeam(team),
+    ) ||
     new Set(eliminatedTeamIds).size !== eliminatedTeamIds.length
   ) {
     throw new Error("The Action Resolution eliminations are invalid.");
@@ -112,7 +112,7 @@ function validateHistoricalActionResolution(
 
 function validateHistoricalEffect(
   state: ActiveMatchState,
-  contacts: ReadonlySet<string>,
+  contacts: ReadonlySet<CharacterId>,
   effect: ActionResolvedEvent["effects"][number],
 ): void {
   if (!contacts.has(effect.characterId)) {
@@ -226,11 +226,12 @@ function coinFlipEndGamePreviewOrThrow(
   current: ActiveMatchState,
   event: MatchEndedEvent,
 ): EndGamePreview {
-  if (event.coinFlipResult !== "Drow" && event.coinFlipResult !== "Duergar") {
+  const coinFlipResult: unknown = event.coinFlipResult;
+  if (typeof coinFlipResult !== "string" || !isTeam(coinFlipResult)) {
     throw new Error("End Game does not follow Match State.");
   }
   const deterministicRandom: RandomSource = {
-    nextUint32: () => (event.coinFlipResult === "Drow" ? 0 : 1),
+    nextUint32: () => (coinFlipResult === "Drow" ? 0 : 1),
   };
   return getEndGamePreview(current, deterministicRandom);
 }
@@ -327,10 +328,14 @@ function applyAbilityResolution(
   current: ActiveMatchState,
   event: Extract<MatchEvent, { readonly type: "ActionResolved" }>,
 ): ActiveMatchState {
+  const abilityId = event.abilityId ?? event.attackId;
+  if (!isAbilityId(abilityId)) {
+    throw new Error("The Ability Resolution Event omits its Ability id.");
+  }
   const expected = resolveAbility(
     current,
     {
-      abilityId: event.abilityId ?? event.attackId,
+      abilityId,
       targetCharacterIds:
         event.targetCharacterIds ??
         event.attackLegs.flatMap((leg) => leg.affectedCharacterIds),

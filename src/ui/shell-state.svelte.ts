@@ -12,6 +12,8 @@
  */
 
 import {
+  type AbilityId,
+  type CharacterId,
   type EndGamePreview,
   type MatchEvent,
   type MatchState,
@@ -40,32 +42,32 @@ export type Confirmation =
   | "remove-summary"
   | "start-new"
   | null;
-export interface ActionDraft {
+export type ActionDraft = {
   /** Which command opened this draft; ability drafts resolve through resolveAbility. */
   readonly kind: "basic" | "ability";
-  readonly sourceCharacterId: string;
+  readonly sourceCharacterId: CharacterId;
   readonly rulesVersion: string;
   /** The chosen Ruleset ability; null for Basic Attack drafts. */
-  readonly abilityId: string | null;
+  readonly abilityId: AbilityId | null;
   /**
    * Chosen targets for targeted-attack and ally/enemy/utility ability
    * drafts. Self abilities need none and physical-attack abilities use the
    * ordered bottle contacts instead.
    */
-  readonly targets: readonly string[];
+  readonly targets: readonly CharacterId[];
   /**
    * Ability draft progression: select-target (targeted/ally/enemy/utility),
    * reactions (targeted-attack only), contacts (physical-attack), review.
    * Basic Attack drafts start at contacts.
    */
   readonly step: "select-target" | "reactions" | "contacts" | "review";
-  readonly attackLegs: readonly (readonly string[])[];
+  readonly attackLegs: readonly (readonly CharacterId[])[];
   readonly physicalConfirmations: Readonly<
     Record<PhysicalAttackCheck, boolean>
   >;
-  readonly reactions: ReadonlyArray<
-    ProtectiveReactionInput & { readonly override: string | null }
-  >;
+  readonly reactions: readonly (ProtectiveReactionInput & {
+    readonly override: string | null;
+  })[];
   /** Records a state-invalid ability choice (spent, wrong active character, invalid target). */
   readonly abilityOverride: boolean;
   /**
@@ -78,7 +80,7 @@ export interface ActionDraft {
 
 export function draftAffectedCharacterIds(
   draft: ActionDraft,
-): readonly string[] {
+): readonly CharacterId[] {
   return draft.attackLegs.flatMap((leg) => leg);
 }
 export function createPhysicalConfirmations(
@@ -98,7 +100,7 @@ export function createPhysicalConfirmations(
         "terrain-contact": true,
       };
 }
-export interface ShellState {
+export type ShellState = {
   readonly network: NetworkState;
   readonly serviceWorker: ServiceWorkerState;
   readonly appShellCache: AppShellCacheState;

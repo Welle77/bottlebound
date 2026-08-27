@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { MatchState } from "../domain/match";
+  import type { AbilityId, MatchState, ReactionId } from "../domain/match";
   import { RULESET } from "../domain/ruleset";
   import { modifierLabel } from "./format";
   import CharacterName from "./CharacterName.svelte";
@@ -46,7 +46,7 @@
   );
 
   function spentNames(
-    ids: readonly string[],
+    ids: readonly AbilityId[] | readonly ReactionId[],
     kind: "abilities" | "reactions",
   ): string {
     if (ids.length === 0) return "None";

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { MatchState } from "../domain/match";
+  import type { CharacterId, MatchState } from "../domain/match";
   import { RULESET } from "../domain/ruleset";
   import {
     draftAffectedCharacterIds,
@@ -33,7 +33,9 @@
   // control-flow block edges is trimmed by the Svelte compiler.
   const DUPLICATE_SUFFIX = " \u00b7 Already contacted in Leg ";
 
-  function handleContactChange(characterId: string): (event: Event) => void {
+  function handleContactChange(
+    characterId: CharacterId,
+  ): (event: Event) => void {
     return (event) => {
       if (!(event.currentTarget instanceof HTMLInputElement)) return;
       const currentDraft = state.current.actionDraft;

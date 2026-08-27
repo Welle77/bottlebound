@@ -2,6 +2,7 @@ import { RULESET } from "./ruleset";
 import { cryptoRandomSource, nextBounded } from "./match-random";
 import type {
   ActiveMatchState,
+  CharacterId,
   CommandResult,
   EndedMatchState,
   EndGamePreview,
@@ -10,9 +11,10 @@ import type {
   MatchOutcome,
   MatchReopenedEvent,
   RandomSource,
+  Team,
 } from "./match-types";
 
-export function teamOfCharacter(characterId: string): "Drow" | "Duergar" {
+export function teamOfCharacter(characterId: CharacterId): Team {
   const character = RULESET.characters.find(({ id }) => id === characterId);
   if (!character) throw new Error("The Match references an unknown character.");
   return character.team;

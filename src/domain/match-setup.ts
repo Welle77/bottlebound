@@ -1,8 +1,13 @@
 import { RULESET, RULES_VERSION } from "./ruleset";
 import { nextBounded, orderByCoinFlips } from "./match-random";
-import { initialCombatState, MATCH_SCHEMA_VERSION } from "./match-types";
+import {
+  initialCombatState,
+  isCharacterId,
+  MATCH_SCHEMA_VERSION,
+} from "./match-types";
 import type {
   ActiveMatchState,
+  CharacterId,
   CoinFlipTieBreakStep,
   CommandResult,
   DisplayNames,
@@ -67,17 +72,19 @@ export function createSetup(
  * are dropped from the map.
  */
 export function normalizeDisplayNames(
-  requested: Readonly<Record<string, string>>,
+  requested: Readonly<Partial<Record<CharacterId, string>>>,
 ): DisplayNames {
-  return Object.fromEntries(
-    Object.entries(requested)
-      .filter(([characterId, rawName]) => {
-        if (!RULESET.characters.some(({ id }) => id === characterId)) {
-          throw new Error("The Display Name references an unknown character.");
-        }
-        return rawName.trim().length > 0;
-      })
-      .map(([characterId, rawName]) => [characterId, rawName.trim()]),
+  return Object.entries(requested).reduce<DisplayNames>(
+    (displayNames, [characterId, rawName]) => {
+      if (!isCharacterId(characterId)) {
+        throw new Error("The Display Name references an unknown character.");
+      }
+      const normalizedName = rawName.trim();
+      return normalizedName.length > 0
+        ? { ...displayNames, [characterId]: normalizedName }
+        : displayNames;
+    },
+    {},
   );
 }
 
@@ -87,7 +94,7 @@ export function normalizeDisplayNames(
  */
 export function assignDisplayNames(
   state: SetupMatchState,
-  requested: Readonly<Record<string, string>>,
+  requested: Readonly<Partial<Record<CharacterId, string>>>,
   occurredAt: string,
 ): CommandResult<SetupMatchState, DisplayNamesAssignedEvent> {
   // Runtime guard against callers bypassing the typed parameter (tests pass

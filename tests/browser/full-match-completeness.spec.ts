@@ -157,7 +157,7 @@ test("one named Match mixes Basic Attack, every ability interaction, undo, and E
     ).toContainText("5/5");
   };
 
-  const pendingRoundOne: Array<[string, Script]> = [
+  const pendingRoundOne: [string, Script][] = [
     ["Silk", silkBackstab],
     ["Vesper", vesperBlessing],
     ["Stone", stoneBasicAttack],

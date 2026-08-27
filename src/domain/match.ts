@@ -6,7 +6,36 @@
  * existing importers of "./domain/match" are unaffected.
  */
 
-export { MATCH_SCHEMA_VERSION } from "./match-types";
+export {
+  ACTION_KINDS,
+  ACTIVE_EFFECT_KINDS,
+  ATTACK_KINDS,
+  CHARACTER_IDS,
+  DECISION_BASES,
+  EFFECT_BOUNDARY_TRIGGERS,
+  EFFECT_DURATION_KINDS,
+  EFFECT_OPERATIONS,
+  MATCH_EVENT_TYPES,
+  MATCH_SCHEMA_VERSION,
+  PHASES,
+  TEAMS,
+  isActionKind,
+  isActiveEffectKind,
+  isAbilityId,
+  isAttackId,
+  isAttackKind,
+  isBasicAttackId,
+  isCharacterId,
+  isDecisionBasis,
+  isEffectBoundaryTrigger,
+  isEffectDurationKind,
+  isEffectOperation,
+  isMatchEventType,
+  isPhase,
+  isTeam,
+} from "./match-types";
+
+export { isAbilityName } from "./ruleset";
 
 export { cryptoRandomSource } from "./match-random";
 
@@ -48,12 +77,19 @@ export {
 } from "./match-replay";
 
 export type {
+  AbilityId,
   ActionEffect,
+  ActionKind,
   ActionResolvedEvent,
   ActiveEffect,
+  ActiveEffectKind,
   ActiveMatchState,
+  AttackKind,
+  AttackId,
   AttackLeg,
   BasicAttackInput,
+  BasicAttackId,
+  CharacterId,
   CoinFlipAttempt,
   CoinFlipTieBreakStep,
   CommandResult,
@@ -62,6 +98,8 @@ export type {
   DisplayNames,
   DisplayNamesAssignedEvent,
   EffectDurationKind,
+  EffectBoundaryTrigger,
+  EffectOperation,
   EliminationContinuedEvent,
   EndedMatchState,
   EndGamePreview,
@@ -71,26 +109,32 @@ export type {
   MatchCharacter,
   MatchEndedEvent,
   MatchEvent,
+  MatchEventType,
   MatchOutcome,
   MatchReopenedEvent,
   MatchStartedEvent,
   MatchState,
   MatchSummary,
+  Phase,
   PhysicalConfirmations,
   ProtectiveReactionChoice,
   ProtectiveReactionInput,
   ProtectiveReactionOperation,
   ProtectiveReactionResolution,
   RandomSource,
+  ReactionId,
   ReversibleMatchEvent,
   SetupCreatedEvent,
   SetupMatchEvent,
   SetupMatchState,
   SimultaneousEliminationRuledEvent,
+  Team,
   TieOrder,
   TurnFinishedEvent,
   UndoAppliedEvent,
   UndoPreview,
 } from "./match-types";
+
+export type { AbilityName } from "./ruleset";
 
 export type { AbilityInput } from "./match-abilities";

@@ -4,14 +4,14 @@ export type ServiceWorkerState =
 export type ProbeState = "checking" | "ready" | "failed";
 export type AppShellCacheState = "checking" | "ready" | "failed";
 
-export interface ReadinessInputs {
+export type ReadinessInputs = {
   readonly network: NetworkState;
   readonly serviceWorker: ServiceWorkerState;
   readonly appShellCache: AppShellCacheState;
   readonly canonicalStorage: ProbeState;
 }
 
-export interface ReadinessState {
+export type ReadinessState = {
   readonly network: NetworkState;
   readonly serviceWorker: ServiceWorkerState;
   readonly canonicalStorage: ProbeState;

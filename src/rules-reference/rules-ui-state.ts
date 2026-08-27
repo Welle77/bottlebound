@@ -1,4 +1,4 @@
-export interface RulesUiState {
+export type RulesUiState = {
   readonly version: string;
   readonly open: boolean;
   readonly query: string;

@@ -15,7 +15,7 @@
   // panel, active-match board, ended-match panel) renders one instance;
   // only one surface is mounted per shell phase, so only one dialog can
   // exist at a time.
-  interface PreviewView {
+  type PreviewView = {
     readonly kind: "preview";
     readonly result: string;
     readonly basisText: string;
@@ -23,7 +23,7 @@
     readonly hpTotalsText: string;
     readonly rulesVersion: string;
   }
-  interface GenericView {
+  type GenericView = {
     readonly kind: "generic";
     readonly heading: string;
     readonly detail: string;

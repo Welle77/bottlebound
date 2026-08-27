@@ -50,6 +50,13 @@ export default defineConfig(
   // Core correctness: ESLint recommended + typescript-eslint strict.
   eslint.configs.recommended,
   tseslint.configs.strict,
+  tseslint.configs.stylistic,
+  {
+    name: "style/type-definitions",
+    rules: {
+      "@typescript-eslint/consistent-type-definitions": ["error", "type"],
+    },
+  },
 
   // Project-wide size and complexity limits.
   {

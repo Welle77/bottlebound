@@ -1,9 +1,19 @@
 import {
   MATCH_SCHEMA_VERSION,
+  isCharacterId,
+  isMatchEventType,
+  isTeam,
+  type CharacterId,
   type InitiativeEntry,
   type MatchEvent,
 } from "../domain/match";
 import { RULESET } from "../domain/ruleset";
+import {
+  assertActionResolutionEffectCollections,
+  assertActionResolutionMetadata,
+  assertExpiredEffectCollection,
+} from "./match-store-canonical-action";
+import { assertMatchEndedEvent } from "./match-store-canonical-ended-event";
 import {
   assertCoinFlipTieOrder,
   assertCanonicalState,
@@ -47,6 +57,8 @@ function assertDisplayNamesEvent(value: Record<string, unknown>): void {
     !isRecord(names) ||
     !Object.keys(names).every(
       (characterId) =>
+        typeof characterId === "string" &&
+        isCharacterId(characterId) &&
         typeof names[characterId] === "string" &&
         names[characterId].length > 0 &&
         names[characterId].trim() === names[characterId] &&
@@ -139,61 +151,13 @@ function assertTurnSkippedSlots(
     throw new Error("The canonical Finish Turn Event is invalid.");
   }
 }
-function assertTurnFinishedEvent(value: Record<string, unknown>): void {
+function assertTurnFinishedEvent(
+  value: Record<string, unknown>,
+  historicalRuleset: boolean,
+): void {
   assertTurnFields(value);
   assertTurnSkippedSlots(value, expectedVisitedTurnSlots(value));
-}
-function assertBasicAttackMetadata(
-  value: Record<string, unknown>,
-  historicalRuleset: boolean,
-): void {
-  const attack = historicalRuleset
-    ? undefined
-    : RULESET.basicAttacks.find(({ id }) => id === value.attackId);
-  if (
-    !historicalRuleset &&
-    value.actionType === "Basic Attack" &&
-    (!attack ||
-      value.sourceCharacterId !== attack.characterId ||
-      value.attackType !== attack.attackType ||
-      value.rangePaces !== attack.rangePaces ||
-      value.damage !== attack.damage ||
-      value.rulesSourceAnchor !== attack.sourceAnchor)
-  ) {
-    throw invalidActionResolution();
-  }
-  if (
-    historicalRuleset &&
-    (!Number.isInteger(value.rangePaces) ||
-      (value.rangePaces as number) < 1 ||
-      !Number.isInteger(value.damage) ||
-      (value.damage as number) < 0 ||
-      typeof value.rulesSourceAnchor !== "string" ||
-      value.rulesSourceAnchor.length === 0)
-  ) {
-    throw invalidActionResolution();
-  }
-}
-function assertAbilityMetadata(value: Record<string, unknown>): void {
-  if (
-    value.actionType === "Ability" &&
-    (typeof value.attackId !== "string" ||
-      value.attackId.length === 0 ||
-      typeof value.rulesSourceAnchor !== "string" ||
-      value.rulesSourceAnchor.length === 0)
-  ) {
-    throw invalidActionResolution();
-  }
-  if (value.actionType !== "Basic Attack" && value.actionType !== "Ability") {
-    throw invalidActionResolution();
-  }
-}
-function assertActionResolutionMetadata(
-  value: Record<string, unknown>,
-  historicalRuleset: boolean,
-): void {
-  assertBasicAttackMetadata(value, historicalRuleset);
-  assertAbilityMetadata(value);
+  assertExpiredEffectCollection(value.expiredEffects, historicalRuleset);
 }
 
 function assertActionResolutionCollections(
@@ -221,7 +185,7 @@ function assertActionResolutionTeamsAndOverrides(
   if (
     !Array.isArray(value.eliminatedTeams) ||
     !value.eliminatedTeams.every(
-      (team) => team === "Drow" || team === "Duergar",
+      (team) => typeof team === "string" && isTeam(team),
     ) ||
     new Set(value.eliminatedTeams).size !== value.eliminatedTeams.length ||
     (value.majorActionOverride !== null &&
@@ -269,21 +233,33 @@ function assertAttackLegTargets(
   value: Record<string, unknown>,
   leg: Record<string, unknown>,
   index: number,
-): readonly string[] {
+): readonly CharacterId[] {
+  const affectedCharacterIds = characterIdsFrom(leg.affectedCharacterIds);
   if (
     leg.towardCharacterId !== (index === 0 ? null : value.sourceCharacterId) ||
-    !Array.isArray(leg.affectedCharacterIds) ||
-    (index === 0 && leg.affectedCharacterIds.length === 0) ||
-    !leg.affectedCharacterIds.every(
-      (characterId) =>
-        typeof characterId === "string" &&
-        RULESET.characters.some(({ id }) => id === characterId),
-    )
+    affectedCharacterIds === null ||
+    (index === 0 && affectedCharacterIds.length === 0)
   ) {
     throw new Error("The canonical Attack Leg is invalid.");
   }
-  return leg.affectedCharacterIds as readonly string[];
+  return affectedCharacterIds;
 }
+
+function characterIdsFrom(value: unknown): readonly CharacterId[] | null {
+  if (!Array.isArray(value)) return null;
+  return value.reduce<readonly CharacterId[] | null>((ids, characterId) => {
+    if (
+      ids === null ||
+      typeof characterId !== "string" ||
+      !isCharacterId(characterId) ||
+      !RULESET.characters.some(({ id }) => id === characterId)
+    ) {
+      return null;
+    }
+    return [...ids, characterId];
+  }, []);
+}
+
 function affectedIdsForLeg(
   value: Record<string, unknown>,
   context: {
@@ -291,7 +267,7 @@ function affectedIdsForLeg(
     readonly index: number;
     readonly historicalRuleset: boolean;
   },
-): readonly string[] {
+): readonly CharacterId[] {
   const { leg, index, historicalRuleset } = context;
   if (!isRecord(leg)) {
     throw new Error("The canonical Attack Leg is invalid.");
@@ -303,7 +279,7 @@ function affectedIdsForLeg(
 function assertActionResolutionContacts(
   value: Record<string, unknown>,
   historicalRuleset: boolean,
-): readonly string[] {
+): readonly CharacterId[] {
   const affectedCharacterIds = (value.attackLegs as readonly unknown[]).flatMap(
     (leg, index) => affectedIdsForLeg(value, { leg, index, historicalRuleset }),
   );
@@ -338,11 +314,13 @@ function assertReactionIdentity(
 }
 function assertReactionProtection(
   reactionResolution: Record<string, unknown>,
-  affectedCharacterIds: readonly string[],
+  affectedCharacterIds: readonly CharacterId[],
 ): void {
+  const protectedCharacterId = reactionResolution.protectedCharacterId;
   if (
-    typeof reactionResolution.protectedCharacterId !== "string" ||
-    !affectedCharacterIds.includes(reactionResolution.protectedCharacterId)
+    typeof protectedCharacterId !== "string" ||
+    !isCharacterId(protectedCharacterId) ||
+    !affectedCharacterIds.includes(protectedCharacterId)
   ) {
     throw new Error("The canonical Action Resolution Reaction is invalid.");
   }
@@ -407,7 +385,7 @@ function assertReactionResolution(
   rawResolution: unknown,
   context: {
     readonly value: Readonly<Record<string, unknown>>;
-    readonly affectedCharacterIds: readonly string[];
+    readonly affectedCharacterIds: readonly CharacterId[];
     readonly historicalRuleset: boolean;
     readonly seenOwners: ReadonlySet<string>;
   },
@@ -451,7 +429,7 @@ function assertReactionResolution(
 }
 function assertActionResolutionReactions(
   value: Record<string, unknown>,
-  affectedCharacterIds: readonly string[],
+  affectedCharacterIds: readonly CharacterId[],
   historicalRuleset: boolean,
 ): void {
   const reactionList = value.reactions as readonly unknown[];
@@ -501,7 +479,7 @@ function assertActionResolutionRedirect(value: Record<string, unknown>): void {
 }
 function assertActionEffect(
   effect: unknown,
-  affectedCharacterId: unknown,
+  affectedCharacterId: CharacterId,
   actionType: unknown,
 ): void {
   if (
@@ -528,10 +506,14 @@ function assertActionEffect(
 }
 function assertActionResolutionEffects(
   value: Record<string, unknown>,
-  affectedCharacterIds: readonly string[],
+  affectedCharacterIds: readonly CharacterId[],
 ): void {
   (value.effects as readonly unknown[]).forEach((effect, index) => {
-    assertActionEffect(effect, affectedCharacterIds[index], value.actionType);
+    const affectedCharacterId = affectedCharacterIds[index];
+    if (!affectedCharacterId) {
+      throw new Error("The canonical Action Resolution effects are invalid.");
+    }
+    assertActionEffect(effect, affectedCharacterId, value.actionType);
   });
 }
 function assertActionResolvedEvent(
@@ -543,6 +525,7 @@ function assertActionResolvedEvent(
     expectedRulesVersion !== RULESET.version;
   assertActionResolutionMetadata(value, historicalRuleset);
   assertActionResolutionCollections(value);
+  assertActionResolutionEffectCollections(value, historicalRuleset);
   assertActionResolutionTeamsAndOverrides(value);
   const affectedCharacterIds = assertActionResolutionContacts(
     value,
@@ -558,8 +541,10 @@ function assertActionResolvedEvent(
 }
 function assertEliminationContinuedEvent(value: Record<string, unknown>): void {
   if (
-    (value.eliminatedTeam !== "Drow" && value.eliminatedTeam !== "Duergar") ||
-    (value.outcome !== "Drow" && value.outcome !== "Duergar") ||
+    typeof value.eliminatedTeam !== "string" ||
+    !isTeam(value.eliminatedTeam) ||
+    typeof value.outcome !== "string" ||
+    !isTeam(value.outcome) ||
     value.eliminatedTeam === value.outcome
   ) {
     throw new Error("The canonical Continue Event is invalid.");
@@ -568,14 +553,15 @@ function assertEliminationContinuedEvent(value: Record<string, unknown>): void {
 function assertSimultaneousEliminationEvent(
   value: Record<string, unknown>,
 ): void {
+  const outcome = value.outcome;
+  const outcomeIsValid =
+    (typeof outcome === "string" && isTeam(outcome)) || outcome === "draw";
   if (
     !Array.isArray(value.eliminatedTeams) ||
     value.eliminatedTeams.length !== 2 ||
     value.eliminatedTeams[0] !== "Drow" ||
     value.eliminatedTeams[1] !== "Duergar" ||
-    (value.outcome !== "Drow" &&
-      value.outcome !== "Duergar" &&
-      value.outcome !== "draw") ||
+    !outcomeIsValid ||
     typeof value.overrideEvidence !== "string" ||
     value.overrideEvidence.trim().length === 0
   ) {
@@ -583,69 +569,6 @@ function assertSimultaneousEliminationEvent(
       "The canonical simultaneous-elimination ruling is invalid.",
     );
   }
-}
-function assertEndedTeamsAndOutcome(value: Record<string, unknown>): void {
-  if (
-    (value.outcome !== "Drow" &&
-      value.outcome !== "Duergar" &&
-      value.outcome !== "draw") ||
-    !Array.isArray(value.eliminatedTeams) ||
-    !value.eliminatedTeams.every(
-      (team: unknown) => team === "Drow" || team === "Duergar",
-    ) ||
-    new Set(value.eliminatedTeams).size !== value.eliminatedTeams.length ||
-    (value.eliminatedTeams.length === 0 && value.outcome === "draw") ||
-    (value.eliminatedTeams.length === 1 &&
-      (value.outcome === "draw" ||
-        value.eliminatedTeams[0] === value.outcome)) ||
-    (value.eliminatedTeams.length === 2 &&
-      (value.eliminatedTeams[0] !== "Drow" ||
-        value.eliminatedTeams[1] !== "Duergar"))
-  ) {
-    throw new Error("The canonical End Game Event is invalid.");
-  }
-}
-function assertEndedDecisionBasis(value: Record<string, unknown>): void {
-  if (
-    value.decisionBasis !== "elimination" &&
-    value.decisionBasis !== "activeCount" &&
-    value.decisionBasis !== "activeHpTotal" &&
-    value.decisionBasis !== "coinFlip"
-  ) {
-    throw new Error("The canonical End Game Event is invalid.");
-  }
-}
-function assertEndedFinalTotals(value: Record<string, unknown>): void {
-  if (
-    !isRecord(value.finalCounts) ||
-    !Number.isInteger(value.finalCounts.Drow) ||
-    !Number.isInteger(value.finalCounts.Duergar) ||
-    (value.finalCounts.Drow as number) < 0 ||
-    (value.finalCounts.Duergar as number) < 0 ||
-    !isRecord(value.finalHpTotals) ||
-    !Number.isInteger(value.finalHpTotals.Drow) ||
-    !Number.isInteger(value.finalHpTotals.Duergar) ||
-    (value.finalHpTotals.Drow as number) < 0 ||
-    (value.finalHpTotals.Duergar as number) < 0
-  ) {
-    throw new Error("The canonical End Game Event is invalid.");
-  }
-}
-function assertEndedCoinFlip(value: Record<string, unknown>): void {
-  if (
-    (value.coinFlipResult !== null &&
-      value.coinFlipResult !== "Drow" &&
-      value.coinFlipResult !== "Duergar") ||
-    (value.decisionBasis === "coinFlip") !== (value.coinFlipResult !== null)
-  ) {
-    throw new Error("The canonical End Game Event is invalid.");
-  }
-}
-function assertMatchEndedEvent(value: Record<string, unknown>): void {
-  assertEndedTeamsAndOutcome(value);
-  assertEndedDecisionBasis(value);
-  assertEndedFinalTotals(value);
-  assertEndedCoinFlip(value);
 }
 function assertMatchReopenedEvent(value: Record<string, unknown>): void {
   if (
@@ -657,27 +580,32 @@ function assertMatchReopenedEvent(value: Record<string, unknown>): void {
   }
 }
 function assertUndoAppliedEvent(value: Record<string, unknown>): void {
+  const targetType: unknown = value.targetType;
+  const targetTypeIsValid =
+    typeof targetType === "string" &&
+    isMatchEventType(targetType) &&
+    (targetType === "InitiativeGenerated" ||
+      targetType === "InitiativeRerolled" ||
+      targetType === "DisplayNamesAssigned" ||
+      targetType === "MatchStarted" ||
+      targetType === "TurnFinished" ||
+      targetType === "ActionResolved" ||
+      targetType === "EliminationContinued" ||
+      targetType === "SimultaneousEliminationRuled" ||
+      targetType === "MatchReopened");
   if (
     !Number.isSafeInteger(value.targetSequence) ||
     (value.targetSequence as number) < 2 ||
     (value.targetSequence as number) >= (value.sequence as number) ||
-    (value.targetType !== "InitiativeGenerated" &&
-      value.targetType !== "InitiativeRerolled" &&
-      value.targetType !== "DisplayNamesAssigned" &&
-      value.targetType !== "MatchStarted" &&
-      value.targetType !== "TurnFinished" &&
-      value.targetType !== "ActionResolved" &&
-      value.targetType !== "EliminationContinued" &&
-      value.targetType !== "SimultaneousEliminationRuled" &&
-      value.targetType !== "MatchReopened")
+    !targetTypeIsValid
   ) {
     throw new Error("The canonical Undo Event is invalid.");
   }
 }
 function expectedInitiativeTies(results: readonly unknown[]): readonly {
   readonly total: number;
-  readonly initialCharacterIds: readonly string[];
-  readonly finalCharacterIds: readonly string[];
+  readonly initialCharacterIds: readonly CharacterId[];
+  readonly finalCharacterIds: readonly CharacterId[];
 }[] {
   return [...new Set(results.map((entry) => (entry as InitiativeEntry).total))]
     .filter(
@@ -769,7 +697,11 @@ export function assertCanonicalEvent(
     return;
   }
   if (value.type === "TurnFinished") {
-    assertTurnFinishedEvent(value);
+    assertTurnFinishedEvent(
+      value,
+      typeof expectedRulesVersion === "string" &&
+        expectedRulesVersion !== RULESET.version,
+    );
     return;
   }
   if (value.type === "ActionResolved") {

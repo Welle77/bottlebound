@@ -23,14 +23,14 @@ const SUMMARY_STORE = "summaries";
 const CURRENT_MATCH_KEY = "current-match";
 const LATEST_SUMMARY_KEY = "latest-summary";
 
-interface CurrentMatchMetadata {
+type CurrentMatchMetadata = {
   readonly matchId: string;
   readonly sequence: number;
   readonly schemaVersion: number;
   readonly rulesVersion: string;
 }
 
-interface CommitContext {
+type CommitContext = {
   readonly transaction: IDBTransaction;
   readonly completion: Promise<void>;
   readonly metadataStore: IDBObjectStore;
@@ -47,7 +47,7 @@ type DeepReadonly<T> = T extends (...args: infer Parameters) => infer Result
 
 type ReadonlyDeepCommitContext = DeepReadonly<CommitContext>;
 
-export interface RestoredMatch {
+export type RestoredMatch = {
   readonly state: MatchState;
   readonly events: readonly MatchEvent[];
   readonly summary: MatchSummary | null;
@@ -448,7 +448,10 @@ export function createIndexedDbMatchStore(
     await completion;
   }
 
-  async function deleteMatch(matchId: string, confirmed: boolean): Promise<void> {
+  async function deleteMatch(
+    matchId: string,
+    confirmed: boolean,
+  ): Promise<void> {
     if (!confirmed) throw new Error("Discard confirmation is required.");
     const database = await open();
     const transaction = database.transaction(

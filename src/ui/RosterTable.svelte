@@ -1,5 +1,9 @@
 <script lang="ts">
-  import type { SetupMatchState } from "../domain/match";
+  import type {
+    CharacterId,
+    SetupMatchState,
+    Team,
+  } from "../domain/match";
   import { RULESET } from "../domain/ruleset";
   import { modifierLabel } from "./format";
   import CharacterName from "./CharacterName.svelte";
@@ -9,24 +13,26 @@
   // the deleted legacy template (seven cells per row).
   let { match }: { match: SetupMatchState } = $props();
 
-  interface InitiativeRow {
-    readonly key: string;
+  type InitiativeRow = {
+    readonly key: CharacterId;
     readonly slot: number;
-    readonly character: { readonly id: string; readonly name: string };
-    readonly team: string;
+    readonly character: RulesetCharacter;
+    readonly team: Team;
     readonly roll: number;
     readonly modifier: string;
     readonly total: number;
     readonly tieBreak: string;
   }
-  interface RosterRow {
-    readonly key: string;
-    readonly character: { readonly id: string; readonly name: string };
-    readonly team: string;
+  type RosterRow = {
+    readonly key: CharacterId;
+    readonly character: RulesetCharacter;
+    readonly team: Team;
     readonly hp: number;
     readonly baseHp: number;
     readonly modifier: string;
   }
+
+  type RulesetCharacter = (typeof RULESET.characters)[number];
 
   const initiativeRows = $derived.by((): readonly InitiativeRow[] => {
     const initiative = match.initiative;

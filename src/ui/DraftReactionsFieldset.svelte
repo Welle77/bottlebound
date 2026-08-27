@@ -1,7 +1,9 @@
 <script lang="ts">
   import {
     getProtectiveReactionChoices,
+    type CharacterId,
     type MatchState,
+    type ReactionId,
   } from "../domain/match";
   import { RULESET } from "../domain/ruleset";
   import { rulesCharacterOf } from "./ability-draft";
@@ -16,16 +18,16 @@
   // wiring (including the Deflecting Palm second-leg management).
   let { match, affectedCharacterIds }: {
     match: Extract<MatchState, { readonly phase: "active" }>;
-    affectedCharacterIds: readonly string[];
+    affectedCharacterIds: readonly CharacterId[];
   } = $props();
 
-  interface ReactionRow {
-    readonly reactionId: string;
-    readonly protectedCharacterId: string;
+  type ReactionRow = {
+    readonly reactionId: ReactionId;
+    readonly protectedCharacterId: CharacterId;
     readonly reactionName: string;
-    readonly owner: { readonly id: string; readonly name: string };
+    readonly owner: { readonly id: CharacterId; readonly name: string };
     readonly protectedCharacter: {
-      readonly id: string;
+      readonly id: CharacterId;
       readonly name: string;
     };
     readonly warning: string;
@@ -106,7 +108,7 @@
           );
       const attackLegs =
         selected && deflectingPalm && currentDraft.attackLegs.length === 1
-          ? [...currentDraft.attackLegs, [] as readonly string[]]
+          ? [...currentDraft.attackLegs, [] as readonly CharacterId[]]
           : !selected && deflectingPalm && currentDraft.attackLegs.length === 2
             ? currentDraft.attackLegs.slice(0, -1)
             : currentDraft.attackLegs;

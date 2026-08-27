@@ -1,30 +1,37 @@
 import { RULESET } from "./ruleset";
+import { isTeam } from "./match-types";
 import type {
   ActiveEffect,
   ActiveMatchState,
+  CharacterId,
   CommandResult,
   EliminationContinuedEvent,
   MatchCharacter,
   MatchOutcome,
   MatchState,
   SimultaneousEliminationRuledEvent,
+  Team,
   TurnFinishedEvent,
 } from "./match-types";
 
-interface TurnPosition {
+type TurnPosition = {
   readonly activeSlot: number;
   readonly round: number;
   readonly skippedSlots: readonly number[];
   readonly stopped: boolean;
 }
 
-interface EffectBoundaryContext {
+type EffectBoundaryContext = {
   readonly activeSlot: number;
   readonly fromSlot: number;
   readonly skippedSlots: readonly number[];
   readonly pathSlots: readonly number[];
-  readonly slotToCharacter: ReadonlyMap<number, string>;
+  readonly slotToCharacter: ReadonlyMap<number, CharacterId>;
   readonly stateSequence: number;
+}
+
+function isSimultaneousEliminationOutcome(value: unknown): boolean {
+  return value === "draw" || (typeof value === "string" && isTeam(value));
 }
 
 function nextTurnPosition(state: ActiveMatchState): TurnPosition {
@@ -67,8 +74,8 @@ function nextTurnPosition(state: ActiveMatchState): TurnPosition {
 }
 
 function characterSlot(
-  slotToCharacter: ReadonlyMap<number, string>,
-  characterId: string,
+  slotToCharacter: ReadonlyMap<number, CharacterId>,
+  characterId: CharacterId,
 ): number | undefined {
   return [...slotToCharacter.entries()].find(
     ([, candidateId]) => candidateId === characterId,
@@ -188,7 +195,7 @@ export function finishTurn(
     throw new Error("Finish Turn needs one non-Downed character.");
   }
   // Expiry handling for scheduled and turn boundaries
-  const slotToCharacter = new Map<number, string>(
+  const slotToCharacter = new Map<number, CharacterId>(
     state.initiative.map((entry) => [entry.slot, entry.characterId]),
   );
   const pathSlots = [...skippedSlots, activeSlot];
@@ -240,7 +247,7 @@ export function finishTurn(
 
 export function acknowledgeElimination(
   state: ActiveMatchState,
-  eliminatedTeam: "Drow" | "Duergar",
+  eliminatedTeam: Team,
   occurredAt: string,
 ): CommandResult<ActiveMatchState, EliminationContinuedEvent> {
   if ((state as MatchState).phase === "ended") {
@@ -288,13 +295,8 @@ export function ruleSimultaneousElimination(
   if ((state as MatchState).phase === "ended") {
     throw new Error("The Ended Match is read-only.");
   }
-  // Widened view keeps this guard live for callers bypassing the typed
-  // parameter with cast values.
-  const ruledOutcome: string = outcome;
   if (
-    (ruledOutcome !== "Drow" &&
-      ruledOutcome !== "Duergar" &&
-      ruledOutcome !== "draw") ||
+    !isSimultaneousEliminationOutcome(outcome) ||
     state.eliminatedTeams.length !== 2 ||
     !state.eliminatedTeams.includes("Drow") ||
     !state.eliminatedTeams.includes("Duergar") ||

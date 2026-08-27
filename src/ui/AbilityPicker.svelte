@@ -13,11 +13,11 @@
   let { match }: { match: Extract<MatchState, { readonly phase: "active" }> } =
     $props();
 
-  const activeRules = $derived(
-    rulesCharacterOf(
-      match.initiative[match.activeSlot - 1]?.characterId ?? "",
-    ),
-  );
+  const activeRules = $derived.by(() => {
+    const entry = match.initiative[match.activeSlot - 1];
+    if (!entry) throw new Error("Active character not found");
+    return rulesCharacterOf(entry.characterId);
+  });
   const abilities = $derived(unspentAbilities(match));
 
   function abilityMeta(ability: StructuredAbility): string {

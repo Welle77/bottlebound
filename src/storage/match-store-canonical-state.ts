@@ -1,5 +1,10 @@
 import {
   assertMatchStateStructure,
+  isCharacterId,
+  isDecisionBasis,
+  isPhase,
+  isTeam,
+  type CharacterId,
   type InitiativeEntry,
   type MatchState,
 } from "../domain/match";
@@ -39,16 +44,14 @@ function assertCanonicalRulesVersion(
 }
 
 function assertCanonicalSnapshotHeader(value: Record<string, unknown>): void {
-  // Widened phase view keeps every literal comparison live for persisted
-  // snapshots without collapsing the modeled phase union downstream.
   const snapshotPhase: unknown = value.phase;
   const sequence: unknown = value.sequence;
+  const phaseIsValid =
+    typeof snapshotPhase === "string" && isPhase(snapshotPhase);
   if (
     typeof value.matchId !== "string" ||
     value.matchId.length === 0 ||
-    (snapshotPhase !== "setup" &&
-      snapshotPhase !== "active" &&
-      snapshotPhase !== "ended") ||
+    !phaseIsValid ||
     !Number.isSafeInteger(sequence) ||
     (sequence as number) < 1
   ) {
@@ -74,7 +77,7 @@ function assertCanonicalRoster(value: MatchState): void {
 
 function assertCanonicalRosterEntry(
   matchCharacter: unknown,
-  characterId: string,
+  characterId: CharacterId,
   baseHp: number,
 ): void {
   if (
@@ -103,12 +106,12 @@ function assertCanonicalInitiative(value: MatchState): void {
   }
   value.initiative.reduce<InitiativeValidationState>(
     assertCanonicalInitiativeEntry,
-    { seen: new Set<string>(), previousTotal: Number.POSITIVE_INFINITY },
+    { seen: new Set<CharacterId>(), previousTotal: Number.POSITIVE_INFINITY },
   );
 }
 
-interface InitiativeValidationState {
-  readonly seen: ReadonlySet<string>;
+type InitiativeValidationState = {
+  readonly seen: ReadonlySet<CharacterId>;
   readonly previousTotal: number;
 }
 
@@ -119,8 +122,15 @@ function assertCanonicalInitiativeEntry(
 ): InitiativeValidationState {
   if (!isRecord(entry))
     throw new Error("The canonical initiative result is structurally invalid.");
+  const characterIdValue: unknown = entry.characterId;
+  const characterIdIsValid =
+    typeof characterIdValue === "string" && isCharacterId(characterIdValue);
+  if (!characterIdIsValid) {
+    throw new Error("The canonical initiative result is structurally invalid.");
+  }
+  const characterId = characterIdValue;
   const rulesCharacter = RULESET.characters.find(
-    ({ id }) => id === entry.characterId,
+    ({ id }) => id === characterId,
   );
   if (
     !rulesCharacter ||
@@ -185,12 +195,7 @@ function assertCanonicalEndedDecision(value: MatchState): void {
 }
 
 function assertCanonicalDecisionBasis(decisionBasis: unknown): void {
-  if (
-    decisionBasis !== "elimination" &&
-    decisionBasis !== "activeCount" &&
-    decisionBasis !== "activeHpTotal" &&
-    decisionBasis !== "coinFlip"
-  ) {
+  if (typeof decisionBasis !== "string" || !isDecisionBasis(decisionBasis)) {
     throw new Error("The Ended Match is structurally invalid.");
   }
 }
@@ -213,11 +218,11 @@ function assertCanonicalFinalTallies(ended: Record<string, unknown>): void {
 }
 
 function assertCanonicalCoinFlipResult(ended: Record<string, unknown>): void {
-  if (
-    ended.coinFlipResult !== null &&
-    ended.coinFlipResult !== "Drow" &&
-    ended.coinFlipResult !== "Duergar"
-  ) {
+  const coinFlipResult: unknown = ended.coinFlipResult;
+  const coinFlipIsValid =
+    coinFlipResult === null ||
+    (typeof coinFlipResult === "string" && isTeam(coinFlipResult));
+  if (!coinFlipIsValid) {
     throw new Error("The Ended Match is structurally invalid.");
   }
   if (
@@ -249,8 +254,8 @@ export function assertCoinFlipTieOrder(
   value: unknown,
   total: number,
   ids: {
-    readonly initialCharacterIds: readonly string[];
-    readonly finalCharacterIds: readonly string[];
+    readonly initialCharacterIds: readonly CharacterId[];
+    readonly finalCharacterIds: readonly CharacterId[];
   },
 ): void {
   const { initialCharacterIds, finalCharacterIds } = ids;
@@ -313,8 +318,8 @@ export function assertCoinFlipTieOrder(
     });
     const selectedIndex = step.selectedIndex as number;
     [replayed[position], replayed[selectedIndex]] = [
-      replayed[selectedIndex] as string,
-      replayed[position] as string,
+      replayed[selectedIndex] as CharacterId,
+      replayed[position] as CharacterId,
     ];
   });
   if (
