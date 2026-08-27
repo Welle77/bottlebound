@@ -35,6 +35,8 @@ export {
   isTeam,
 } from "./match-types";
 
+export { isAbilityName } from "./ruleset";
+
 export { cryptoRandomSource } from "./match-random";
 
 export {
@@ -132,5 +134,7 @@ export type {
   UndoAppliedEvent,
   UndoPreview,
 } from "./match-types";
+
+export type { AbilityName } from "./ruleset";
 
 export type { AbilityInput } from "./match-abilities";

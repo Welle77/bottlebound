@@ -14,6 +14,63 @@ import type {
 } from "./match-types";
 
 export type { Team, CharacterId, AbilityId, BasicAttackId, ReactionId };
+export type AbilityName =
+  | "Backstab"
+  | "Vanish"
+  | "Shapeshift"
+  | "Nature’s Renewal"
+  | "Lay on Hands"
+  | "Divine Shield"
+  | "Frostbind"
+  | "Misty Escape"
+  | "Arcane Bolt"
+  | "Mirror Veil"
+  | "Inspiring Words"
+  | "Battle Hymn"
+  | "Hunter’s Mark"
+  | "Deadeye"
+  | "Stunning Strike"
+  | "Deflecting Palm"
+  | "Second Wind"
+  | "Shield Wall"
+  | "Brutal Shove"
+  | "Rage"
+  | "Hex"
+  | "Eldritch Blast"
+  | "Blessing of Battle"
+  | "Revivify";
+
+const ABILITY_NAMES: readonly AbilityName[] = [
+  "Backstab",
+  "Vanish",
+  "Shapeshift",
+  "Nature’s Renewal",
+  "Lay on Hands",
+  "Divine Shield",
+  "Frostbind",
+  "Misty Escape",
+  "Arcane Bolt",
+  "Mirror Veil",
+  "Inspiring Words",
+  "Battle Hymn",
+  "Hunter’s Mark",
+  "Deadeye",
+  "Stunning Strike",
+  "Deflecting Palm",
+  "Second Wind",
+  "Shield Wall",
+  "Brutal Shove",
+  "Rage",
+  "Hex",
+  "Eldritch Blast",
+  "Blessing of Battle",
+  "Revivify",
+];
+
+export function isAbilityName(value: string): value is AbilityName {
+  return (ABILITY_NAMES as readonly string[]).includes(value);
+}
+
 export type {
   AttackKind,
   Phase,
@@ -23,7 +80,7 @@ export type {
 export { isCharacterId, isTeam } from "./match-types";
 
 export interface RulesetAbility {
-  readonly name: string;
+  readonly name: AbilityName;
   readonly sourceAnchor: string;
   readonly type: string;
   readonly target: string;
@@ -72,7 +129,7 @@ export type ReactionOperation =
 export interface RulesetReaction {
   readonly id: ReactionId;
   readonly ownerCharacterId: CharacterId;
-  readonly name: string;
+  readonly name: AbilityName;
   readonly trigger: "attack-would-affect" | "physical-ball-hits-owner";
   readonly target: string;
   readonly range: string;
@@ -91,7 +148,7 @@ export interface RulesetReferenceCharacter extends RulesetCharacter {
 
 export interface StructuredAbility {
   readonly id: AbilityId;
-  readonly name: string;
+  readonly name: AbilityName;
   readonly ownerCharacterId: CharacterId;
   readonly actionType: "standard" | "powerful" | "reaction";
   readonly attackType: StructuredAbilityAttackType;
@@ -151,8 +208,13 @@ function requiredCharacterId(value: string): CharacterId {
 
 const referenceCharacters = RULES_REFERENCE.characters.map((character) => {
   const characterId = requiredCharacterId(character.id);
-  const abilities = character.abilities.map((ability) =>
-    Object.freeze({
+  const abilities = character.abilities.map((ability) => {
+    if (!isAbilityName(ability.name)) {
+      throw new Error(
+        `Bundled Ruleset has an invalid ability name: ${ability.name}.`,
+      );
+    }
+    return Object.freeze({
       name: ability.name,
       sourceAnchor: ability.anchor,
       type: ability.fields.Type,
@@ -163,8 +225,8 @@ const referenceCharacters = RULES_REFERENCE.characters.map((character) => {
       ballRequired: ability.fields["Ball Required"],
       effect: ability.fields.Effect,
       duration: ability.fields.Duration,
-    }),
-  );
+    });
+  });
   return Object.freeze({
     id: characterId,
     name: character.name,
@@ -272,7 +334,7 @@ const reactionConfigurations = [
   },
 ] as const satisfies readonly {
   readonly ownerCharacterId: CharacterId;
-  readonly name: string;
+  readonly name: AbilityName;
   readonly trigger: RulesetReaction["trigger"];
   readonly operations: readonly ReactionOperation[];
 }[];
@@ -321,7 +383,7 @@ function slugAbility(value: string): string {
     .replaceAll(/^-|-$/g, "");
 }
 
-function reactionId(characterId: CharacterId, name: string): ReactionId {
+function reactionId(characterId: CharacterId, name: AbilityName): ReactionId {
   const id = `${characterId}-${slugAbility(name)}`;
   if (!isReactionId(id)) {
     throw new Error(`Unsupported Reaction id: ${id}`);
@@ -329,7 +391,7 @@ function reactionId(characterId: CharacterId, name: string): ReactionId {
   return id;
 }
 
-function abilityId(characterId: CharacterId, name: string): AbilityId {
+function abilityId(characterId: CharacterId, name: AbilityName): AbilityId {
   const id = `${characterId}-${slugAbility(name)}`;
   if (!isAbilityId(id)) {
     throw new Error(`Unsupported Ability id: ${id}`);

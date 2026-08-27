@@ -82,7 +82,7 @@ Introduce centralized explicit string-union types for the closed domain literals
 
 ## Acceptance Criteria
 
-1. Centralized unions exist for `Team`, `CharacterId` (all 12 roster ids), `Phase`, `MatchEventType`, `ActionKind`/`AttackKind`, `AbilityId`/`ReactionId`, and effect-duration/anchor kinds where the current code uses bare `string` for branching, each defined once and re-exported via `src/domain/match.ts`.
+1. Centralized unions exist for `Team`, `CharacterId` (all 12 roster ids), `Phase`, `MatchEventType`, `ActionKind`/`AttackKind`, `AbilityId`/`ReactionId`, `AbilityName` (all 24 structured ability names), and effect-duration/anchor kinds where the current code uses bare `string` for branching, each defined once and re-exported via `src/domain/match.ts`.
 2. Match State, Initiative, Attack Legs, Effects, Protective Reactions, and Match Event payloads use those unions for every character-/team-/ability-/reaction-/event-type-bearing field; `DisplayNames` is keyed by `CharacterId`, and `spentReactionIds / spentAbilityIds` are typed by the corresponding id unions.
 3. `teamOfCharacter` and every helper that branches on a narrowed field accepts the union (not `string`) and an exhaustive `switch` or guard covers the union without a fallback `string` arm that would re-widen it.
 4. No helper widens a narrowed literal back to `string` in its return type or map key; generic `Record<string,string>` keyed by character is replaced by a `CharacterId`-keyed type where a character key is intended.

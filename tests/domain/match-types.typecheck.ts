@@ -1,5 +1,6 @@
 import type {
   AbilityId,
+  AbilityName,
   ActiveEffect,
   BasicAttackId,
   BasicAttackInput,
@@ -20,6 +21,9 @@ const invalidDisplayNames: DisplayNames = { "not-a-character": "Silk" };
 
 // @ts-expect-error Ability ids are the exact 24 printed Ability-card ids.
 const invalidAbilityId: AbilityId = "drow-rogue-invented-ability";
+
+// @ts-expect-error Ability names are limited to the authoritative 24 cards.
+const invalidAbilityName: AbilityName = "Invented Ability";
 
 // @ts-expect-error Basic Attack ids are distinct from one-shot Ability ids.
 const abilityUsedAsBasicAttackId: BasicAttackId = "drow-rogue-backstab";
@@ -43,6 +47,7 @@ void invalidCharacterId;
 void invalidBasicAttackSourceCharacterId;
 void invalidDisplayNames;
 void invalidAbilityId;
+void invalidAbilityName;
 void abilityUsedAsBasicAttackId;
 void invalidReactionId;
 void invalidActiveEffectKind;

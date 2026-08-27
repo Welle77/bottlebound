@@ -61,3 +61,13 @@ Make the single-schema canonical validators aware of the new narrow types while 
 - [x] No validator rejects a previously-accepted persisted record; `MATCH_SCHEMA_VERSION` remains `3`, and serialization round-trips are unchanged. Evidence: storage audit passed 6 files / 31 tests and persistence contracts passed 2 files / 12 tests.
 - [x] Storage audit suites (`canonical-storage-probe`, `match-store`, `match-store-completeness`, canonical-event, display-name, lifecycle) and contract persistence tests pass; `pnpm run lint` and `pnpm run build` pass. Evidence: direct Vitest runs above plus Corepack pnpm static commands on 2026-08-27.
 - [x] `pnpm run test` (Vitest + Playwright) is Test-owned and intentionally not run during Code, per the approved phase boundary; this slice has focused storage, contract, lint, TypeScript, and build evidence.
+
+## F01: Narrow structured ability names
+
+**Follow-up to:** T03
+
+Introduce one exact `AbilityName` union for the 24 structured Ability card names and propagate it through `RulesetAbility`, `StructuredAbility`, `RulesetReaction`, and name-based ability helpers. Keep the rules-reference parser boundary and printed-card free-text fields as `string`; preserve runtime and persisted values.
+
+- [x] `AbilityName` contains all 24 authoritative names, has a runtime guard for untyped rules-reference input, and is re-exported through `src/domain/match.ts`
+- [x] Structured ability and reaction names plus name-based helper parameters use `AbilityName`; compile-only probes reject an invented ability name
+- [x] `tsc --noEmit`, `svelte-check`, scoped lint/format, and ability/domain tests pass with no runtime or persistence behavior changes

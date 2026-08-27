@@ -1,4 +1,4 @@
-import { RULESET } from "./ruleset";
+import { RULESET, type AbilityName } from "./ruleset";
 import { resolveAttackDamageAgainstCharacter } from "./match-ability-effects";
 import { applyDownedCleanup } from "./match-turn";
 import type {
@@ -45,7 +45,7 @@ interface BasicAttackOutcome {
   readonly activeEffects: readonly ActiveEffect[];
 }
 
-export const AUTOMATED_REACTION_NAMES = new Set([
+export const AUTOMATED_REACTION_NAMES: ReadonlySet<AbilityName> = new Set([
   "Divine Shield",
   "Misty Escape",
   "Mirror Veil",

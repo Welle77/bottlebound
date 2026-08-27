@@ -1,4 +1,4 @@
-import { RULESET, type StructuredAbility } from "./ruleset";
+import { RULESET, type AbilityName, type StructuredAbility } from "./ruleset";
 import type { ProtectiveReactionInput } from "./match-types";
 import type {
   AbilityId,
@@ -15,8 +15,8 @@ import { teamOfCharacter } from "./match-endgame";
  * byte-equality against source-level ASCII strings silently fails.
  */
 export function isAbilityNamed(
-  ability: { readonly name: string },
-  printedName: string,
+  ability: { readonly name: AbilityName },
+  printedName: AbilityName,
 ): boolean {
   const fold = (value: string): string => value.replaceAll(/['’]/g, "");
   return fold(ability.name) === fold(printedName);
