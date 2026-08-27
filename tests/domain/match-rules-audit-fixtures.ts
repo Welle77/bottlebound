@@ -4,7 +4,9 @@ import {
   generateInitiative,
   resolveAbility,
   startMatch,
+  type AbilityId,
   type ActiveMatchState,
+  type CharacterId,
   type CommandResult,
   type MatchEvent,
 } from "../../src/domain/match";
@@ -53,7 +55,10 @@ export function createAuditRun(initialState: ActiveMatchState): AuditRun {
   };
 }
 
-export function abilityId(ownerCharacterId: string, name: string): string {
+export function abilityId(
+  ownerCharacterId: CharacterId,
+  name: string,
+): AbilityId {
   const fold = (value: string): string => value.replaceAll(/['’]/g, "");
   const ability = RULESET.abilities.find(
     (entry) =>
@@ -79,7 +84,10 @@ export function startedAuditMatch(matchId: string): AuditRun {
   return run;
 }
 
-export function slotOf(state: ActiveMatchState, characterId: string): number {
+export function slotOf(
+  state: ActiveMatchState,
+  characterId: CharacterId,
+): number {
   const entry = state.initiative.find(
     ({ characterId: id }) => id === characterId,
   );
@@ -102,7 +110,7 @@ export function play(
 /** Finishes turns until the given character begins a fresh, unacted turn. */
 export function advanceTo(
   run: Readonly<AuditRun>,
-  characterId: string,
+  characterId: CharacterId,
 ): ActiveMatchState {
   const targetSlot = slotOf(run.state, characterId);
   const advanceStep = (
@@ -130,7 +138,7 @@ export interface CastRequest {
 /** Advances to the source's turn and commits one Ability resolution. */
 export function cast(
   run: Readonly<AuditRun>,
-  sourceCharacterId: string,
+  sourceCharacterId: CharacterId,
   request: CastRequest,
 ): ActiveMatchState {
   const state = advanceTo(run, sourceCharacterId);

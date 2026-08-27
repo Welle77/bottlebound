@@ -81,7 +81,10 @@ describe("Display Name assignment", () => {
     expect(() =>
       assignDisplayNames(
         setup.state,
-        { "unknown-character": "Silk" },
+        { "unknown-character": "Silk" } as unknown as Record<
+          import("../../src/domain/match").CharacterId,
+          string
+        >,
         "2026-08-22T14:01:00.000Z",
       ),
     ).toThrow("The Display Name references an unknown character.");

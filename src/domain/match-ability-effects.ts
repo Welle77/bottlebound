@@ -1,6 +1,11 @@
 import { RULESET, type StructuredAbility } from "./ruleset";
 import type { ProtectiveReactionInput } from "./match-types";
-import type { ActiveEffect, ActiveMatchState } from "./match-types";
+import type {
+  AbilityId,
+  ActiveEffect,
+  ActiveMatchState,
+  CharacterId,
+} from "./match-types";
 import { teamOfCharacter } from "./match-endgame";
 
 /**
@@ -19,14 +24,14 @@ export function isAbilityNamed(
 
 function abilityWarnings(
   state: ActiveMatchState,
-  abilityId: string,
+  abilityId: AbilityId,
 ): readonly string[] {
   return state.spentAbilityIds.includes(abilityId)
     ? ["ability-already-spent"]
     : [];
 }
 
-function getAbilityOrThrow(abilityId: string) {
+function getAbilityOrThrow(abilityId: AbilityId): StructuredAbility {
   const ability = RULESET.abilities.find((entry) => entry.id === abilityId);
   if (!ability) throw new Error("The ability is unknown.");
   return ability;
@@ -35,9 +40,9 @@ function getAbilityOrThrow(abilityId: string) {
 function buildAbilityEffects(
   ability: StructuredAbility,
   context: {
-    readonly affectedIds: readonly string[];
+    readonly affectedIds: readonly CharacterId[];
     readonly sequence: number;
-    readonly anchorId: string;
+    readonly anchorId: CharacterId;
   },
 ): readonly ActiveEffect[] {
   const { affectedIds, sequence, anchorId } = context;
@@ -161,9 +166,9 @@ function buildAbilityEffects(
 }
 
 interface AbilityTargetInput {
-  readonly targetCharacterIds?: readonly string[];
+  readonly targetCharacterIds?: readonly CharacterId[];
   readonly attackLegs?: readonly Readonly<{
-    readonly affectedCharacterIds: readonly string[];
+    readonly affectedCharacterIds: readonly CharacterId[];
   }>[];
   readonly physicalConfirmations?: Readonly<{
     readonly range: boolean;
@@ -183,7 +188,7 @@ interface AbilityTargetContext {
 
 function resolveTargetedAttackTargetIds(
   context: AbilityTargetContext,
-): readonly string[] {
+): readonly CharacterId[] {
   const { state, ability, input, abilityOverride } = context;
   const targetIds = input.targetCharacterIds ?? [];
   const [targetId] = targetIds;
@@ -227,7 +232,7 @@ function hasDeflectingPalm(
 
 function validatePhysicalTargets(
   state: ActiveMatchState,
-  targetIds: readonly string[],
+  targetIds: readonly CharacterId[],
 ): void {
   if (targetIds.length === 0) {
     throw new Error(
@@ -251,7 +256,7 @@ function validatePhysicalTargets(
 
 function resolvePhysicalAttackTargetIds(
   context: AbilityTargetContext,
-): readonly string[] {
+): readonly CharacterId[] {
   const { state, input } = context;
   const attackLegs = input.attackLegs;
   if (!attackLegs || attackLegs.length === 0) {
@@ -275,7 +280,9 @@ function resolvePhysicalAttackTargetIds(
   return targetIds;
 }
 
-function selfDefaultTargetIds(ability: StructuredAbility): readonly string[] {
+function selfDefaultTargetIds(
+  ability: StructuredAbility,
+): readonly CharacterId[] {
   if (
     ability.name === "Second Wind" ||
     ability.name === "Rage" ||
@@ -290,7 +297,7 @@ function selfDefaultTargetIds(ability: StructuredAbility): readonly string[] {
 function validateAbsoluteUtilityLifeState(
   state: ActiveMatchState,
   ability: StructuredAbility,
-  targetIds: readonly string[],
+  targetIds: readonly CharacterId[],
 ): void {
   if (
     isAbilityNamed(ability, "Nature’s Renewal") ||
@@ -322,7 +329,7 @@ function validateAbsoluteUtilityLifeState(
 function validateUtilityTarget(context: {
   readonly state: ActiveMatchState;
   readonly ability: StructuredAbility;
-  readonly targetId: string;
+  readonly targetId: CharacterId;
   readonly abilityOverride: string | null;
 }): void {
   const { state, ability, targetId, abilityOverride } = context;
@@ -355,7 +362,7 @@ function validateUtilityTarget(context: {
 function validateEliminatedTeamRevival(
   state: ActiveMatchState,
   ability: StructuredAbility,
-  targetIds: readonly string[],
+  targetIds: readonly CharacterId[],
 ): void {
   if (ability.name !== "Revivify" && ability.name !== "Lay on Hands") {
     return;
@@ -374,7 +381,7 @@ function validateEliminatedTeamRevival(
 
 function resolveUtilityTargetIds(
   context: AbilityTargetContext,
-): readonly string[] {
+): readonly CharacterId[] {
   const { state, ability, input, abilityOverride } = context;
   const targetIds = input.targetCharacterIds ?? [];
   if (targetIds.length === 0) return selfDefaultTargetIds(ability);
@@ -390,7 +397,7 @@ function resolveUtilityTargetIds(
 
 function resolveAffectedCharacterIds(
   context: AbilityTargetContext,
-): readonly string[] {
+): readonly CharacterId[] {
   if (context.ability.interaction === "targeted-attack") {
     return resolveTargetedAttackTargetIds(context);
   }
@@ -431,7 +438,7 @@ function hexTriggeredMovementCap(
 
 export interface AttackDamageInput {
   readonly baseDamage: number;
-  readonly affectedCharacterId: string;
+  readonly affectedCharacterId: CharacterId;
   /** Physical throws cannot affect a Vanish-protected character. */
   readonly physicalAttack: boolean;
   /** A protective Reaction prevented all damage and effects for the character. */

@@ -1,6 +1,9 @@
 import {
   MATCH_SCHEMA_VERSION,
   canonicalMatchRecordsEqual,
+  isCharacterId,
+  isMatchEventType,
+  isTeam,
   restoreStateFromEvents,
   type MatchEvent,
   type MatchStartedEvent,
@@ -22,8 +25,12 @@ import {
 function isLiveCommittedEvent(
   event: MatchEvent,
 ): event is MatchStartedEvent | TurnFinishedEvent {
-  const eventType: string = event.type;
-  return eventType === "MatchStarted" || eventType === "TurnFinished";
+  const eventType: unknown = event.type;
+  return (
+    typeof eventType === "string" &&
+    isMatchEventType(eventType) &&
+    (eventType === "MatchStarted" || eventType === "TurnFinished")
+  );
 }
 
 type SetupCreatedEvent = Extract<MatchEvent, { readonly type: "SetupCreated" }>;
@@ -94,8 +101,14 @@ function assertActionResolvedEffects(
   state: MatchState,
 ): void {
   for (const effect of event.effects) {
+    const effectCharacterId: unknown = effect.characterId;
+    const effectCharacterIsValid =
+      typeof effectCharacterId === "string" && isCharacterId(effectCharacterId);
+    if (!effectCharacterIsValid) {
+      throw new Error("The Action Resolution Event and snapshot do not match.");
+    }
     const character = state.characters.find(
-      ({ characterId }) => characterId === effect.characterId,
+      ({ characterId }) => characterId === effectCharacterId,
     );
     if (!character || character.hp !== effect.hpAfter) {
       throw new Error("The Action Resolution Event and snapshot do not match.");
@@ -135,9 +148,15 @@ function assertEliminationContinuedCommit(
   event: EliminationContinuedEvent,
   state: MatchState,
 ): void {
+  const eliminatedTeam: unknown = event.eliminatedTeam;
+  const eliminatedTeamIsValid =
+    typeof eliminatedTeam === "string" && isTeam(eliminatedTeam);
+  if (!eliminatedTeamIsValid) {
+    throw new Error("The Continue Event and snapshot do not match.");
+  }
   if (
     state.phase !== "active" ||
-    !state.acknowledgedEliminations.includes(event.eliminatedTeam) ||
+    !state.acknowledgedEliminations.includes(eliminatedTeam) ||
     state.outcome !== event.outcome
   ) {
     throw new Error("The Continue Event and snapshot do not match.");

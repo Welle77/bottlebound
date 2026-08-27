@@ -1,10 +1,10 @@
-import type { ActionEffect, MatchCharacter } from "./match-types";
+import type { ActionEffect, CharacterId, MatchCharacter } from "./match-types";
 import type { StructuredAbility } from "./ruleset";
 import { isAbilityNamed } from "./match-ability-effects";
 
 export interface UtilityAbilityContext {
   readonly ability: StructuredAbility;
-  readonly affectedCharacterIds: readonly string[];
+  readonly affectedCharacterIds: readonly CharacterId[];
   /** Pre-action snapshot backing the Lay on Hands revive-or-heal choice. */
   readonly priorCharacters: readonly MatchCharacter[];
   /** Working copy the HP changes apply onto (already carries earlier legs). */
@@ -38,7 +38,7 @@ export function applyUtilityAbility(
 
   const healTarget = (
     character: MatchCharacter,
-    targetId: string,
+    targetId: CharacterId,
   ): TargetOutcome => {
     const maxHp = character.currentMaxHp;
     const hpAfter = Math.min(maxHp, character.hp + 1);
@@ -58,7 +58,7 @@ export function applyUtilityAbility(
 
   const reviveTarget = (
     character: MatchCharacter,
-    targetId: string,
+    targetId: CharacterId,
   ): TargetOutcome => {
     const before = character.hp;
     return {
@@ -76,7 +76,7 @@ export function applyUtilityAbility(
 
   const ledgerOnlyTarget = (
     character: MatchCharacter,
-    targetId: string,
+    targetId: CharacterId,
   ): TargetOutcome => ({
     character,
     effect: {
@@ -90,7 +90,7 @@ export function applyUtilityAbility(
   });
 
   const updateFor = (
-    targetId: string,
+    targetId: CharacterId,
   ): ((character: MatchCharacter) => TargetOutcome) => {
     const characterOf = (candidates: readonly MatchCharacter[]) =>
       candidates.find((candidate) => candidate.characterId === targetId);

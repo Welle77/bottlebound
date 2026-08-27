@@ -4,7 +4,9 @@
     getEndGamePreview,
     getUndoPreview,
     type ActiveMatchState,
+    type CharacterId,
     type InitiativeEntry,
+    type Team,
   } from "../domain/match";
   import { RULESET } from "../domain/ruleset";
   import {
@@ -30,10 +32,10 @@
   // since T07), this component does not render; the App shell owns that
   // branching.
   interface BoardRow {
-    readonly key: string;
+    readonly key: CharacterId;
     readonly slot: number;
-    readonly character: { readonly id: string; readonly name: string };
-    readonly team: string;
+    readonly character: RulesetCharacter;
+    readonly team: Team;
     readonly hp: number;
     readonly baseHp: number;
     readonly turnLabel: string;
@@ -87,7 +89,7 @@
     return entry;
   }
 
-  function requireCharacter(characterId: string): RulesetCharacter {
+  function requireCharacter(characterId: CharacterId): RulesetCharacter {
     const character = RULESET.characters.find(({ id }) => id === characterId);
     if (!character) {
       throw new Error("The Active Match references an unknown character.");
@@ -96,8 +98,8 @@
   }
 
   function requireHp(
-    hpByCharacter: ReadonlyMap<string, number>,
-    characterId: string,
+    hpByCharacter: ReadonlyMap<CharacterId, number>,
+    characterId: CharacterId,
   ): number {
     const hp = hpByCharacter.get(characterId);
     if (hp === undefined) {
@@ -109,7 +111,7 @@
   function buildBoardRows(
     match: ActiveMatchState,
     nextSlot: number,
-    hpByCharacter: ReadonlyMap<string, number>,
+    hpByCharacter: ReadonlyMap<CharacterId, number>,
   ): readonly BoardRow[] {
     return match.initiative.map((entry) => {
       const character = requireCharacter(entry.characterId);
@@ -160,7 +162,7 @@
     const nextEntry = requireInitiativeEntry(match, nextSlot);
     const activeCharacter = requireCharacter(activeEntry.characterId);
     const nextCharacter = requireCharacter(nextEntry.characterId);
-    const hpByCharacter = new Map(
+    const hpByCharacter = new Map<CharacterId, number>(
       match.characters.map(({ characterId, hp }) => [characterId, hp]),
     );
     const rows = buildBoardRows(match, nextSlot, hpByCharacter);

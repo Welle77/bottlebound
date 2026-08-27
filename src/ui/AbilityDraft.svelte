@@ -1,6 +1,7 @@
 <script lang="ts">
   import { RULESET } from "../domain/ruleset";
   import { cancelAbilityDraft, confirmAbility } from "../app/actions";
+  import type { CharacterId, Team } from "../domain/match";
   import {
     attackPreviewRow,
     currentMaxHpOf,
@@ -37,7 +38,7 @@
   const WARNING_CODE_SEPARATOR = " — ";
 
   interface NamedCharacter {
-    readonly id: string;
+    readonly id: CharacterId;
     readonly name: string;
   }
 
@@ -56,7 +57,7 @@
 
   interface TargetRow {
     readonly candidate: ReturnType<typeof targetCandidates>[number];
-    readonly character: NamedCharacter & { readonly team: string };
+    readonly character: NamedCharacter & { readonly team: Team };
     readonly hp: number;
     readonly maxHp: number;
     readonly selected: boolean;
@@ -254,7 +255,7 @@
     );
   }
 
-  function handleTargetChange(characterId: string): (event: Event) => void {
+  function handleTargetChange(characterId: CharacterId): (event: Event) => void {
     return (event) => {
       if (!(event.currentTarget instanceof HTMLInputElement)) return;
       const currentDraft = state.current.actionDraft;

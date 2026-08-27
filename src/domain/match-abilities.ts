@@ -6,11 +6,13 @@ import {
 import { applyDownedCleanup } from "./match-turn";
 import { applyUtilityAbility } from "./match-ability-utility";
 import type {
+  AbilityId,
   ActionEffect,
   ActionResolvedEvent,
   ActiveEffect,
   ActiveMatchState,
   AttackLeg,
+  CharacterId,
   CommandResult,
   MatchOutcome,
   MatchState,
@@ -18,13 +20,15 @@ import type {
   ProtectiveReactionOperation,
   ProtectiveReactionResolution,
   MatchCharacter,
+  ReactionId,
+  Team,
 } from "./match-types";
 
 export interface AbilityInput {
-  readonly abilityId: string;
-  readonly targetCharacterIds?: readonly string[];
+  readonly abilityId: AbilityId;
+  readonly targetCharacterIds?: readonly CharacterId[];
   readonly attackLegs?: readonly {
-    readonly affectedCharacterIds: readonly string[];
+    readonly affectedCharacterIds: readonly CharacterId[];
   }[];
   readonly physicalConfirmations?: {
     readonly range: boolean;
@@ -70,7 +74,7 @@ interface AbilityOutcome {
 interface AbilityOutcomeContext {
   readonly state: ActiveMatchState;
   readonly ability: StructuredAbility;
-  readonly affectedCharacterIds: readonly string[];
+  readonly affectedCharacterIds: readonly CharacterId[];
   readonly reactions: readonly ProtectiveReactionResolution[];
   readonly sequence: number;
 }
@@ -137,7 +141,7 @@ function validateAbilityUse(context: {
 function reactionOperations(
   reaction: (typeof RULESET.reactions)[number],
   ability: StructuredAbility,
-  protectedCharacterId: string,
+  protectedCharacterId: CharacterId,
 ): readonly ProtectiveReactionOperation[] {
   return reaction.operations.flatMap(
     (operation): readonly ProtectiveReactionOperation[] => {
@@ -168,12 +172,12 @@ function reactionOperations(
 function resolveProtectiveReactions(context: {
   readonly state: ActiveMatchState;
   readonly ability: StructuredAbility;
-  readonly affectedCharacterIds: readonly string[];
+  readonly affectedCharacterIds: readonly CharacterId[];
   readonly selections: readonly ProtectiveReactionInput[];
 }): readonly ProtectiveReactionResolution[] {
   const { state, ability, affectedCharacterIds, selections } = context;
   return selections.reduce<{
-    readonly seen: ReadonlySet<string>;
+    readonly seen: ReadonlySet<CharacterId>;
     readonly results: readonly ProtectiveReactionResolution[];
   }>(
     (accumulated, selection) => {
@@ -219,13 +223,13 @@ function resolveProtectiveReactions(context: {
         ],
       };
     },
-    { seen: new Set<string>(), results: [] },
+    { seen: new Set<CharacterId>(), results: [] },
   ).results;
 }
 
 function attackAbilityOutcome(context: AbilityOutcomeContext): AbilityOutcome {
   const { state, ability, affectedCharacterIds, reactions, sequence } = context;
-  const protectedIds = new Set(
+  const protectedIds = new Set<CharacterId>(
     reactions.flatMap(({ operations }) =>
       operations.flatMap((operation) =>
         operation.type === "prevent-damage-and-effects"
@@ -234,7 +238,7 @@ function attackAbilityOutcome(context: AbilityOutcomeContext): AbilityOutcome {
       ),
     ),
   );
-  const vanishProtected = new Set(
+  const vanishProtected = new Set<CharacterId>(
     state.activeEffects
       .filter((effect) => effect.operations.includes("ignore-physical-attack"))
       .map((effect) => effect.affectedCharacterId),
@@ -291,7 +295,7 @@ function attackAbilityOutcome(context: AbilityOutcomeContext): AbilityOutcome {
 function utilityAbilityOutcome(
   state: ActiveMatchState,
   ability: StructuredAbility,
-  affectedCharacterIds: readonly string[],
+  affectedCharacterIds: readonly CharacterId[],
 ): AbilityOutcome {
   const utility = applyUtilityAbility({
     ability,
@@ -379,7 +383,7 @@ function finalizeActiveEffects(context: {
 function resultingEliminations(
   state: ActiveMatchState,
   characters: readonly MatchCharacter[],
-): readonly ("Drow" | "Duergar")[] {
+): readonly Team[] {
   const newlyEliminated = (["Drow", "Duergar"] as const).filter((team) =>
     RULESET.characters
       .filter((character) => character.team === team)
@@ -392,16 +396,14 @@ function resultingEliminations(
   return [...new Set([...state.eliminatedTeams, ...newlyEliminated])];
 }
 
-function matchOutcome(
-  eliminatedTeams: readonly ("Drow" | "Duergar")[],
-): MatchOutcome {
+function matchOutcome(eliminatedTeams: readonly Team[]): MatchOutcome {
   if (eliminatedTeams.length !== 1) return null;
   return eliminatedTeams[0] === "Drow" ? "Duergar" : "Drow";
 }
 
 function initialAbilityAttackLeg(
   ability: StructuredAbility,
-  affectedCharacterIds: readonly string[],
+  affectedCharacterIds: readonly CharacterId[],
   rangePaces: 2 | 6 | 8,
 ): AttackLeg {
   return {
@@ -419,7 +421,7 @@ function initialAbilityAttackLeg(
 function buildAbilityAttackLegs(context: {
   readonly ability: StructuredAbility;
   readonly attackLegsInput: AbilityInput["attackLegs"];
-  readonly affectedCharacterIds: readonly string[];
+  readonly affectedCharacterIds: readonly CharacterId[];
   readonly reactions: readonly ProtectiveReactionResolution[];
   readonly rangePaces: 2 | 6 | 8;
   readonly attackInteraction: boolean;
@@ -574,13 +576,15 @@ export function resolveAbility(
       ...state,
       sequence,
       majorActionUsed: true,
-      spentAbilityIds: [...new Set([...state.spentAbilityIds, ability.id])],
+      spentAbilityIds: [
+        ...new Set([...state.spentAbilityIds, ability.id]),
+      ] as readonly AbilityId[],
       spentReactionIds: [
         ...new Set([
           ...state.spentReactionIds,
           ...reactions.map(({ reactionId }) => reactionId),
         ]),
-      ],
+      ] as readonly ReactionId[],
       characters,
       eliminatedTeams,
       outcome,

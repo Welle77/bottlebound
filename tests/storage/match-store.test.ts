@@ -21,7 +21,10 @@ import {
 
 describe("IndexedDbMatchStore", () => {
   it("atomically restores and undoes one redirected Action Resolution", async () => {
-    const store = createIndexedDbMatchStore(new IDBFactory(), "restore-redirect");
+    const store = createIndexedDbMatchStore(
+      new IDBFactory(),
+      "restore-redirect",
+    );
     const setup = createSetup("match-redirect", "2026-08-22T14:00:00.000Z");
     const generated = generateInitiative(
       setup.state,

@@ -1,11 +1,13 @@
 import {
   acknowledgeElimination,
   assignDisplayNames,
+  CHARACTER_IDS,
   createSetup,
   cryptoRandomSource,
   endMatch,
   finishTurn,
   generateInitiative,
+  isCharacterId,
   normalizeDisplayNames,
   rerollInitiative,
   reopenMatch,
@@ -15,8 +17,11 @@ import {
   startMatch,
   undoLastEvent,
   type CommandResult,
+  type AbilityId,
+  type CharacterId,
   type MatchState,
   type RandomSource,
+  type Team,
 } from "../domain/match";
 import { RULESET } from "../domain/ruleset";
 import { probeCanonicalStorage } from "../storage/canonical-storage-probe";
@@ -130,7 +135,7 @@ export function closeAbilityPicker(): void {
   patchShellState({ abilityPickerOpen: false });
 }
 
-export function openAbilityDraft(abilityId: string): void {
+export function openAbilityDraft(abilityId: AbilityId): void {
   const match = state.current.match;
   if (match?.phase !== "active" || match.rulesVersion !== RULESET.version)
     return;
@@ -286,19 +291,19 @@ export async function start(): Promise<void> {
 export async function saveDisplayNames(): Promise<void> {
   const match = state.current.match;
   if (match?.phase !== "setup") return;
-  const requested = Object.fromEntries(
-    Array.from(
-      appRoot.querySelectorAll<HTMLInputElement>("[data-display-name-for]"),
-    ).flatMap((input) => {
-      const characterId = input.dataset.displayNameFor;
-      return characterId ? [[characterId, input.value] as const] : [];
-    }),
-  );
+  const requested = Array.from(
+    appRoot.querySelectorAll<HTMLInputElement>("[data-display-name-for]"),
+  ).reduce<Partial<Record<CharacterId, string>>>((displayNames, input) => {
+    const characterId = input.dataset.displayNameFor;
+    return characterId && isCharacterId(characterId)
+      ? { ...displayNames, [characterId]: input.value }
+      : displayNames;
+  }, {});
   const normalized = normalizeDisplayNames(requested);
   const current = match.displayNames;
-  const unchanged =
-    Object.keys(normalized).length === Object.keys(current).length &&
-    Object.entries(normalized).every(([id, name]) => current[id] === name);
+  const unchanged = CHARACTER_IDS.every(
+    (characterId) => normalized[characterId] === current[characterId],
+  );
   if (unchanged) return;
   await commitResult(
     assignDisplayNames(match, requested, new Date().toISOString()),
@@ -321,7 +326,7 @@ export async function continueMatch(): Promise<void> {
   );
 }
 export async function recordSimultaneousRuling(
-  outcome: "Drow" | "Duergar" | "draw",
+  outcome: Team | "draw",
 ): Promise<void> {
   if (
     state.current.match?.phase !== "active" ||

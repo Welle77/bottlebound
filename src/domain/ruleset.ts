@@ -1,6 +1,26 @@
 import { RULES_REFERENCE } from "virtual:rules-reference";
+import {
+  isAbilityId,
+  isBasicAttackId,
+  isCharacterId,
+  isReactionId,
+} from "./match-types";
+import type {
+  AbilityId,
+  BasicAttackId,
+  CharacterId,
+  ReactionId,
+  Team,
+} from "./match-types";
 
-export type Team = "Drow" | "Duergar";
+export type { Team, CharacterId, AbilityId, BasicAttackId, ReactionId };
+export type {
+  AttackKind,
+  Phase,
+  MatchEventType,
+  ActionKind,
+} from "./match-types";
+export { isCharacterId, isTeam } from "./match-types";
 
 export interface RulesetAbility {
   readonly name: string;
@@ -16,7 +36,7 @@ export interface RulesetAbility {
 }
 
 export interface RulesetCharacter {
-  readonly id: string;
+  readonly id: CharacterId;
   readonly name: string;
   readonly team: Team;
   readonly baseHp: number;
@@ -27,8 +47,8 @@ export type PhysicalAttackCheck =
   "range" | "line-of-sight" | "legal-bottle-contact" | "terrain-contact";
 
 export interface RulesetBasicAttack {
-  readonly id: string;
-  readonly characterId: string;
+  readonly id: BasicAttackId;
+  readonly characterId: CharacterId;
   readonly attackType: "melee" | "ranged";
   readonly rangePaces: 2 | 6;
   readonly damage: 1;
@@ -50,8 +70,8 @@ export type ReactionOperation =
     };
 
 export interface RulesetReaction {
-  readonly id: string;
-  readonly ownerCharacterId: string;
+  readonly id: ReactionId;
+  readonly ownerCharacterId: CharacterId;
   readonly name: string;
   readonly trigger: "attack-would-affect" | "physical-ball-hits-owner";
   readonly target: string;
@@ -70,11 +90,11 @@ export interface RulesetReferenceCharacter extends RulesetCharacter {
 }
 
 export interface StructuredAbility {
-  readonly id: string;
+  readonly id: AbilityId;
   readonly name: string;
-  readonly ownerCharacterId: string;
+  readonly ownerCharacterId: CharacterId;
   readonly actionType: "standard" | "powerful" | "reaction";
-  readonly attackType: string;
+  readonly attackType: StructuredAbilityAttackType;
   readonly interaction:
     | "physical-attack"
     | "targeted-attack"
@@ -87,6 +107,8 @@ export interface StructuredAbility {
     readonly cardinality: "one" | "all-in-range" | "self";
     readonly lifeState: "active" | "downed" | "either";
   };
+  // Free-text card display fields intentionally remain string (out-of-scope for union narrowing):
+  // effect/target/range presentation strings are not branching keys.
   readonly range: string;
   readonly lineOfSight: string;
   readonly ballRequired: string;
@@ -96,6 +118,10 @@ export interface StructuredAbility {
   readonly rulesText: string;
   readonly sourceAnchor: string;
 }
+
+/** Printed Attack Type values retained exactly from the authoritative cards. */
+export type StructuredAbilityAttackType =
+  "None" | "Ability Attack" | "Melee" | "Ranged";
 
 export interface Ruleset {
   readonly version: string;
@@ -114,7 +140,17 @@ if (RULES_REFERENCE.version !== RULES_VERSION) {
   );
 }
 
+function requiredCharacterId(value: string): CharacterId {
+  if (!isCharacterId(value)) {
+    throw new Error(
+      `Bundled Ruleset roster has an invalid character id: ${value}.`,
+    );
+  }
+  return value;
+}
+
 const referenceCharacters = RULES_REFERENCE.characters.map((character) => {
+  const characterId = requiredCharacterId(character.id);
   const abilities = character.abilities.map((ability) =>
     Object.freeze({
       name: ability.name,
@@ -130,7 +166,7 @@ const referenceCharacters = RULES_REFERENCE.characters.map((character) => {
     }),
   );
   return Object.freeze({
-    id: character.id,
+    id: characterId,
     name: character.name,
     team: character.team,
     role: character.role,
@@ -178,16 +214,24 @@ const basicAttacks = referenceCharacters.map((character) => {
     );
   }
   return Object.freeze({
-    id: `${character.id}-basic-attack`,
+    id: basicAttackId(character.id),
     characterId: character.id,
-    attackType,
-    rangePaces,
+    attackType: attackType,
+    rangePaces: rangePaces,
     damage: 1 as const,
     use: "unlimited" as const,
     physicalChecks,
     sourceAnchor: `${character.sourceAnchor}-roster`,
   });
 });
+
+function basicAttackId(characterId: CharacterId): BasicAttackId {
+  const id = `${characterId}-basic-attack`;
+  if (!isBasicAttackId(id)) {
+    throw new Error(`Unsupported Basic Attack id: ${id}`);
+  }
+  return id;
+}
 
 const reactionConfigurations = [
   {
@@ -227,7 +271,7 @@ const reactionConfigurations = [
     operations: [{ type: "prevent-damage-and-effects" }],
   },
 ] as const satisfies readonly {
-  readonly ownerCharacterId: string;
+  readonly ownerCharacterId: CharacterId;
   readonly name: string;
   readonly trigger: RulesetReaction["trigger"];
   readonly operations: readonly ReactionOperation[];
@@ -255,9 +299,7 @@ const reactions = reactionConfigurations.map((configuration) => {
     );
   }
   return Object.freeze({
-    id: `${owner.id}-${configuration.name
-      .toLowerCase()
-      .replaceAll(/[^a-z0-9]+/g, "-")}`,
+    id: reactionId(owner.id, configuration.name),
     ownerCharacterId: owner.id,
     name: configuration.name,
     trigger: configuration.trigger,
@@ -277,6 +319,22 @@ function slugAbility(value: string): string {
     .toLowerCase()
     .replaceAll(/[^a-z0-9]+/g, "-")
     .replaceAll(/^-|-$/g, "");
+}
+
+function reactionId(characterId: CharacterId, name: string): ReactionId {
+  const id = `${characterId}-${slugAbility(name)}`;
+  if (!isReactionId(id)) {
+    throw new Error(`Unsupported Reaction id: ${id}`);
+  }
+  return id;
+}
+
+function abilityId(characterId: CharacterId, name: string): AbilityId {
+  const id = `${characterId}-${slugAbility(name)}`;
+  if (!isAbilityId(id)) {
+    throw new Error(`Unsupported Ability id: ${id}`);
+  }
+  return id;
 }
 
 function inferActionType(
@@ -461,16 +519,30 @@ function inferOperations(ability: RulesetAbility): readonly string[] {
   return inferred.length === 0 ? ["apply-effect"] : inferred;
 }
 
+function structuredAbilityAttackType(
+  rawAttackType: string,
+): StructuredAbilityAttackType {
+  if (
+    rawAttackType !== "None" &&
+    rawAttackType !== "Ability Attack" &&
+    rawAttackType !== "Melee" &&
+    rawAttackType !== "Ranged"
+  ) {
+    throw new Error(`Unsupported ability attackType: ${rawAttackType}`);
+  }
+  return rawAttackType;
+}
+
 function inferAbilityStructure(
-  characterId: string,
+  characterId: CharacterId,
   ability: RulesetAbility,
 ): StructuredAbility {
   return Object.freeze({
-    id: `${characterId}-${slugAbility(ability.name)}`,
+    id: abilityId(characterId, ability.name),
     name: ability.name,
     ownerCharacterId: characterId,
     actionType: inferActionType(ability),
-    attackType: ability.attackType,
+    attackType: structuredAbilityAttackType(ability.attackType),
     interaction: inferInteraction(ability),
     targetPolicy: inferTargetPolicy(ability),
     range: ability.range,

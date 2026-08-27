@@ -1,4 +1,9 @@
-import { type AbilityInput, type MatchState } from "../domain/match";
+import {
+  type AbilityInput,
+  type CharacterId,
+  type MatchState,
+  type Team,
+} from "../domain/match";
 import { resolveAttackDamageAgainstCharacter } from "../domain/match-ability-effects";
 import {
   RULESET,
@@ -9,23 +14,28 @@ import type { ActionDraft } from "./shell-state.svelte";
 
 type ActiveView = Extract<MatchState, { readonly phase: "active" }>;
 
-export function activeCharacterIdOf(match: ActiveView): string | undefined {
+export function activeCharacterIdOf(
+  match: ActiveView,
+): CharacterId | undefined {
   return match.initiative[match.activeSlot - 1]?.characterId;
 }
 
-export function rulesCharacterOf(characterId: string) {
+export function rulesCharacterOf(characterId: CharacterId) {
   const character = RULESET.characters.find(({ id }) => id === characterId);
   if (!character) throw new Error("The Match references an unknown character.");
   return character;
 }
 
-export function hpByIdMap(match: ActiveView): ReadonlyMap<string, number> {
+export function hpByIdMap(match: ActiveView): ReadonlyMap<CharacterId, number> {
   return new Map(
     match.characters.map(({ characterId, hp }) => [characterId, hp]),
   );
 }
 
-export function currentMaxHpOf(match: ActiveView, characterId: string): number {
+export function currentMaxHpOf(
+  match: ActiveView,
+  characterId: CharacterId,
+): number {
   const entry = match.characters.find(
     ({ characterId: id }) => id === characterId,
   );
@@ -112,7 +122,7 @@ export const CHECK_LABELS: readonly (readonly [PhysicalAttackCheck, string])[] =
 /* ------------------------------------------------------------------ */
 
 interface TargetCandidate {
-  readonly characterId: string;
+  readonly characterId: CharacterId;
   readonly blocked: boolean;
   readonly reasons: readonly string[];
 }
@@ -121,7 +131,7 @@ export type { TargetCandidate };
 function reviveBlockedOnEliminatedTeam(
   match: ActiveView,
   ability: StructuredAbility,
-  targetCharacterId: string,
+  targetCharacterId: CharacterId,
 ): boolean {
   if (ability.name !== "Revivify" && ability.name !== "Lay on Hands")
     return false;
@@ -175,7 +185,10 @@ export function targetCandidates(
  */
 export interface DraftWarning {
   readonly code: string;
-  readonly character: { readonly id: string; readonly name: string } | null;
+  readonly character: {
+    readonly id: CharacterId;
+    readonly name: string;
+  } | null;
   readonly rest: string;
 }
 
@@ -276,8 +289,8 @@ interface AttackPreviewContext {
 /** One "Ordered hits and final changes" review row, rendered as real markup. */
 export interface AttackPreviewRow {
   readonly contactLabel: string;
-  readonly character: { readonly id: string; readonly name: string };
-  readonly team: string;
+  readonly character: { readonly id: CharacterId; readonly name: string };
+  readonly team: Team;
   /** Composed damage cell text: damage, prevention note, consumed-effect notes. */
   readonly damageText: string;
   /** Composed HP transition text, for example "3 → 1". */
@@ -294,7 +307,7 @@ export interface AttackPreviewRow {
  */
 export function attackPreviewRow(
   { match, draft, baseDamage, physicalAttack }: AttackPreviewContext,
-  characterId: string,
+  characterId: CharacterId,
   contactLabel: string,
 ): AttackPreviewRow {
   const character = rulesCharacterOf(characterId);
@@ -354,8 +367,8 @@ export function attackPreviewRow(
 
 /** One "Expected changes" review row, rendered as real markup. */
 export interface EffectPreviewRow {
-  readonly character: { readonly id: string; readonly name: string };
-  readonly team: string;
+  readonly character: { readonly id: CharacterId; readonly name: string };
+  readonly team: Team;
   readonly effectLabel: string;
   /** Composed HP transition text, for example "3 → 4". */
   readonly hpText: string;
@@ -369,7 +382,7 @@ export interface EffectPreviewRow {
 export function effectPreviewRow(
   match: ActiveView,
   ability: StructuredAbility,
-  characterId: string,
+  characterId: CharacterId,
 ): EffectPreviewRow {
   const character = rulesCharacterOf(characterId);
   const hp = hpByIdMap(match).get(characterId) ?? 0;

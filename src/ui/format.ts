@@ -1,4 +1,4 @@
-import type { MatchState } from "../domain/match";
+import type { DecisionBasis, MatchState } from "../domain/match";
 import type { RulesSearchHighlight } from "../rules-reference/rules-search";
 
 export function statusLabel(value: string): string {
@@ -56,13 +56,11 @@ export function searchResultKind(kind: string): string {
   );
 }
 
-export function decisionBasisLabel(basis: string): string {
-  return (
-    {
-      elimination: "Team Elimination",
-      activeCount: "Active-character count",
-      activeHpTotal: "Active HP total",
-      coinFlip: "Coin Flip",
-    }[basis] ?? basis
-  );
+export function decisionBasisLabel(basis: DecisionBasis): string {
+  return {
+    elimination: "Team Elimination",
+    activeCount: "Active-character count",
+    activeHpTotal: "Active HP total",
+    coinFlip: "Coin Flip",
+  }[basis];
 }

@@ -7,6 +7,7 @@ import type {
   ActiveEffect,
   ActiveMatchState,
   BasicAttackInput,
+  CharacterId,
   CommandResult,
   MatchCharacter,
   MatchOutcome,
@@ -15,6 +16,8 @@ import type {
   ProtectiveReactionInput,
   ProtectiveReactionOperation,
   ProtectiveReactionResolution,
+  ReactionId,
+  Team,
 } from "./match-types";
 
 type BasicAttack = (typeof RULESET.basicAttacks)[number];
@@ -24,7 +27,7 @@ type ProtectiveReaction = (typeof RULESET.reactions)[number];
 interface ValidatedBasicAttack {
   readonly attack: BasicAttack;
   readonly inputLegs: readonly BasicAttackLegInput[];
-  readonly affectedCharacterIds: readonly string[];
+  readonly affectedCharacterIds: readonly CharacterId[];
   readonly override: string | null;
 }
 
@@ -52,8 +55,8 @@ export const AUTOMATED_REACTION_NAMES = new Set([
 
 export function protectiveReactionWarnings(
   state: ActiveMatchState,
-  reactionId: string,
-  protectedCharacterId: string,
+  reactionId: ReactionId,
+  protectedCharacterId: CharacterId,
 ): readonly string[] {
   const reaction = RULESET.reactions.find(({ id }) => id === reactionId);
   if (!reaction || !AUTOMATED_REACTION_NAMES.has(reaction.name)) {
@@ -78,7 +81,7 @@ export function protectiveReactionWarnings(
 
 export function getProtectiveReactionChoices(
   state: ActiveMatchState,
-  affectedCharacterIds: readonly string[],
+  affectedCharacterIds: readonly CharacterId[],
 ): readonly ProtectiveReactionChoice[] {
   return RULESET.reactions
     .filter(({ name }) => AUTOMATED_REACTION_NAMES.has(name))
@@ -119,7 +122,7 @@ function resolveAttackContacts(
   input: BasicAttackInput,
 ): {
   readonly inputLegs: readonly BasicAttackLegInput[];
-  readonly affectedCharacterIds: readonly string[];
+  readonly affectedCharacterIds: readonly CharacterId[];
 } {
   if (input.affectedCharacterIds && input.attackLegs) {
     throw new Error("Basic Attack needs one ordered contact representation.");
@@ -191,7 +194,7 @@ function validateBasicAttack(
 function resolveReactionOperations(context: {
   readonly reaction: ProtectiveReaction;
   readonly selection: ProtectiveReactionInput;
-  readonly sourceCharacterId: string;
+  readonly sourceCharacterId: CharacterId;
 }): readonly ProtectiveReactionOperation[] {
   const { reaction, selection, sourceCharacterId } = context;
   return reaction.operations.flatMap(
@@ -227,14 +230,14 @@ function resolveReactionOperations(context: {
 
 function resolveProtectiveReactions(context: {
   readonly state: ActiveMatchState;
-  readonly sourceCharacterId: string;
-  readonly affectedCharacterIds: readonly string[];
+  readonly sourceCharacterId: CharacterId;
+  readonly affectedCharacterIds: readonly CharacterId[];
   readonly selections: readonly ProtectiveReactionInput[];
 }): readonly ProtectiveReactionResolution[] {
   const { state, sourceCharacterId, affectedCharacterIds, selections } =
     context;
   return selections.reduce<{
-    readonly seen: ReadonlySet<string>;
+    readonly seen: ReadonlySet<CharacterId>;
     readonly results: readonly ProtectiveReactionResolution[];
   }>(
     (accumulated, selection) => {
@@ -280,7 +283,7 @@ function resolveProtectiveReactions(context: {
         ],
       };
     },
-    { seen: new Set<string>(), results: [] },
+    { seen: new Set<CharacterId>(), results: [] },
   ).results;
 }
 
@@ -311,8 +314,8 @@ function redirectReactionForAttack(
 
 function protectedCharacterIds(
   reactions: readonly ProtectiveReactionResolution[],
-): ReadonlySet<string> {
-  return new Set(
+): ReadonlySet<CharacterId> {
+  return new Set<CharacterId>(
     reactions.flatMap(({ operations }) =>
       operations.flatMap((operation) =>
         operation.type === "prevent-damage-and-effects"
@@ -326,8 +329,8 @@ function protectedCharacterIds(
 function resolveAttackEffects(context: {
   readonly state: ActiveMatchState;
   readonly attack: BasicAttack;
-  readonly affectedCharacterIds: readonly string[];
-  readonly protectedCharacterIds: ReadonlySet<string>;
+  readonly affectedCharacterIds: readonly CharacterId[];
+  readonly protectedCharacterIds: ReadonlySet<CharacterId>;
   readonly sequence: number;
 }): readonly ResolvedAttackEffect[] {
   const {
@@ -423,8 +426,8 @@ function expireShapeshiftsAfterDamage(
 function resolveBasicAttackOutcome(context: {
   readonly state: ActiveMatchState;
   readonly attack: BasicAttack;
-  readonly affectedCharacterIds: readonly string[];
-  readonly protectedCharacterIds: ReadonlySet<string>;
+  readonly affectedCharacterIds: readonly CharacterId[];
+  readonly protectedCharacterIds: ReadonlySet<CharacterId>;
   readonly sequence: number;
 }): BasicAttackOutcome {
   const { state } = context;
@@ -477,7 +480,7 @@ function resolveBasicAttackOutcome(context: {
 function resultingEliminations(
   state: ActiveMatchState,
   characters: readonly MatchCharacter[],
-): readonly ("Drow" | "Duergar")[] {
+): readonly Team[] {
   const newlyEliminated = (["Drow", "Duergar"] as const).filter((team) =>
     RULESET.characters
       .filter((character) => character.team === team)
@@ -490,16 +493,14 @@ function resultingEliminations(
   return [...new Set([...state.eliminatedTeams, ...newlyEliminated])];
 }
 
-function matchOutcome(
-  eliminatedTeams: readonly ("Drow" | "Duergar")[],
-): MatchOutcome {
+function matchOutcome(eliminatedTeams: readonly Team[]): MatchOutcome {
   if (eliminatedTeams.length !== 1) return null;
   return eliminatedTeams[0] === "Drow" ? "Duergar" : "Drow";
 }
 
 function buildAttackLegs(context: {
   readonly inputLegs: readonly BasicAttackLegInput[];
-  readonly sourceCharacterId: string;
+  readonly sourceCharacterId: CharacterId;
   readonly attack: BasicAttack;
   readonly redirectReaction: ProtectiveReactionResolution | undefined;
 }): ActionResolvedEvent["attackLegs"] {
@@ -597,7 +598,7 @@ export function resolveBasicAttack(
           ...state.spentReactionIds,
           ...reactions.map(({ reactionId }) => reactionId),
         ]),
-      ],
+      ] as readonly ReactionId[],
       characters: attackOutcome.characters,
       activeEffects: attackOutcome.activeEffects,
       eliminatedTeams,

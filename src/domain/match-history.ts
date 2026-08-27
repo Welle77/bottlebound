@@ -1,8 +1,21 @@
 import { RULESET } from "./ruleset";
-import { MATCH_SCHEMA_VERSION } from "./match-types";
+import {
+  MATCH_SCHEMA_VERSION,
+  isAbilityId,
+  isActiveEffectKind,
+  isCharacterId,
+  isEffectBoundaryTrigger,
+  isEffectDurationKind,
+  isEffectOperation,
+  isDecisionBasis,
+  isReactionId,
+  isTeam,
+} from "./match-types";
 import type {
+  DecisionBasis,
   EndedMatchState,
   FinalTeamCounts,
+  MatchOutcome,
   MatchState,
   MatchSummary,
 } from "./match-types";
@@ -36,12 +49,107 @@ export function canonicalMatchRecordsEqual(
 function assertStringArray(
   value: unknown,
   label: string,
+  isAllowed?: (entry: string) => boolean,
 ): asserts value is readonly string[] {
   if (
     !Array.isArray(value) ||
-    !value.every((entry) => typeof entry === "string")
+    !value.every(
+      (entry) => typeof entry === "string" && (isAllowed?.(entry) ?? true),
+    )
   ) {
     throw new Error(`The canonical ${label} is structurally invalid.`);
+  }
+}
+
+function isNonEmptyString(value: string): boolean {
+  return value.length > 0;
+}
+
+function hasValidActiveEffectIdentity(
+  effect: Record<string, unknown>,
+  historicalRuleset: boolean,
+): boolean {
+  return (
+    typeof effect.effectId === "string" &&
+    effect.effectId.length > 0 &&
+    typeof effect.abilityId === "string" &&
+    (historicalRuleset
+      ? isNonEmptyString(effect.abilityId)
+      : isAbilityId(effect.abilityId)) &&
+    typeof effect.anchorCharacterId === "string" &&
+    isCharacterId(effect.anchorCharacterId) &&
+    typeof effect.affectedCharacterId === "string" &&
+    isCharacterId(effect.affectedCharacterId) &&
+    Number.isSafeInteger(effect.appliedSequence) &&
+    (effect.appliedSequence as number) >= 1
+  );
+}
+
+function hasValidEffectBranch(
+  value: unknown,
+  historicalRuleset: boolean,
+  isCurrentValue: (branch: string) => boolean,
+): boolean {
+  return (
+    typeof value === "string" &&
+    (historicalRuleset ? isNonEmptyString(value) : isCurrentValue(value))
+  );
+}
+
+function hasValidActiveEffectDuration(
+  duration: Record<string, unknown>,
+  historicalRuleset: boolean,
+): boolean {
+  const boundaryTrigger = duration.boundaryTrigger;
+  const boundaryTriggerIsValid =
+    boundaryTrigger === undefined ||
+    hasValidEffectBranch(
+      boundaryTrigger,
+      historicalRuleset,
+      isEffectBoundaryTrigger,
+    );
+  return (
+    hasValidEffectBranch(
+      duration.kind,
+      historicalRuleset,
+      isEffectDurationKind,
+    ) &&
+    boundaryTriggerIsValid &&
+    (duration.anchor === "source" || duration.anchor === "affected") &&
+    typeof duration.removeWhenAffectedDowned === "boolean"
+  );
+}
+
+function hasValidActiveEffectOperations(
+  operations: unknown,
+  historicalRuleset: boolean,
+): boolean {
+  return (
+    Array.isArray(operations) &&
+    operations.every(
+      (operation) =>
+        typeof operation === "string" &&
+        (historicalRuleset
+          ? isNonEmptyString(operation)
+          : isEffectOperation(operation)),
+    )
+  );
+}
+
+export function assertActiveEffectStructure(
+  effect: unknown,
+  historicalRuleset: boolean,
+): void {
+  if (!isRecord(effect) || !isRecord(effect.duration)) {
+    throw new Error("The canonical active effects are structurally invalid.");
+  }
+  if (
+    !hasValidActiveEffectIdentity(effect, historicalRuleset) ||
+    !hasValidEffectBranch(effect.kind, historicalRuleset, isActiveEffectKind) ||
+    !hasValidActiveEffectDuration(effect.duration, historicalRuleset) ||
+    !hasValidActiveEffectOperations(effect.operations, historicalRuleset)
+  ) {
+    throw new Error("The canonical active effects are structurally invalid.");
   }
 }
 
@@ -55,7 +163,7 @@ export function assertMatchStateStructure(
   assertMatchStateInitiative(value);
   assertMatchStateTurn(value);
   assertEndedMatchState(value);
-  assertMatchStatePersistence(value);
+  assertMatchStatePersistence(value, value.rulesVersion !== RULESET.version);
 }
 
 function assertMatchStateHeader(
@@ -167,15 +275,8 @@ function assertEndedMatchMetadata(value: EndedMatchState): void {
 }
 
 function assertEndedMatchDecision(value: EndedMatchState): void {
-  // Widened views keep every literal comparison live so persisted values
-  // outside the contract still fail validation exactly as before.
-  const decisionBasis: string = value.decisionBasis;
-  if (
-    decisionBasis !== "elimination" &&
-    decisionBasis !== "activeCount" &&
-    decisionBasis !== "activeHpTotal" &&
-    decisionBasis !== "coinFlip"
-  ) {
+  const decisionBasis: unknown = value.decisionBasis;
+  if (typeof decisionBasis !== "string" || !isDecisionBasis(decisionBasis)) {
     throw new Error("The Ended Match decision basis is invalid.");
   }
   assertFinalTeamTallies(
@@ -186,11 +287,10 @@ function assertEndedMatchDecision(value: EndedMatchState): void {
     value.finalHpTotals,
     "The Ended Match final team tallies are invalid.",
   );
-  const coinFlipResult: string | null = value.coinFlipResult;
+  const coinFlipResult: unknown = value.coinFlipResult;
   if (
     coinFlipResult !== null &&
-    coinFlipResult !== "Drow" &&
-    coinFlipResult !== "Duergar"
+    (typeof coinFlipResult !== "string" || !isTeam(coinFlipResult))
   ) {
     throw new Error("The Ended Match coin flip result is invalid.");
   }
@@ -199,19 +299,28 @@ function assertEndedMatchDecision(value: EndedMatchState): void {
   }
 }
 
-function assertMatchStatePersistence(value: MatchState): void {
-  // Single-schema persistence (ADR 0001): the parameter type is the one
-  // current version, so these canonical checks apply unconditionally.
+function assertMatchStatePersistence(
+  value: MatchState,
+  historicalRuleset: boolean,
+): void {
   const state = value as unknown as Record<string, unknown>;
-  assertStringArray(state.spentAbilityIds, "spent Abilities");
+  assertStringArray(
+    state.spentAbilityIds,
+    "spent Abilities",
+    historicalRuleset ? isNonEmptyString : isAbilityId,
+  );
   if (!Array.isArray(state.activeEffects)) {
     throw new Error("The canonical active effects are structurally invalid.");
   }
+  state.activeEffects.forEach((effect) => {
+    assertActiveEffectStructure(effect, historicalRuleset);
+  });
   const names = state.displayNames;
   if (
     !isRecord(names) ||
     !Object.keys(names).every(
       (characterId) =>
+        isCharacterId(characterId) &&
         typeof names[characterId] === "string" &&
         names[characterId].length > 0 &&
         names[characterId].trim() === names[characterId] &&
@@ -220,25 +329,23 @@ function assertMatchStatePersistence(value: MatchState): void {
   ) {
     throw new Error("The canonical Match display names are invalid.");
   }
-  assertStringArray(state.spentReactionIds, "spent Reactions");
-  assertStringArray(state.eliminatedTeams, "Team Elimination state");
+  assertStringArray(
+    state.spentReactionIds,
+    "spent Reactions",
+    historicalRuleset ? isNonEmptyString : isReactionId,
+  );
+  assertStringArray(state.eliminatedTeams, "Team Elimination state", isTeam);
   assertStringArray(
     state.acknowledgedEliminations,
     "acknowledged Team Elimination state",
+    isTeam,
   );
   if (
     typeof state.majorActionUsed !== "boolean" ||
-    !state.eliminatedTeams.every(
-      (team) => team === "Drow" || team === "Duergar",
-    ) ||
+    !state.eliminatedTeams.every((team) => isTeam(team)) ||
     new Set(state.eliminatedTeams).size !== state.eliminatedTeams.length ||
-    !state.acknowledgedEliminations.every(
-      (team) => team === "Drow" || team === "Duergar",
-    ) ||
-    (state.outcome !== null &&
-      state.outcome !== "Drow" &&
-      state.outcome !== "Duergar" &&
-      state.outcome !== "draw")
+    !state.acknowledgedEliminations.every((team) => isTeam(team)) ||
+    (state.outcome !== null && !isMatchOutcome(state.outcome))
   ) {
     throw new Error("The canonical combat state is structurally invalid.");
   }
@@ -296,17 +403,16 @@ function assertMatchSummaryHeader(
   }
 }
 
-function isValidOutcome(value: unknown): boolean {
-  return value === "Drow" || value === "Duergar" || value === "draw";
+function isMatchOutcome(value: unknown): value is Exclude<MatchOutcome, null> {
+  return value === "draw" || (typeof value === "string" && isTeam(value));
 }
 
-function isValidDecisionBasis(value: unknown): boolean {
-  return (
-    value === "elimination" ||
-    value === "activeCount" ||
-    value === "activeHpTotal" ||
-    value === "coinFlip"
-  );
+function isValidOutcome(value: unknown): value is Exclude<MatchOutcome, null> {
+  return isMatchOutcome(value);
+}
+
+function isValidDecisionBasis(value: unknown): value is DecisionBasis {
+  return typeof value === "string" && isDecisionBasis(value);
 }
 
 function assertMatchSummaryCoinFlip(value: MatchSummary): void {
@@ -314,8 +420,7 @@ function assertMatchSummaryCoinFlip(value: MatchSummary): void {
   const decisionBasis: unknown = value.decisionBasis;
   if (
     coinFlipResult !== undefined &&
-    coinFlipResult !== "Drow" &&
-    coinFlipResult !== "Duergar"
+    (typeof coinFlipResult !== "string" || !isTeam(coinFlipResult))
   ) {
     throw new Error("The Match Summary coin flip result is invalid.");
   }

@@ -7,6 +7,7 @@ import {
   resolveBasicAttack,
   startMatch,
   type ActiveMatchState,
+  type CharacterId,
   type MatchEvent,
   type MatchState,
 } from "../../src/domain/match";
@@ -294,9 +295,9 @@ export function simultaneousEliminationRun(matchId: string): {
   const characterIds = started.state.characters.map(
     ({ characterId }) => characterId,
   );
-  const everywhere = (exceptCharacterId: string) =>
+  const everywhere = (exceptCharacterId: CharacterId): readonly CharacterId[] =>
     characterIds.filter((characterId) => characterId !== exceptCharacterId);
-  const sources = [
+  const sources: readonly CharacterId[] = [
     "drow-rogue",
     "drow-druid",
     "drow-paladin",
@@ -304,13 +305,13 @@ export function simultaneousEliminationRun(matchId: string): {
     "duergar-fighter",
     "duergar-barbarian",
   ];
-  const affectedLists = [
+  const affectedLists: readonly (readonly CharacterId[])[] = [
     everywhere("drow-rogue"),
     everywhere("drow-druid"),
     everywhere("drow-paladin"),
-    ["drow-paladin", "duergar-barbarian"],
-    ["drow-rogue", "drow-druid", "duergar-fighter", "drow-paladin"],
-    ["drow-paladin", "duergar-monk", "duergar-barbarian"],
+    ["drow-paladin", "duergar-barbarian"] as const,
+    ["drow-rogue", "drow-druid", "duergar-fighter", "drow-paladin"] as const,
+    ["drow-paladin", "duergar-monk", "duergar-barbarian"] as const,
   ];
   const initialResults: ReadonlyArray<{
     readonly event: MatchEvent;

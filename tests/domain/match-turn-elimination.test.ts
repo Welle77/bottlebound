@@ -11,6 +11,7 @@ import {
   restoreStateFromEvents,
   ruleSimultaneousElimination,
   startMatch,
+  type CharacterId,
   undoLastEvent,
   type ActiveMatchState,
   type MatchEvent,
@@ -365,7 +366,10 @@ describe("Active Match commands", () => {
     );
     const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
     const sourceCharacterId = initiativeCharacterId(started.state, 0);
-    const finalCharacters = ["drow-paladin", "duergar-ranger"];
+    const finalCharacters: readonly CharacterId[] = [
+      "drow-paladin",
+      "duergar-ranger",
+    ];
     const nearlyEliminated = {
       ...started.state,
       characters: started.state.characters.map((character) => ({

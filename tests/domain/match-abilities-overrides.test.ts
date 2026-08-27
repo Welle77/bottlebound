@@ -5,6 +5,8 @@ import {
   resolveBasicAttack,
   restoreStateFromEvents,
   type ActionResolvedEvent,
+  type CharacterId,
+  type MatchEvent,
 } from "../../src/domain/match";
 import {
   abilityId,
@@ -46,12 +48,98 @@ function asResolution(result: {
 }
 
 describe("resolveAbility override-recording branches", () => {
+  it("restores an Ability resolution that predates its optional abilityId field", () => {
+    const run = startedAuditMatch("ability-event-without-ability-id");
+    const resolved = resolveAbility(
+      run.state,
+      {
+        abilityId: abilityId("duergar-ranger", "Hunter's Mark"),
+        targetCharacterIds: ["drow-wizard"],
+      },
+      stamp(1),
+    );
+    const { abilityId: omittedAbilityId, ...legacyEvent } =
+      asResolution(resolved);
+    void omittedAbilityId;
+
+    expect(restoreStateFromEvents([...run.events, legacyEvent])).toEqual(
+      resolved.state,
+    );
+  });
+
+  it("restores an Ability resolution with a null optional abilityId", () => {
+    const run = startedAuditMatch("ability-event-with-null-ability-id");
+    const resolved = resolveAbility(
+      run.state,
+      {
+        abilityId: abilityId("duergar-ranger", "Hunter's Mark"),
+        targetCharacterIds: ["drow-wizard"],
+      },
+      stamp(1),
+    );
+    const legacyEvent = { ...asResolution(resolved), abilityId: null };
+
+    expect(restoreStateFromEvents([...run.events, legacyEvent])).toEqual(
+      resolved.state,
+    );
+  });
+
+  it("restores retired Ability ids and metadata through the historical replay path", () => {
+    const run = startedAuditMatch("retired-ability-resolution");
+    const resolved = resolveAbility(
+      run.state,
+      {
+        abilityId: abilityId("duergar-ranger", "Hunter's Mark"),
+        targetCharacterIds: ["drow-wizard"],
+      },
+      stamp(1),
+    );
+    const event = asResolution(resolved);
+    const appliedEffect = event.appliedEffects?.[0];
+    if (!appliedEffect) {
+      throw new Error("Hunter's Mark must apply one active effect.");
+    }
+    const rulesVersion = "BB-retired";
+    const attackId = "duergar-ranger-retired-mark";
+    const historicalEvent = {
+      ...event,
+      rulesVersion,
+      attackId,
+      abilityId: null,
+      attackType: "retired-ability-attack",
+      rangePaces: 9,
+      damage: 2,
+      rulesSourceAnchor: "retired-ability-card",
+      attackLegs: event.attackLegs.map((leg) => ({
+        ...leg,
+        attackId,
+        rangePaces: 9,
+      })),
+      spentAbilityIds: [attackId],
+      appliedEffects: [{ ...appliedEffect, abilityId: attackId }],
+    } as unknown as MatchEvent;
+    const historicalEvents = [
+      ...run.events.map((recorded): MatchEvent => ({
+        ...recorded,
+        rulesVersion,
+      })),
+      historicalEvent,
+    ];
+
+    expect(restoreStateFromEvents(historicalEvents)).toEqual({
+      ...resolved.state,
+      rulesVersion,
+      spentAbilityIds: [attackId],
+      activeEffects: [{ ...appliedEffect, abilityId: attackId }],
+    });
+  });
+
   it("requires an Override for a wrong-active-character Ability choice", () => {
     const run = startedAuditMatch("ability-override-wrong-active");
     // Slot 1 is the Duergar Ranger; Arcane Bolt belongs to the Drow Sorcerer.
     const input = {
       abilityId: abilityId("drow-sorcerer", "Arcane Bolt"),
-      targetCharacterIds: ["duergar-ranger"],
+      targetCharacterIds: ["duergar-ranger" as CharacterId],
     };
     expect(() => resolveAbility(run.state, input, stamp(1))).toThrow(
       "wrong-active-character",
@@ -103,7 +191,10 @@ describe("resolveAbility override-recording branches", () => {
     expect(run.state.spentAbilityIds).toEqual([markId]);
     expect(run.state.majorActionUsed).toBe(true);
 
-    const repeat = { abilityId: markId, targetCharacterIds: ["drow-wizard"] };
+    const repeat = {
+      abilityId: markId,
+      targetCharacterIds: ["drow-wizard" as CharacterId],
+    };
     expect(() => resolveAbility(run.state, repeat, stamp(2))).toThrow(
       "ability-already-spent",
     );
@@ -144,7 +235,7 @@ describe("resolveAbility override-recording branches", () => {
     const sorcererTurn = advanceTo(run, "drow-sorcerer");
     const input = {
       abilityId: abilityId("drow-sorcerer", "Arcane Bolt"),
-      targetCharacterIds: ["drow-wizard"],
+      targetCharacterIds: ["drow-wizard" as CharacterId],
     };
     expect(() => resolveAbility(sorcererTurn, input, stamp(1))).toThrow(
       "invalid-target-relation",
@@ -199,7 +290,7 @@ describe("resolveAbility override-recording branches", () => {
     const sorcererTurn = advanceTo(run, "drow-sorcerer");
     const input = {
       abilityId: abilityId("drow-sorcerer", "Arcane Bolt"),
-      targetCharacterIds: ["duergar-ranger"],
+      targetCharacterIds: ["duergar-ranger" as CharacterId],
     };
     expect(() => resolveAbility(sorcererTurn, input, stamp(1))).toThrow(
       "invalid-target-life-state",

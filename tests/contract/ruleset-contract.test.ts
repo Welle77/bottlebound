@@ -5,6 +5,14 @@ import { describe, expect, it } from "vitest";
 import { RULESET } from "../../src/domain/ruleset";
 
 describe("authoritative roster contract", () => {
+  it("keeps Structured Ability attack types byte-for-byte equal to their cards", () => {
+    expect(RULESET.abilities.map(({ attackType }) => attackType)).toEqual(
+      RULESET.referenceCharacters.flatMap(({ abilities }) =>
+        abilities.map(({ attackType }) => attackType),
+      ),
+    );
+  });
+
   it("matches the team, HP, and initiative table in the rules contract", () => {
     const rules = readFileSync(
       new URL("../../bottlebound_rules_final.md", import.meta.url),

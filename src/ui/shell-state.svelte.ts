@@ -12,6 +12,8 @@
  */
 
 import {
+  type AbilityId,
+  type CharacterId,
   type EndGamePreview,
   type MatchEvent,
   type MatchState,
@@ -43,23 +45,23 @@ export type Confirmation =
 export interface ActionDraft {
   /** Which command opened this draft; ability drafts resolve through resolveAbility. */
   readonly kind: "basic" | "ability";
-  readonly sourceCharacterId: string;
+  readonly sourceCharacterId: CharacterId;
   readonly rulesVersion: string;
   /** The chosen Ruleset ability; null for Basic Attack drafts. */
-  readonly abilityId: string | null;
+  readonly abilityId: AbilityId | null;
   /**
    * Chosen targets for targeted-attack and ally/enemy/utility ability
    * drafts. Self abilities need none and physical-attack abilities use the
    * ordered bottle contacts instead.
    */
-  readonly targets: readonly string[];
+  readonly targets: readonly CharacterId[];
   /**
    * Ability draft progression: select-target (targeted/ally/enemy/utility),
    * reactions (targeted-attack only), contacts (physical-attack), review.
    * Basic Attack drafts start at contacts.
    */
   readonly step: "select-target" | "reactions" | "contacts" | "review";
-  readonly attackLegs: readonly (readonly string[])[];
+  readonly attackLegs: readonly (readonly CharacterId[])[];
   readonly physicalConfirmations: Readonly<
     Record<PhysicalAttackCheck, boolean>
   >;
@@ -78,7 +80,7 @@ export interface ActionDraft {
 
 export function draftAffectedCharacterIds(
   draft: ActionDraft,
-): readonly string[] {
+): readonly CharacterId[] {
   return draft.attackLegs.flatMap((leg) => leg);
 }
 export function createPhysicalConfirmations(

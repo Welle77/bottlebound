@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { DisplayNames } from "../domain/match";
+  import type { CharacterId, DisplayNames } from "../domain/match";
 
   // One character name with its optional Display Name primary and the
   // Ruleset name secondary as muted context; without a distinct Display
@@ -10,7 +10,7 @@
     character,
     displayNames,
   }: {
-    character: { readonly id: string; readonly name: string };
+    character: { readonly id: CharacterId; readonly name: string };
     displayNames?: DisplayNames;
   } = $props();
 
