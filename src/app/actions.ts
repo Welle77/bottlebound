@@ -343,106 +343,110 @@ export async function reopenEndedMatch(): Promise<void> {
     reopenMatch(state.current.match, new Date().toISOString()),
   );
 }
-export async function confirmAction(): Promise<void> {
-  if (!state.current.confirmation) return;
-  const confirmation = state.current.confirmation;
-  patchShellState({ confirmation: null });
-  if (confirmation === "remove-summary") {
-    patchShellState({ saving: true });
-    try {
-      await matchStore.deleteSummary(true);
-      patchShellState({ summary: null, matchError: null });
-    } catch {
-      patchShellState({
-        matchError: "Canonical storage could not remove the prior summary.",
-      });
-    } finally {
-      patchShellState({ saving: false });
-    }
-    return;
-  }
-  if (confirmation === "start-new" && state.current.match?.phase === "ended") {
-    patchShellState({ saving: true });
-    try {
-      const setup = createSetup(crypto.randomUUID(), new Date().toISOString());
-      await matchStore.commit(setup.event, setup.state);
-      patchShellState({
-        match: setup.state,
-        events: [setup.event],
-        matchError: null,
-      });
-      try {
-        patchShellState({ summary: await matchStore.getSummary() });
-      } catch {
-        // keep existing
-      }
-    } catch {
-      patchShellState({
-        matchError: "Canonical storage could not start a new Match.",
-      });
-    } finally {
-      patchShellState({ saving: false });
-    }
-    return;
-  }
-  if (state.current.match === null) return;
-  if (confirmation === "undo") {
-    await commitResult(
-      undoLastEvent(state.current.match, state.current.events, {
-        occurredAt: new Date().toISOString(),
-        confirmed: true,
-      }),
-    );
-    return;
-  }
-  if (confirmation === "end" && state.current.match.phase === "active") {
-    const preview = state.current.endGamePreview;
-    const expected = preview?.coinFlipResult;
-    const random: RandomSource =
-      expected === undefined
-        ? cryptoRandomSource
-        : { nextUint32: () => (expected === "Drow" ? 0 : 1) };
-    const result = endMatch(state.current.match, {
-      occurredAt: new Date().toISOString(),
-      confirmed: true,
-      random,
-    });
-    patchShellState({ endGamePreview: null });
-    await commitResult(result);
-    return;
-  }
-  if (confirmation === "remove" && state.current.match.phase === "ended") {
-    patchShellState({ saving: true });
-    try {
-      await matchStore.deleteMatch(state.current.match.matchId, true);
-      patchShellState({
-        match: null,
-        events: [],
-        summary: null,
-        matchError: null,
-      });
-    } catch {
-      patchShellState({
-        matchError: "Canonical storage could not remove the Ended Match.",
-      });
-    } finally {
-      patchShellState({ saving: false });
-    }
-    return;
-  }
-  if (state.current.match.phase !== "setup") return;
-  if (confirmation === "reroll") {
-    await commitResult(
-      rerollInitiative(state.current.match, cryptoRandomSource, {
-        occurredAt: new Date().toISOString(),
-        confirmed: true,
-      }),
-    );
-    return;
-  }
+
+async function removePriorSummary(): Promise<void> {
   patchShellState({ saving: true });
   try {
-    await matchStore.deleteMatch(state.current.match.matchId, true);
+    await matchStore.deleteSummary(true);
+    patchShellState({ summary: null, matchError: null });
+  } catch {
+    patchShellState({
+      matchError: "Canonical storage could not remove the prior summary.",
+    });
+  } finally {
+    patchShellState({ saving: false });
+  }
+}
+
+async function startNewMatch(): Promise<void> {
+  patchShellState({ saving: true });
+  try {
+    const setup = createSetup(crypto.randomUUID(), new Date().toISOString());
+    await matchStore.commit(setup.event, setup.state);
+    patchShellState({
+      match: setup.state,
+      events: [setup.event],
+      matchError: null,
+    });
+    try {
+      patchShellState({ summary: await matchStore.getSummary() });
+    } catch {
+      // keep existing
+    }
+  } catch {
+    patchShellState({
+      matchError: "Canonical storage could not start a new Match.",
+    });
+  } finally {
+    patchShellState({ saving: false });
+  }
+}
+
+async function confirmUndo(match: MatchState): Promise<void> {
+  await commitResult(
+    undoLastEvent(match, state.current.events, {
+      occurredAt: new Date().toISOString(),
+      confirmed: true,
+    }),
+  );
+}
+
+async function confirmEndGame(
+  match: Extract<MatchState, { readonly phase: "active" }>,
+): Promise<void> {
+  const preview = state.current.endGamePreview;
+  const expected = preview?.coinFlipResult;
+  const random: RandomSource =
+    expected === undefined
+      ? cryptoRandomSource
+      : { nextUint32: () => (expected === "Drow" ? 0 : 1) };
+  const result = endMatch(match, {
+    occurredAt: new Date().toISOString(),
+    confirmed: true,
+    random,
+  });
+  patchShellState({ endGamePreview: null });
+  await commitResult(result);
+}
+
+async function removeEndedMatch(
+  match: Extract<MatchState, { readonly phase: "ended" }>,
+): Promise<void> {
+  patchShellState({ saving: true });
+  try {
+    await matchStore.deleteMatch(match.matchId, true);
+    patchShellState({
+      match: null,
+      events: [],
+      summary: null,
+      matchError: null,
+    });
+  } catch {
+    patchShellState({
+      matchError: "Canonical storage could not remove the Ended Match.",
+    });
+  } finally {
+    patchShellState({ saving: false });
+  }
+}
+
+async function confirmInitiativeReroll(
+  match: Extract<MatchState, { readonly phase: "setup" }>,
+): Promise<void> {
+  await commitResult(
+    rerollInitiative(match, cryptoRandomSource, {
+      occurredAt: new Date().toISOString(),
+      confirmed: true,
+    }),
+  );
+}
+
+async function discardSetupMatch(
+  match: Extract<MatchState, { readonly phase: "setup" }>,
+): Promise<void> {
+  patchShellState({ saving: true });
+  try {
+    await matchStore.deleteMatch(match.matchId, true);
     patchShellState({ match: null, events: [], matchError: null });
     try {
       patchShellState({ summary: await matchStore.getSummary() });
@@ -456,6 +460,40 @@ export async function confirmAction(): Promise<void> {
   } finally {
     patchShellState({ saving: false });
   }
+}
+
+export async function confirmAction(): Promise<void> {
+  if (!state.current.confirmation) return;
+  const confirmation = state.current.confirmation;
+  patchShellState({ confirmation: null });
+  if (confirmation === "remove-summary") {
+    await removePriorSummary();
+    return;
+  }
+  if (confirmation === "start-new" && state.current.match?.phase === "ended") {
+    await startNewMatch();
+    return;
+  }
+  const match = state.current.match;
+  if (match === null) return;
+  if (confirmation === "undo") {
+    await confirmUndo(match);
+    return;
+  }
+  if (confirmation === "end" && match.phase === "active") {
+    await confirmEndGame(match);
+    return;
+  }
+  if (confirmation === "remove" && match.phase === "ended") {
+    await removeEndedMatch(match);
+    return;
+  }
+  if (match.phase !== "setup") return;
+  if (confirmation === "reroll") {
+    await confirmInitiativeReroll(match);
+    return;
+  }
+  await discardSetupMatch(match);
 }
 export async function restoreMatch(): Promise<void> {
   try {

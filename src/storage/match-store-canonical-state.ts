@@ -16,6 +16,18 @@ export function assertCanonicalState(
   assertMatchStateStructure(value);
   if (!isRecord(value))
     throw new Error("The canonical snapshot is structurally invalid.");
+  assertCanonicalRulesVersion(value, expectedRulesVersion);
+  assertCanonicalSnapshotHeader(value);
+  assertCanonicalRoster(value);
+  assertCanonicalInitiative(value);
+  assertCanonicalTurn(value);
+  assertCanonicalEndedState(value);
+}
+
+function assertCanonicalRulesVersion(
+  value: Record<string, unknown>,
+  expectedRulesVersion: string | undefined,
+): void {
   if (
     typeof value.rulesVersion !== "string" ||
     value.rulesVersion.length === 0 ||
@@ -24,20 +36,27 @@ export function assertCanonicalState(
   ) {
     throw new Error("The canonical snapshot rules version is incompatible.");
   }
+}
+
+function assertCanonicalSnapshotHeader(value: Record<string, unknown>): void {
   // Widened phase view keeps every literal comparison live for persisted
   // snapshots without collapsing the modeled phase union downstream.
-  const snapshotPhase: string = value.phase;
+  const snapshotPhase: unknown = value.phase;
+  const sequence: unknown = value.sequence;
   if (
     typeof value.matchId !== "string" ||
     value.matchId.length === 0 ||
     (snapshotPhase !== "setup" &&
       snapshotPhase !== "active" &&
       snapshotPhase !== "ended") ||
-    !Number.isSafeInteger(value.sequence) ||
-    value.sequence < 1
+    !Number.isSafeInteger(sequence) ||
+    (sequence as number) < 1
   ) {
     throw new Error("The canonical snapshot is structurally invalid.");
   }
+}
+
+function assertCanonicalRoster(value: MatchState): void {
   if (
     !Array.isArray(value.characters) ||
     value.characters.length !== RULESET.characters.length
@@ -45,17 +64,31 @@ export function assertCanonicalState(
     throw new Error("The canonical snapshot roster is invalid.");
   }
   for (const [index, rulesCharacter] of RULESET.characters.entries()) {
-    const matchCharacter: unknown = value.characters[index];
-    if (
-      !isRecord(matchCharacter) ||
-      matchCharacter.characterId !== rulesCharacter.id ||
-      !Number.isInteger(matchCharacter.hp) ||
-      (matchCharacter.hp as number) < 0 ||
-      (matchCharacter.hp as number) > rulesCharacter.baseHp
-    ) {
-      throw new Error("The canonical snapshot roster is invalid.");
-    }
+    assertCanonicalRosterEntry(
+      value.characters[index],
+      rulesCharacter.id,
+      rulesCharacter.baseHp,
+    );
   }
+}
+
+function assertCanonicalRosterEntry(
+  matchCharacter: unknown,
+  characterId: string,
+  baseHp: number,
+): void {
+  if (
+    !isRecord(matchCharacter) ||
+    matchCharacter.characterId !== characterId ||
+    !Number.isInteger(matchCharacter.hp) ||
+    (matchCharacter.hp as number) < 0 ||
+    (matchCharacter.hp as number) > baseHp
+  ) {
+    throw new Error("The canonical snapshot roster is invalid.");
+  }
+}
+
+function assertCanonicalInitiative(value: MatchState): void {
   if (value.initiative === null) {
     if (value.phase === "active") {
       throw new Error("The Active Match initiative result is incomplete.");
@@ -68,41 +101,47 @@ export function assertCanonicalState(
   ) {
     throw new Error("The canonical initiative result is structurally invalid.");
   }
-  value.initiative.reduce<{
-    readonly seen: ReadonlySet<string>;
-    readonly previousTotal: number;
-  }>(
-    (state, entry, index) => {
-      if (!isRecord(entry))
-        throw new Error(
-          "The canonical initiative result is structurally invalid.",
-        );
-      const rulesCharacter = RULESET.characters.find(
-        ({ id }) => id === entry.characterId,
-      );
-      if (
-        !rulesCharacter ||
-        state.seen.has(rulesCharacter.id) ||
-        entry.slot !== index + 1 ||
-        !Number.isInteger(entry.roll) ||
-        (entry.roll as number) < 1 ||
-        (entry.roll as number) > 20 ||
-        entry.modifier !== rulesCharacter.initiativeModifier ||
-        entry.total !==
-          (entry.roll as number) + rulesCharacter.initiativeModifier ||
-        entry.total > state.previousTotal
-      ) {
-        throw new Error(
-          "The canonical initiative result is structurally invalid.",
-        );
-      }
-      return {
-        seen: new Set([...state.seen, rulesCharacter.id]),
-        previousTotal: entry.total,
-      };
-    },
+  value.initiative.reduce<InitiativeValidationState>(
+    assertCanonicalInitiativeEntry,
     { seen: new Set<string>(), previousTotal: Number.POSITIVE_INFINITY },
   );
+}
+
+interface InitiativeValidationState {
+  readonly seen: ReadonlySet<string>;
+  readonly previousTotal: number;
+}
+
+function assertCanonicalInitiativeEntry(
+  state: InitiativeValidationState,
+  entry: InitiativeEntry,
+  index: number,
+): InitiativeValidationState {
+  if (!isRecord(entry))
+    throw new Error("The canonical initiative result is structurally invalid.");
+  const rulesCharacter = RULESET.characters.find(
+    ({ id }) => id === entry.characterId,
+  );
+  if (
+    !rulesCharacter ||
+    state.seen.has(rulesCharacter.id) ||
+    entry.slot !== index + 1 ||
+    !Number.isInteger(entry.roll) ||
+    entry.roll < 1 ||
+    entry.roll > 20 ||
+    entry.modifier !== rulesCharacter.initiativeModifier ||
+    entry.total !== entry.roll + rulesCharacter.initiativeModifier ||
+    entry.total > state.previousTotal
+  ) {
+    throw new Error("The canonical initiative result is structurally invalid.");
+  }
+  return {
+    seen: new Set([...state.seen, rulesCharacter.id]),
+    previousTotal: entry.total,
+  };
+}
+
+function assertCanonicalTurn(value: MatchState): void {
   if (
     (value.phase === "active" || value.phase === "ended") &&
     (!Number.isSafeInteger(value.round) ||
@@ -113,53 +152,79 @@ export function assertCanonicalState(
   ) {
     throw new Error("The Active Match turn is structurally invalid.");
   }
+}
+
+function assertCanonicalEndedState(value: MatchState): void {
+  if (value.phase !== "ended") return;
+  assertCanonicalEndedMetadata(value);
+  assertCanonicalEndedDecision(value);
+}
+
+function assertCanonicalEndedMetadata(value: MatchState): void {
+  const ended = value as unknown as Record<string, unknown>;
+  const endedAt: unknown = ended.endedAt;
+  const endedSequence: unknown = ended.endedSequence;
+  const sequence: unknown = ended.sequence;
   if (
-    value.phase === "ended" &&
-    (typeof value.endedAt !== "string" ||
-      value.endedAt.length === 0 ||
-      !Number.isSafeInteger(value.endedSequence) ||
-      value.endedSequence < 2 ||
-      value.endedSequence > value.sequence)
+    typeof endedAt !== "string" ||
+    endedAt.length === 0 ||
+    !Number.isSafeInteger(endedSequence) ||
+    (endedSequence as number) < 2 ||
+    !Number.isSafeInteger(sequence) ||
+    (endedSequence as number) > (sequence as number)
   ) {
     throw new Error("The Ended Match is structurally invalid.");
   }
-  if (value.phase === "ended") {
-    const ended = value as Record<string, unknown>;
-    if (
-      ended.decisionBasis !== "elimination" &&
-      ended.decisionBasis !== "activeCount" &&
-      ended.decisionBasis !== "activeHpTotal" &&
-      ended.decisionBasis !== "coinFlip"
-    ) {
-      throw new Error("The Ended Match is structurally invalid.");
-    }
-    if (
-      !isRecord(ended.finalCounts) ||
-      !Number.isInteger(ended.finalCounts.Drow) ||
-      !Number.isInteger(ended.finalCounts.Duergar) ||
-      (ended.finalCounts.Drow as number) < 0 ||
-      (ended.finalCounts.Duergar as number) < 0 ||
-      !isRecord(ended.finalHpTotals) ||
-      !Number.isInteger(ended.finalHpTotals.Drow) ||
-      !Number.isInteger(ended.finalHpTotals.Duergar) ||
-      (ended.finalHpTotals.Drow as number) < 0 ||
-      (ended.finalHpTotals.Duergar as number) < 0
-    ) {
-      throw new Error("The Ended Match is structurally invalid.");
-    }
-    if (
-      ended.coinFlipResult !== null &&
-      ended.coinFlipResult !== "Drow" &&
-      ended.coinFlipResult !== "Duergar"
-    ) {
-      throw new Error("The Ended Match is structurally invalid.");
-    }
-    if (
-      (ended.decisionBasis === "coinFlip") !==
-      (ended.coinFlipResult !== null)
-    ) {
-      throw new Error("The Ended Match is structurally invalid.");
-    }
+}
+
+function assertCanonicalEndedDecision(value: MatchState): void {
+  const ended = value as unknown as Record<string, unknown>;
+  assertCanonicalDecisionBasis(ended.decisionBasis);
+  assertCanonicalFinalTallies(ended);
+  assertCanonicalCoinFlipResult(ended);
+}
+
+function assertCanonicalDecisionBasis(decisionBasis: unknown): void {
+  if (
+    decisionBasis !== "elimination" &&
+    decisionBasis !== "activeCount" &&
+    decisionBasis !== "activeHpTotal" &&
+    decisionBasis !== "coinFlip"
+  ) {
+    throw new Error("The Ended Match is structurally invalid.");
+  }
+}
+
+function assertCanonicalFinalTallies(ended: Record<string, unknown>): void {
+  if (
+    !isRecord(ended.finalCounts) ||
+    !Number.isInteger(ended.finalCounts.Drow) ||
+    !Number.isInteger(ended.finalCounts.Duergar) ||
+    (ended.finalCounts.Drow as number) < 0 ||
+    (ended.finalCounts.Duergar as number) < 0 ||
+    !isRecord(ended.finalHpTotals) ||
+    !Number.isInteger(ended.finalHpTotals.Drow) ||
+    !Number.isInteger(ended.finalHpTotals.Duergar) ||
+    (ended.finalHpTotals.Drow as number) < 0 ||
+    (ended.finalHpTotals.Duergar as number) < 0
+  ) {
+    throw new Error("The Ended Match is structurally invalid.");
+  }
+}
+
+function assertCanonicalCoinFlipResult(ended: Record<string, unknown>): void {
+  if (
+    ended.coinFlipResult !== null &&
+    ended.coinFlipResult !== "Drow" &&
+    ended.coinFlipResult !== "Duergar"
+  ) {
+    throw new Error("The Ended Match is structurally invalid.");
+  }
+  if (
+    (ended.decisionBasis === "coinFlip") !==
+    (ended.coinFlipResult !== null)
+  ) {
+    throw new Error("The Ended Match is structurally invalid.");
   }
 }
 

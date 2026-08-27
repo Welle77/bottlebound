@@ -12,9 +12,35 @@ import type {
   MatchOutcome,
   MatchState,
   ProtectiveReactionChoice,
+  ProtectiveReactionInput,
   ProtectiveReactionOperation,
   ProtectiveReactionResolution,
 } from "./match-types";
+
+type BasicAttack = (typeof RULESET.basicAttacks)[number];
+type BasicAttackLegInput = NonNullable<BasicAttackInput["attackLegs"]>[number];
+type ProtectiveReaction = (typeof RULESET.reactions)[number];
+
+interface ValidatedBasicAttack {
+  readonly attack: BasicAttack;
+  readonly inputLegs: readonly BasicAttackLegInput[];
+  readonly affectedCharacterIds: readonly string[];
+  readonly override: string | null;
+}
+
+interface ResolvedAttackEffect {
+  readonly effect: ActionEffect;
+  readonly expired: readonly ActiveEffect[];
+  readonly applied: readonly ActiveEffect[];
+}
+
+interface BasicAttackOutcome {
+  readonly actionEffects: readonly ActionEffect[];
+  readonly appliedEffects: readonly ActiveEffect[];
+  readonly expiredEffects: readonly ActiveEffect[];
+  readonly characters: readonly MatchCharacter[];
+  readonly activeEffects: readonly ActiveEffect[];
+}
 
 export const AUTOMATED_REACTION_NAMES = new Set([
   "Divine Shield",
@@ -88,31 +114,13 @@ export function getProtectiveReactionChoices(
     });
 }
 
-export function resolveBasicAttack(
+function resolveAttackContacts(
   state: ActiveMatchState,
   input: BasicAttackInput,
-  occurredAt: string,
-): CommandResult<ActiveMatchState, ActionResolvedEvent> {
-  if ((state as MatchState).phase === "ended") {
-    throw new Error("The Ended Match is read-only.");
-  }
-  if (state.rulesVersion !== RULESET.version) {
-    throw new Error("Basic Attack needs the exact bundled Ruleset.");
-  }
-  const activeCharacterId = state.initiative[state.activeSlot - 1]?.characterId;
-  if (input.sourceCharacterId !== activeCharacterId) {
-    throw new Error("Basic Attack needs the active character as its source.");
-  }
-  const activeCharacter = state.characters.find(
-    ({ characterId }) => characterId === activeCharacterId,
-  );
-  if (!activeCharacter || activeCharacter.hp === 0) {
-    throw new Error("A Downed character cannot use Basic Attack.");
-  }
-  const attack = RULESET.basicAttacks.find(
-    ({ characterId }) => characterId === input.sourceCharacterId,
-  );
-  if (!attack) throw new Error("The active character has no Basic Attack.");
+): {
+  readonly inputLegs: readonly BasicAttackLegInput[];
+  readonly affectedCharacterIds: readonly string[];
+} {
   if (input.affectedCharacterIds && input.attackLegs) {
     throw new Error("Basic Attack needs one ordered contact representation.");
   }
@@ -139,17 +147,93 @@ export function resolveBasicAttack(
   ) {
     throw new Error("Basic Attack references an unknown affected character.");
   }
-  if (
-    Object.values(input.physicalConfirmations).some((value) => !value)
-  ) {
+  return { inputLegs, affectedCharacterIds };
+}
+
+function validateBasicAttack(
+  state: ActiveMatchState,
+  input: BasicAttackInput,
+): ValidatedBasicAttack {
+  if ((state as MatchState).phase === "ended") {
+    throw new Error("The Ended Match is read-only.");
+  }
+  if (state.rulesVersion !== RULESET.version) {
+    throw new Error("Basic Attack needs the exact bundled Ruleset.");
+  }
+  const activeCharacterId = state.initiative[state.activeSlot - 1]?.characterId;
+  if (input.sourceCharacterId !== activeCharacterId) {
+    throw new Error("Basic Attack needs the active character as its source.");
+  }
+  const activeCharacter = state.characters.find(
+    ({ characterId }) => characterId === activeCharacterId,
+  );
+  if (!activeCharacter || activeCharacter.hp === 0) {
+    throw new Error("A Downed character cannot use Basic Attack.");
+  }
+  const attack = RULESET.basicAttacks.find(
+    ({ characterId }) => characterId === input.sourceCharacterId,
+  );
+  if (!attack) throw new Error("The active character has no Basic Attack.");
+  const { inputLegs, affectedCharacterIds } = resolveAttackContacts(
+    state,
+    input,
+  );
+  if (Object.values(input.physicalConfirmations).some((value) => !value)) {
     throw new Error("Every manual physical confirmation is required.");
   }
   const override = input.majorActionOverride?.trim() || null;
   if (state.majorActionUsed && override === null) {
     throw new Error("A second Basic Attack needs a recorded referee override.");
   }
-  const selectedReactions = input.reactions ?? [];
-  const reactions = selectedReactions.reduce<{
+  return { attack, inputLegs, affectedCharacterIds, override };
+}
+
+function resolveReactionOperations(context: {
+  readonly reaction: ProtectiveReaction;
+  readonly selection: ProtectiveReactionInput;
+  readonly sourceCharacterId: string;
+}): readonly ProtectiveReactionOperation[] {
+  const { reaction, selection, sourceCharacterId } = context;
+  return reaction.operations.flatMap(
+    (operation): readonly ProtectiveReactionOperation[] => {
+      if (operation.type === "prevent-damage-and-effects") {
+        return [
+          {
+            type: operation.type,
+            characterId: selection.protectedCharacterId,
+          },
+        ];
+      }
+      if (operation.type === "manual-movement") {
+        return [
+          {
+            type: operation.type,
+            characterId: reaction.ownerCharacterId,
+            maxPaces: operation.maxPaces,
+            instruction: `Move ${reaction.name}'s owner up to ${String(operation.maxPaces)} paces immediately.`,
+          },
+        ];
+      }
+      return [
+        {
+          type: operation.type,
+          fromCharacterId: reaction.ownerCharacterId,
+          towardCharacterId: sourceCharacterId,
+        },
+      ];
+    },
+  );
+}
+
+function resolveProtectiveReactions(context: {
+  readonly state: ActiveMatchState;
+  readonly sourceCharacterId: string;
+  readonly affectedCharacterIds: readonly string[];
+  readonly selections: readonly ProtectiveReactionInput[];
+}): readonly ProtectiveReactionResolution[] {
+  const { state, sourceCharacterId, affectedCharacterIds, selections } =
+    context;
+  return selections.reduce<{
     readonly seen: ReadonlySet<string>;
     readonly results: readonly ProtectiveReactionResolution[];
   }>(
@@ -177,36 +261,6 @@ export function resolveBasicAttack(
       if (warnings.length > 0 && reactionOverride === null) {
         throw new Error("A state-invalid Reaction needs a recorded Override.");
       }
-      const operations = reaction.operations.flatMap(
-        (operation): readonly ProtectiveReactionOperation[] => {
-          if (operation.type === "prevent-damage-and-effects") {
-            return [
-              {
-                type: operation.type,
-                characterId: selection.protectedCharacterId,
-              },
-            ];
-          }
-          if (operation.type === "manual-movement") {
-            return [
-              {
-                type: operation.type,
-                characterId: reaction.ownerCharacterId,
-                maxPaces: operation.maxPaces,
-                instruction: `Move ${reaction.name}'s owner up to ${String(operation.maxPaces)} paces immediately.`,
-              },
-            ];
-          }
-          // Only "redirect-physical-attack" operations remain in this union.
-          return [
-            {
-              type: operation.type,
-              fromCharacterId: reaction.ownerCharacterId,
-              towardCharacterId: input.sourceCharacterId,
-            },
-          ];
-        },
-      );
       return {
         seen: new Set([...accumulated.seen, reaction.ownerCharacterId]),
         results: [
@@ -217,13 +271,24 @@ export function resolveBasicAttack(
             protectedCharacterId: selection.protectedCharacterId,
             warnings,
             override: reactionOverride,
-            operations,
+            operations: resolveReactionOperations({
+              reaction,
+              selection,
+              sourceCharacterId,
+            }),
           } satisfies ProtectiveReactionResolution,
         ],
       };
     },
     { seen: new Set<string>(), results: [] },
   ).results;
+}
+
+function redirectReactionForAttack(
+  inputLegs: readonly BasicAttackLegInput[],
+  reactions: readonly ProtectiveReactionResolution[],
+): ProtectiveReactionResolution | undefined {
+  const [firstLeg] = inputLegs;
   const redirectReaction = reactions.find(({ operations }) =>
     operations.some(({ type }) => type === "redirect-physical-attack"),
   );
@@ -235,15 +300,19 @@ export function resolveBasicAttack(
   }
   if (
     redirectReaction &&
-    !firstLeg.affectedCharacterIds.includes(
-      redirectReaction.ownerCharacterId,
-    )
+    !firstLeg?.affectedCharacterIds.includes(redirectReaction.ownerCharacterId)
   ) {
     throw new Error(
       "Deflecting Palm needs the Monk in the initial Attack Leg.",
     );
   }
-  const protectedCharacterIds = new Set(
+  return redirectReaction;
+}
+
+function protectedCharacterIds(
+  reactions: readonly ProtectiveReactionResolution[],
+): ReadonlySet<string> {
+  return new Set(
     reactions.flatMap(({ operations }) =>
       operations.flatMap((operation) =>
         operation.type === "prevent-damage-and-effects"
@@ -252,8 +321,23 @@ export function resolveBasicAttack(
       ),
     ),
   );
-  const sequence = state.sequence + 1;
-  const effects = affectedCharacterIds.map((characterId) => {
+}
+
+function resolveAttackEffects(context: {
+  readonly state: ActiveMatchState;
+  readonly attack: BasicAttack;
+  readonly affectedCharacterIds: readonly string[];
+  readonly protectedCharacterIds: ReadonlySet<string>;
+  readonly sequence: number;
+}): readonly ResolvedAttackEffect[] {
+  const {
+    state,
+    attack,
+    affectedCharacterIds,
+    protectedCharacterIds: protectedIds,
+    sequence,
+  } = context;
+  return affectedCharacterIds.map((characterId) => {
     const character = state.characters.find(
       (candidate) => candidate.characterId === characterId,
     );
@@ -267,7 +351,7 @@ export function resolveBasicAttack(
       baseDamage: attack.damage,
       affectedCharacterId: characterId,
       physicalAttack: true,
-      prevented: protectedCharacterIds.has(characterId),
+      prevented: protectedIds.has(characterId),
       activeEffects: state.activeEffects,
       sequence,
     });
@@ -285,100 +369,187 @@ export function resolveBasicAttack(
       applied: resolved.applied,
     };
   });
-  const appliedFromEffects: readonly ActiveEffect[] = effects.flatMap(
-    ({ applied }) => applied,
-  );
-  const expiredFromEffects: readonly ActiveEffect[] = effects.flatMap(
-    ({ expired }) => expired,
-  );
-  const actionEffects: readonly ActionEffect[] = effects.map(
-    ({ effect }) => effect,
-  );
-  const characters = state.characters.map((character) => {
+}
+
+function applyResolvedDamage(
+  characters: readonly MatchCharacter[],
+  effects: readonly ResolvedAttackEffect[],
+): readonly MatchCharacter[] {
+  return characters.map((character) => {
     const resolved = effects.find(
       ({ effect }) => effect.characterId === character.characterId,
     );
     return resolved ? { ...character, hp: resolved.effect.hpAfter } : character;
   });
-  const expiredEffectIds = new Set(
-    expiredFromEffects.map(({ effectId }) => effectId),
-  );
-  // Rules §9 and §15: temporary buffs and debuffs attached to a character end
-  // immediately when that character becomes Downed, and Shapeshift ends
-  // immediately when damage reduces the Druid below 3 HP with its maximum HP
-  // returning to 3. The Basic Attack path applies both right away instead of
-  // waiting for Finish Turn.
-  const { finalCharacters, expiredAfterDamage } = [
-    ...state.activeEffects,
-    ...appliedFromEffects,
-  ].reduce<{
-    readonly finalCharacters: readonly MatchCharacter[];
-    readonly expiredAfterDamage: readonly ActiveEffect[];
+}
+
+function expireShapeshiftsAfterDamage(
+  characters: readonly MatchCharacter[],
+  effects: readonly ActiveEffect[],
+  alreadyExpiredIds: ReadonlySet<string>,
+): {
+  readonly characters: readonly MatchCharacter[];
+  readonly expired: readonly ActiveEffect[];
+} {
+  return effects.reduce<{
+    readonly characters: readonly MatchCharacter[];
+    readonly expired: readonly ActiveEffect[];
   }>(
     (accumulated, effect) => {
       if (
-        expiredEffectIds.has(effect.effectId) ||
-        accumulated.expiredAfterDamage.some(
-          ({ effectId }) => effectId === effect.effectId,
-        )
+        alreadyExpiredIds.has(effect.effectId) ||
+        accumulated.expired.some(({ effectId }) => effectId === effect.effectId)
       ) {
         return accumulated;
       }
       if (effect.kind !== "shapeshift") return accumulated;
-      const bearer = accumulated.finalCharacters.find(
+      const bearer = accumulated.characters.find(
         ({ characterId }) => characterId === effect.affectedCharacterId,
       );
       if (!bearer || bearer.hp >= 3) return accumulated;
       return {
-        finalCharacters: accumulated.finalCharacters.map((character) =>
+        characters: accumulated.characters.map((character) =>
           character.characterId === effect.affectedCharacterId
             ? { ...character, currentMaxHp: 3, hp: Math.min(character.hp, 3) }
             : character,
         ),
-        expiredAfterDamage: [...accumulated.expiredAfterDamage, effect],
+        expired: [...accumulated.expired, effect],
       };
     },
-    { finalCharacters: characters, expiredAfterDamage: [] },
+    { characters, expired: [] },
+  );
+}
+
+function resolveBasicAttackOutcome(context: {
+  readonly state: ActiveMatchState;
+  readonly attack: BasicAttack;
+  readonly affectedCharacterIds: readonly string[];
+  readonly protectedCharacterIds: ReadonlySet<string>;
+  readonly sequence: number;
+}): BasicAttackOutcome {
+  const { state } = context;
+  const resolvedEffects = resolveAttackEffects(context);
+  const appliedEffects = resolvedEffects.flatMap(({ applied }) => applied);
+  const initiallyExpired = resolvedEffects.flatMap(({ expired }) => expired);
+  const actionEffects = resolvedEffects.map(({ effect }) => effect);
+  const damagedCharacters = applyResolvedDamage(
+    state.characters,
+    resolvedEffects,
+  );
+  const initiallyExpiredIds = new Set(
+    initiallyExpired.map(({ effectId }) => effectId),
+  );
+  const shapeshiftExpiry = expireShapeshiftsAfterDamage(
+    damagedCharacters,
+    [...state.activeEffects, ...appliedEffects],
+    initiallyExpiredIds,
+  );
+  const shapeshiftExpiredIds = new Set(
+    shapeshiftExpiry.expired.map(({ effectId }) => effectId),
   );
   const survivingEffects = [
     ...state.activeEffects.filter(
-      ({ effectId }) => !expiredEffectIds.has(effectId),
+      ({ effectId }) => !initiallyExpiredIds.has(effectId),
     ),
-    ...appliedFromEffects,
-  ].filter(
-    (effect) =>
-      !expiredAfterDamage.some(({ effectId }) => effectId === effect.effectId),
+    ...appliedEffects,
+  ].filter(({ effectId }) => !shapeshiftExpiredIds.has(effectId));
+  const downedCleanup = applyDownedCleanup(
+    shapeshiftExpiry.characters,
+    survivingEffects,
   );
-  const downedCleanup = applyDownedCleanup(finalCharacters, survivingEffects);
-  const activeEffects = downedCleanup.cleaned;
-  const uniqueExpiredEffects = [
-    ...new Map(
-      [
-        ...expiredFromEffects,
-        ...expiredAfterDamage,
-        ...downedCleanup.expired,
-      ].map((effect) => [effect.effectId, effect]),
-    ).values(),
-  ];
-  const eliminatedTeams = (["Drow", "Duergar"] as const).filter((team) =>
+  return {
+    actionEffects,
+    appliedEffects,
+    characters: shapeshiftExpiry.characters,
+    activeEffects: downedCleanup.cleaned,
+    expiredEffects: [
+      ...new Map(
+        [
+          ...initiallyExpired,
+          ...shapeshiftExpiry.expired,
+          ...downedCleanup.expired,
+        ].map((effect) => [effect.effectId, effect]),
+      ).values(),
+    ],
+  };
+}
+
+function resultingEliminations(
+  state: ActiveMatchState,
+  characters: readonly MatchCharacter[],
+): readonly ("Drow" | "Duergar")[] {
+  const newlyEliminated = (["Drow", "Duergar"] as const).filter((team) =>
     RULESET.characters
       .filter((character) => character.team === team)
       .every(
         (character) =>
-          finalCharacters.find(
-            ({ characterId }) => characterId === character.id,
-          )?.hp === 0,
+          characters.find(({ characterId }) => characterId === character.id)
+            ?.hp === 0,
       ),
   );
-  const resultingEliminations: readonly ("Drow" | "Duergar")[] = [
-    ...new Set([...state.eliminatedTeams, ...eliminatedTeams]),
-  ];
-  const outcome: MatchOutcome =
-    resultingEliminations.length === 1
-      ? resultingEliminations[0] === "Drow"
-        ? "Duergar"
-        : "Drow"
-      : null;
+  return [...new Set([...state.eliminatedTeams, ...newlyEliminated])];
+}
+
+function matchOutcome(
+  eliminatedTeams: readonly ("Drow" | "Duergar")[],
+): MatchOutcome {
+  if (eliminatedTeams.length !== 1) return null;
+  return eliminatedTeams[0] === "Drow" ? "Duergar" : "Drow";
+}
+
+function buildAttackLegs(context: {
+  readonly inputLegs: readonly BasicAttackLegInput[];
+  readonly sourceCharacterId: string;
+  readonly attack: BasicAttack;
+  readonly redirectReaction: ProtectiveReactionResolution | undefined;
+}): ActionResolvedEvent["attackLegs"] {
+  const { inputLegs, sourceCharacterId, attack, redirectReaction } = context;
+  return inputLegs.map((leg, index) => ({
+    sequence: index + 1,
+    kind: index === 0 ? "initial" : "redirected",
+    sourceCharacterId,
+    attackId: attack.id,
+    rangePaces: attack.rangePaces,
+    redirectedByReactionId:
+      index === 0 ? null : (redirectReaction?.reactionId ?? null),
+    towardCharacterId:
+      index === 0
+        ? null
+        : redirectReaction?.ownerCharacterId
+          ? sourceCharacterId
+          : null,
+    affectedCharacterIds: [...leg.affectedCharacterIds],
+  }));
+}
+
+export function resolveBasicAttack(
+  state: ActiveMatchState,
+  input: BasicAttackInput,
+  occurredAt: string,
+): CommandResult<ActiveMatchState, ActionResolvedEvent> {
+  const { attack, inputLegs, affectedCharacterIds, override } =
+    validateBasicAttack(state, input);
+  const reactions = resolveProtectiveReactions({
+    state,
+    sourceCharacterId: input.sourceCharacterId,
+    affectedCharacterIds,
+    selections: input.reactions ?? [],
+  });
+  const redirectReaction = redirectReactionForAttack(inputLegs, reactions);
+  const protectedIds = protectedCharacterIds(reactions);
+  const sequence = state.sequence + 1;
+  const attackOutcome = resolveBasicAttackOutcome({
+    state,
+    attack,
+    affectedCharacterIds,
+    protectedCharacterIds: protectedIds,
+    sequence,
+  });
+  const eliminatedTeams = resultingEliminations(
+    state,
+    attackOutcome.characters,
+  );
+  const outcome = matchOutcome(eliminatedTeams);
   const event: ActionResolvedEvent = {
     type: "ActionResolved",
     matchId: state.matchId,
@@ -392,22 +563,12 @@ export function resolveBasicAttack(
     rangePaces: attack.rangePaces,
     damage: attack.damage,
     rulesSourceAnchor: attack.sourceAnchor,
-    attackLegs: inputLegs.map((leg, index) => ({
-      sequence: index + 1,
-      kind: index === 0 ? "initial" : "redirected",
+    attackLegs: buildAttackLegs({
+      inputLegs,
       sourceCharacterId: input.sourceCharacterId,
-      attackId: attack.id,
-      rangePaces: attack.rangePaces,
-      redirectedByReactionId:
-        index === 0 ? null : (redirectReaction?.reactionId ?? null),
-      towardCharacterId:
-        index === 0
-          ? null
-          : redirectReaction?.ownerCharacterId
-            ? input.sourceCharacterId
-            : null,
-      affectedCharacterIds: [...leg.affectedCharacterIds],
-    })),
+      attack,
+      redirectReaction,
+    }),
     physicalConfirmations: {
       range: true,
       lineOfSight: true,
@@ -415,15 +576,15 @@ export function resolveBasicAttack(
       terrainContact: true,
     },
     reactions,
-    effects: actionEffects,
+    effects: attackOutcome.actionEffects,
     majorActionOverride: override,
     // Basic Attacks never involve an Ability choice, so no Override applies.
     abilityOverride: null,
-    eliminatedTeams: resultingEliminations,
-    ...(appliedFromEffects.length > 0
-      ? { appliedEffects: appliedFromEffects }
+    eliminatedTeams,
+    ...(attackOutcome.appliedEffects.length > 0
+      ? { appliedEffects: attackOutcome.appliedEffects }
       : {}),
-    expiredEffects: uniqueExpiredEffects,
+    expiredEffects: attackOutcome.expiredEffects,
   };
   return {
     event,
@@ -437,9 +598,9 @@ export function resolveBasicAttack(
           ...reactions.map(({ reactionId }) => reactionId),
         ]),
       ],
-      characters: finalCharacters,
-      activeEffects,
-      eliminatedTeams: resultingEliminations,
+      characters: attackOutcome.characters,
+      activeEffects: attackOutcome.activeEffects,
+      eliminatedTeams,
       outcome,
     },
   };

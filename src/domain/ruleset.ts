@@ -279,83 +279,140 @@ function slugAbility(value: string): string {
     .replaceAll(/^-|-$/g, "");
 }
 
-function inferAbilityStructure(
-  characterId: string,
+function inferActionType(
   ability: RulesetAbility,
-): StructuredAbility {
-  const actionType =
-    ability.type === "Powerful"
-      ? ("powerful" as const)
-      : ability.type === "Reaction"
-        ? ("reaction" as const)
-        : ("standard" as const);
-  const interaction: StructuredAbility["interaction"] =
-    ability.ballRequired === "Yes"
-      ? "physical-attack"
-      : ability.attackType === "Ability Attack"
-        ? "targeted-attack"
-        : ability.target === "Self"
-          ? "self"
-          : ability.target.includes("ally")
-            ? "ally"
-            : ability.target.includes("enemy")
-              ? "enemy"
-              : "utility";
-  const relation: StructuredAbility["targetPolicy"]["relation"] =
-    ability.target === "Self"
-      ? "self"
-      : ability.target.includes("ally") && ability.target.includes("enemy")
-        ? "any"
-        : ability.target.includes("ally")
-          ? "ally"
-          : ability.target.includes("enemy")
-            ? "enemy"
-            : "any";
-  const cardinality: StructuredAbility["targetPolicy"]["cardinality"] =
-    ability.target.includes("All living") || ability.target.includes("All")
-      ? "all-in-range"
-      : ability.target === "Self" || ability.target === "None — physical throw"
-        ? "self"
-        : "one";
+): StructuredAbility["actionType"] {
+  if (ability.type === "Powerful") {
+    return "powerful";
+  }
+  if (ability.type === "Reaction") {
+    return "reaction";
+  }
+  return "standard";
+}
+
+function inferInteraction(
+  ability: RulesetAbility,
+): StructuredAbility["interaction"] {
+  if (ability.ballRequired === "Yes") {
+    return "physical-attack";
+  }
+  if (ability.attackType === "Ability Attack") {
+    return "targeted-attack";
+  }
+  if (ability.target === "Self") {
+    return "self";
+  }
+  if (ability.target.includes("ally")) {
+    return "ally";
+  }
+  if (ability.target.includes("enemy")) {
+    return "enemy";
+  }
+  return "utility";
+}
+
+function inferTargetRelation(
+  target: string,
+): StructuredAbility["targetPolicy"]["relation"] {
+  if (target === "Self") {
+    return "self";
+  }
+  if (target.includes("ally") && target.includes("enemy")) {
+    return "any";
+  }
+  if (target.includes("ally")) {
+    return "ally";
+  }
+  if (target.includes("enemy")) {
+    return "enemy";
+  }
+  return "any";
+}
+
+function inferTargetCardinality(
+  target: string,
+): StructuredAbility["targetPolicy"]["cardinality"] {
+  if (target.includes("All living") || target.includes("All")) {
+    return "all-in-range";
+  }
+  if (target === "Self" || target === "None — physical throw") {
+    return "self";
+  }
+  return "one";
+}
+
+function inferTargetLifeState(
+  target: string,
+  effect: string,
+): StructuredAbility["targetPolicy"]["lifeState"] {
   // Target life-state policy read from the printed cards: a Downed target
   // requirement appears in the Target field ("1 Downed ally"), revive
   // capability in phrases like "restore a Downed ally", and healing cards
   // state their prohibition explicitly ("A Downed character cannot be
   // targeted").
-  const effectLower = ability.effect.toLowerCase();
-  const targetLower = ability.target.toLowerCase();
-  const lifeState: StructuredAbility["targetPolicy"]["lifeState"] =
-    targetLower.includes("downed")
-      ? "downed"
-      : effectLower.includes("restore a downed") ||
-          effectLower.includes("stand their bottle")
-        ? "either"
-        : effectLower.includes("a downed character cannot be targeted")
-          ? "active"
-          : effectLower.includes("downed")
-            ? "either"
-            : "active";
-  const manualChecks: readonly string[] = [
+  const targetLower = target.toLowerCase();
+  const effectLower = effect.toLowerCase();
+  if (targetLower.includes("downed")) {
+    return "downed";
+  }
+  if (
+    effectLower.includes("restore a downed") ||
+    effectLower.includes("stand their bottle")
+  ) {
+    return "either";
+  }
+  if (effectLower.includes("a downed character cannot be targeted")) {
+    return "active";
+  }
+  return effectLower.includes("downed") ? "either" : "active";
+}
+
+function inferTargetPolicy(
+  ability: RulesetAbility,
+): StructuredAbility["targetPolicy"] {
+  return Object.freeze({
+    relation: inferTargetRelation(ability.target),
+    cardinality: inferTargetCardinality(ability.target),
+    lifeState: inferTargetLifeState(ability.target, ability.effect),
+  });
+}
+
+function inferManualChecks(ability: RulesetAbility): readonly string[] {
+  return [
     ...(ability.range !== "Self" && ability.range !== "N/A" ? ["range"] : []),
     ...(ability.lineOfSight === "Yes" ? ["lineOfSight"] : []),
     ...(ability.ballRequired === "Yes"
       ? ["legalBottleContact", "terrainContact"]
       : []),
   ];
-  const foldApostrophes = (value: string): string =>
-    value.replaceAll(/['’]/g, "");
-  const operationsBeforeFallback: readonly string[] = [
-    ...(effectLower.includes("takes 1 damage") ? ["deal-damage"] : []),
-    ...(effectLower.includes("+1 damage") ||
+}
+
+function foldApostrophes(value: string): string {
+  return value.replaceAll(/['’]/g, "");
+}
+
+function inferDamageOperations(
+  ability: RulesetAbility,
+  effectLower: string,
+): readonly string[] {
+  const addsDamage =
+    effectLower.includes("+1 damage") ||
     effectLower.includes("add-damage") ||
     foldApostrophes(ability.name) === "Hunters Mark" ||
-    ability.name === "Hex"
-      ? ["add-damage"]
-      : []),
+    ability.name === "Hex";
+  return [
+    ...(effectLower.includes("takes 1 damage") ? ["deal-damage"] : []),
+    ...(addsDamage ? ["add-damage"] : []),
     ...(effectLower.includes("prevent all damage")
       ? ["prevent-damage-and-effects"]
       : []),
     ...(effectLower.includes("reduce") ? ["reduce-remaining-damage"] : []),
+  ];
+}
+
+function inferRecoveryOperations(effectLower: string): readonly string[] {
+  return [
     ...(effectLower.includes("restores 1 hp") || effectLower.includes("heal")
       ? ["heal"]
       : []),
@@ -364,6 +421,11 @@ function inferAbilityStructure(
       ? ["revive"]
       : []),
     ...(effectLower.includes("maximum hp") ? ["change-max-hp"] : []),
+  ];
+}
+
+function inferRestrictionOperations(effectLower: string): readonly string[] {
+  return [
     ...(effectLower.includes("movement") && effectLower.includes("maximum of 1")
       ? ["set-movement-cap"]
       : []),
@@ -376,29 +438,47 @@ function inferAbilityStructure(
     ...(effectLower.includes("cannot be affected by physically")
       ? ["ignore-physical-attack"]
       : []),
+  ];
+}
+
+function inferPhysicalOperations(effectLower: string): readonly string[] {
+  return [
     ...(effectLower.includes("redirect") ? ["redirect-physical-attack"] : []),
     ...(effectLower.includes("move") && effectLower.includes("paces")
       ? ["manual-movement-instruction"]
       : []),
   ];
-  const operations: readonly string[] =
-    operationsBeforeFallback.length === 0
-      ? ["apply-effect"]
-      : operationsBeforeFallback;
+}
+
+function inferOperations(ability: RulesetAbility): readonly string[] {
+  const effectLower = ability.effect.toLowerCase();
+  const inferred = [
+    ...inferDamageOperations(ability, effectLower),
+    ...inferRecoveryOperations(effectLower),
+    ...inferRestrictionOperations(effectLower),
+    ...inferPhysicalOperations(effectLower),
+  ];
+  return inferred.length === 0 ? ["apply-effect"] : inferred;
+}
+
+function inferAbilityStructure(
+  characterId: string,
+  ability: RulesetAbility,
+): StructuredAbility {
   return Object.freeze({
     id: `${characterId}-${slugAbility(ability.name)}`,
     name: ability.name,
     ownerCharacterId: characterId,
-    actionType,
+    actionType: inferActionType(ability),
     attackType: ability.attackType,
-    interaction,
-    targetPolicy: Object.freeze({ relation, cardinality, lifeState }),
+    interaction: inferInteraction(ability),
+    targetPolicy: inferTargetPolicy(ability),
     range: ability.range,
     lineOfSight: ability.lineOfSight,
     ballRequired: ability.ballRequired,
     reactionTrigger: ability.type === "Reaction" ? "attack-would-affect" : "",
-    manualChecks: Object.freeze(manualChecks),
-    operations: Object.freeze(operations),
+    manualChecks: Object.freeze(inferManualChecks(ability)),
+    operations: Object.freeze(inferOperations(ability)),
     rulesText: ability.effect,
     sourceAnchor: ability.sourceAnchor,
   });

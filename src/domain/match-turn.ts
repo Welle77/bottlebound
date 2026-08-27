@@ -11,24 +11,28 @@ import type {
   TurnFinishedEvent,
 } from "./match-types";
 
-export function finishTurn(
-  state: ActiveMatchState,
-  occurredAt: string,
-): CommandResult<ActiveMatchState, TurnFinishedEvent> {
-  if ((state as MatchState).phase === "ended") {
-    throw new Error("The Ended Match is read-only.");
-  }
-  const sequence = state.sequence + 1;
+interface TurnPosition {
+  readonly activeSlot: number;
+  readonly round: number;
+  readonly skippedSlots: readonly number[];
+  readonly stopped: boolean;
+}
+
+interface EffectBoundaryContext {
+  readonly activeSlot: number;
+  readonly fromSlot: number;
+  readonly skippedSlots: readonly number[];
+  readonly pathSlots: readonly number[];
+  readonly slotToCharacter: ReadonlyMap<number, string>;
+  readonly stateSequence: number;
+}
+
+function nextTurnPosition(state: ActiveMatchState): TurnPosition {
   const hpByCharacter = new Map(
     state.characters.map(({ characterId, hp }) => [characterId, hp]),
   );
   const eliminatedTeams = new Set(state.eliminatedTeams);
-  const walk = state.initiative.reduce<{
-    readonly activeSlot: number;
-    readonly round: number;
-    readonly skippedSlots: readonly number[];
-    readonly stopped: boolean;
-  }>(
+  return state.initiative.reduce<TurnPosition>(
     (position) => {
       if (position.stopped) return position;
       const wraps = position.activeSlot === state.initiative.length;
@@ -60,6 +64,123 @@ export function finishTurn(
       stopped: false,
     },
   );
+}
+
+function characterSlot(
+  slotToCharacter: ReadonlyMap<number, string>,
+  characterId: string,
+): number | undefined {
+  return [...slotToCharacter.entries()].find(
+    ([, candidateId]) => candidateId === characterId,
+  )?.[0];
+}
+
+function effectExpiresAtBoundary(
+  effect: ActiveEffect,
+  context: EffectBoundaryContext,
+): boolean {
+  const {
+    activeSlot,
+    fromSlot,
+    skippedSlots,
+    pathSlots,
+    slotToCharacter,
+    stateSequence,
+  } = context;
+  const trigger = effect.duration.boundaryTrigger;
+  const anchorId =
+    effect.duration.anchor === "source"
+      ? effect.anchorCharacterId
+      : effect.affectedCharacterId;
+  const anchorSlot = characterSlot(slotToCharacter, anchorId);
+  if (!trigger) return false;
+  if (
+    trigger === "beginning-of-next-turn" &&
+    effect.duration.anchor === "affected"
+  ) {
+    return (
+      characterSlot(slotToCharacter, effect.affectedCharacterId) === activeSlot
+    );
+  }
+  if (trigger === "end-of-next-turn" && effect.duration.anchor === "affected") {
+    const affectedSlot = characterSlot(
+      slotToCharacter,
+      effect.affectedCharacterId,
+    );
+    // The effect outlives the turn in which it was applied and expires at the
+    // end of the affected character's NEXT turn. A self-hit or self-buff
+    // therefore survives this finish.
+    const appliedInThisTurn =
+      effect.appliedSequence === stateSequence && affectedSlot === fromSlot;
+    return affectedSlot === fromSlot && !appliedInThisTurn;
+  }
+  if (
+    trigger === "beginning-of-next-scheduled-slot" &&
+    effect.duration.anchor === "source"
+  ) {
+    return anchorSlot !== undefined && pathSlots.includes(anchorSlot);
+  }
+  if (
+    trigger === "end-of-next-scheduled-slot" &&
+    effect.duration.anchor === "source"
+  ) {
+    // Hunter's Mark and Hex expire when the source's next scheduled position
+    // ends or is skipped, never during the turn in which they were applied.
+    const appliedInThisTurn =
+      effect.appliedSequence === stateSequence && fromSlot === anchorSlot;
+    const positionEnds =
+      anchorSlot !== undefined &&
+      (fromSlot === anchorSlot || skippedSlots.includes(anchorSlot));
+    return positionEnds && !appliedInThisTurn;
+  }
+  return false;
+}
+
+function partitionEffectsAtBoundary(
+  effects: readonly ActiveEffect[],
+  context: EffectBoundaryContext,
+): {
+  readonly expired: readonly ActiveEffect[];
+  readonly kept: readonly ActiveEffect[];
+} {
+  return effects.reduce<{
+    readonly expired: readonly ActiveEffect[];
+    readonly kept: readonly ActiveEffect[];
+  }>(
+    (partition, effect) =>
+      effectExpiresAtBoundary(effect, context)
+        ? { ...partition, expired: [...partition.expired, effect] }
+        : { ...partition, kept: [...partition.kept, effect] },
+    { expired: [], kept: [] },
+  );
+}
+
+function restoreExpiredShapeshifts(
+  characters: readonly MatchCharacter[],
+  expiredEffects: readonly ActiveEffect[],
+): readonly MatchCharacter[] {
+  return expiredEffects
+    .filter((effect) => effect.kind === "shapeshift")
+    .reduce<readonly MatchCharacter[]>(
+      (currentCharacters, expired) =>
+        currentCharacters.map((character) =>
+          character.characterId === expired.affectedCharacterId
+            ? { ...character, currentMaxHp: 3, hp: Math.min(character.hp, 3) }
+            : character,
+        ),
+      characters,
+    );
+}
+
+export function finishTurn(
+  state: ActiveMatchState,
+  occurredAt: string,
+): CommandResult<ActiveMatchState, TurnFinishedEvent> {
+  if ((state as MatchState).phase === "ended") {
+    throw new Error("The Ended Match is read-only.");
+  }
+  const sequence = state.sequence + 1;
+  const walk = nextTurnPosition(state);
   const activeSlot = walk.activeSlot;
   const round = walk.round;
   const skippedSlots = walk.skippedSlots;
@@ -71,100 +192,26 @@ export function finishTurn(
     state.initiative.map((entry) => [entry.slot, entry.characterId]),
   );
   const pathSlots = [...skippedSlots, activeSlot];
-  const fromSlotValue = state.activeSlot;
+  const fromSlot = state.activeSlot;
   const { expired: boundaryExpired, kept: remaining } =
-    state.activeEffects.reduce<{
-      readonly expired: readonly ActiveEffect[];
-      readonly kept: readonly ActiveEffect[];
-    }>(
-      (partition, effect) => {
-        const trigger = effect.duration.boundaryTrigger;
-        const anchorId =
-          effect.duration.anchor === "source"
-            ? effect.anchorCharacterId
-            : effect.affectedCharacterId;
-        const anchorSlot = [...slotToCharacter.entries()].find(
-          ([, characterId]) => characterId === anchorId,
-        )?.[0];
-        if (!trigger) {
-          return { ...partition, kept: [...partition.kept, effect] };
-        }
-        if (
-          trigger === "beginning-of-next-turn" &&
-          effect.duration.anchor === "affected"
-        ) {
-          const affectedSlot = [...slotToCharacter.entries()].find(
-            ([, characterId]) => characterId === effect.affectedCharacterId,
-          )?.[0];
-          if (affectedSlot === activeSlot) {
-            return { ...partition, expired: [...partition.expired, effect] };
-          }
-        }
-        if (
-          trigger === "end-of-next-turn" &&
-          effect.duration.anchor === "affected"
-        ) {
-          const affectedSlot = [...slotToCharacter.entries()].find(
-            ([, characterId]) => characterId === effect.affectedCharacterId,
-          )?.[0];
-          // The effect outlives the turn in which it was applied and expires
-          // at the end of the affected character's NEXT turn; an effect
-          // applied to the acting character itself (a self-hit or a
-          // self-buff) therefore survives this finish.
-          const appliedInThisTurn =
-            effect.appliedSequence === state.sequence &&
-            affectedSlot === fromSlotValue;
-          if (affectedSlot === fromSlotValue && !appliedInThisTurn) {
-            return { ...partition, expired: [...partition.expired, effect] };
-          }
-        }
-        if (
-          trigger === "beginning-of-next-scheduled-slot" &&
-          effect.duration.anchor === "source"
-        ) {
-          if (anchorSlot !== undefined && pathSlots.includes(anchorSlot)) {
-            return { ...partition, expired: [...partition.expired, effect] };
-          }
-        }
-        if (
-          trigger === "end-of-next-scheduled-slot" &&
-          effect.duration.anchor === "source"
-        ) {
-          // "Until the end of the source's next scheduled initiative
-          // position" (Hunter's Mark, Hex): the effect expires when that
-          // position ends or is skipped, never during the turn in which the
-          // effect was applied.
-          const appliedInThisTurn =
-            effect.appliedSequence === state.sequence &&
-            fromSlotValue === anchorSlot;
-          const positionEnds =
-            anchorSlot !== undefined &&
-            (fromSlotValue === anchorSlot || skippedSlots.includes(anchorSlot));
-          if (positionEnds && !appliedInThisTurn) {
-            return { ...partition, expired: [...partition.expired, effect] };
-          }
-        }
-        return { ...partition, kept: [...partition.kept, effect] };
-      },
-      { expired: [], kept: [] },
-    );
+    partitionEffectsAtBoundary(state.activeEffects, {
+      activeSlot,
+      fromSlot,
+      skippedSlots,
+      pathSlots,
+      slotToCharacter,
+      stateSequence: state.sequence,
+    });
   // Downed cleanup after expiry (if any character is Downed, remove its effects)
   const downedCleanup = applyDownedCleanup(state.characters, remaining);
   const finalActiveEffects = downedCleanup.cleaned;
   const pendingExpired = [...boundaryExpired, ...downedCleanup.expired];
   // Handle while-condition shapeshift expiry that may have been triggered by previous HP changes but also need to revert maxHP
   // If any shapeshift expired, revert maxHP to 3 (as in resolveAbility)
-  const finalCharacters = pendingExpired
-    .filter((expired) => expired.kind === "shapeshift")
-    .reduce<readonly MatchCharacter[]>(
-      (characters, expired) =>
-        characters.map((character) =>
-          character.characterId === expired.affectedCharacterId
-            ? { ...character, currentMaxHp: 3, hp: Math.min(character.hp, 3) }
-            : character,
-        ),
-      state.characters,
-    );
+  const finalCharacters = restoreExpiredShapeshifts(
+    state.characters,
+    pendingExpired,
+  );
   return {
     state: {
       ...state,

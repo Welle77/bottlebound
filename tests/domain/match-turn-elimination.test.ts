@@ -16,7 +16,11 @@ import {
   type MatchEvent,
 } from "../../src/domain/match";
 import { RULESET } from "../../src/domain/ruleset";
-import { initiativeCharacterId, queuedRandom, simultaneousEliminationRun } from "./match-test-support";
+import {
+  initiativeCharacterId,
+  queuedRandom,
+  simultaneousEliminationRun,
+} from "./match-test-support";
 
 describe("Active Match commands", () => {
   it("needs a complete initiative order and starts Round 1 at slot 1", () => {

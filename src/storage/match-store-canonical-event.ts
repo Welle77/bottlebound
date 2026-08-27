@@ -11,19 +11,18 @@ import {
 } from "./match-store-canonical-state";
 
 /**
- * Highest finalized per-character attack damage expressible under the locked
- * Ruleset: a base or ability attack contributes its written 1 damage and both
- * stacking character effects (Hunter's Mark, Hex) add their written +1 each
- * (rules §11), for a maximum of 3.
+ * Highest finalized per-character attack damage: a base or ability attack
+ * contributes its written 1 damage and both
+ * stacking character effects (Hunter's Mark, Hex) add +1 each, for a maximum of 3.
  */
 const MAX_STACKED_ATTACK_DAMAGE = 3;
-
-export function assertCanonicalEvent(
-  value: unknown,
+const invalidActionResolution = () =>
+  new Error("The canonical Action Resolution Event is invalid.");
+function assertEventBase(
+  value: Record<string, unknown>,
   expectedRulesVersion?: string,
-): asserts value is MatchEvent {
+): void {
   if (
-    !isRecord(value) ||
     typeof value.matchId !== "string" ||
     !Number.isSafeInteger(value.sequence) ||
     (value.sequence as number) < 1 ||
@@ -36,457 +35,651 @@ export function assertCanonicalEvent(
   ) {
     throw new Error("The canonical Match Event is structurally invalid.");
   }
-  if (value.type === "SetupCreated") {
-    if (value.sequence !== 1) {
-      throw new Error("The canonical Setup Event is structurally invalid.");
-    }
-    return;
+}
+function assertSetupEvent(value: Record<string, unknown>): void {
+  if (value.sequence !== 1) {
+    throw new Error("The canonical Setup Event is structurally invalid.");
   }
-  if (value.type === "DisplayNamesAssigned") {
-    const names = value.displayNames;
-    if (
-      !isRecord(names) ||
-      !Object.keys(names).every(
-        (characterId) =>
-          typeof names[characterId] === "string" &&
-          names[characterId].length > 0 &&
-          names[characterId].trim() === names[characterId] &&
-          RULESET.characters.some(({ id }) => id === characterId),
-      )
-    ) {
-      throw new Error("The canonical Display Name assignment is invalid.");
-    }
-    return;
+}
+function assertDisplayNamesEvent(value: Record<string, unknown>): void {
+  const names = value.displayNames;
+  if (
+    !isRecord(names) ||
+    !Object.keys(names).every(
+      (characterId) =>
+        typeof names[characterId] === "string" &&
+        names[characterId].length > 0 &&
+        names[characterId].trim() === names[characterId] &&
+        RULESET.characters.some(({ id }) => id === characterId),
+    )
+  ) {
+    throw new Error("The canonical Display Name assignment is invalid.");
   }
-  if (value.type === "MatchStarted") {
-    if (value.round !== 1 || value.activeSlot !== 1) {
-      throw new Error("The canonical Start Match Event is invalid.");
-    }
-    return;
+}
+function assertMatchStartedEvent(value: Record<string, unknown>): void {
+  if (value.round !== 1 || value.activeSlot !== 1) {
+    throw new Error("The canonical Start Match Event is invalid.");
   }
-  if (value.type === "TurnFinished") {
-    const values = [
-      value.fromRound,
-      value.fromSlot,
-      value.round,
-      value.activeSlot,
-    ];
-    if (
-      values.some((entry) => !Number.isSafeInteger(entry)) ||
-      (value.fromRound as number) < 1 ||
-      (value.round as number) < 1 ||
-      (value.fromSlot as number) < 1 ||
-      (value.fromSlot as number) > RULESET.characters.length ||
-      (value.activeSlot as number) < 1 ||
-      (value.activeSlot as number) > RULESET.characters.length ||
-      !Array.isArray(value.skippedSlots) ||
-      !value.skippedSlots.every(
-        (slot) =>
-          Number.isSafeInteger(slot) &&
-          (slot as number) >= 1 &&
-          (slot as number) <= RULESET.characters.length,
-      )
-    ) {
-      throw new Error("The canonical Finish Turn Event is invalid.");
-    }
-    const visited = Array.from(
-      { length: RULESET.characters.length + 4 },
-      (_, step) => step,
-    ).reduce<{
-      readonly slot: number;
-      readonly round: number;
-      readonly visited: readonly number[];
-      readonly done: boolean;
-    }>(
-      (position) => {
-        if (position.done) return position;
-        const wraps = position.slot === RULESET.characters.length;
-        const slot = wraps ? 1 : position.slot + 1;
-        const round = wraps ? position.round + 1 : position.round;
-        const nextVisited =
-          slot !== value.activeSlot || round !== value.round
-            ? [...position.visited, slot]
-            : position.visited;
-        if (nextVisited.length > RULESET.characters.length) {
-          return { slot, round, visited: nextVisited, done: true };
-        }
-        return {
-          slot,
-          round,
-          visited: nextVisited,
-          done: slot === value.activeSlot && round === value.round,
-        };
-      },
-      {
-        slot: value.fromSlot as number,
-        round: value.fromRound as number,
-        visited: [],
-        done: false,
-      },
-    ).visited;
-    if (
-      visited.length > RULESET.characters.length ||
-      value.skippedSlots.length !== visited.length ||
-      !value.skippedSlots.every((skipped, index) => skipped === visited[index])
-    ) {
-      throw new Error("The canonical Finish Turn Event is invalid.");
-    }
-    return;
+}
+function assertTurnFields(value: Record<string, unknown>): void {
+  const values = [
+    value.fromRound,
+    value.fromSlot,
+    value.round,
+    value.activeSlot,
+  ];
+  if (
+    values.some((entry) => !Number.isSafeInteger(entry)) ||
+    (value.fromRound as number) < 1 ||
+    (value.round as number) < 1 ||
+    (value.fromSlot as number) < 1 ||
+    (value.fromSlot as number) > RULESET.characters.length ||
+    (value.activeSlot as number) < 1 ||
+    (value.activeSlot as number) > RULESET.characters.length ||
+    !Array.isArray(value.skippedSlots) ||
+    !value.skippedSlots.every(
+      (slot) =>
+        Number.isSafeInteger(slot) &&
+        (slot as number) >= 1 &&
+        (slot as number) <= RULESET.characters.length,
+    )
+  ) {
+    throw new Error("The canonical Finish Turn Event is invalid.");
   }
-  if (value.type === "ActionResolved") {
-    const historicalRuleset =
-      typeof expectedRulesVersion === "string" &&
-      expectedRulesVersion !== RULESET.version;
-    const attack = historicalRuleset
-      ? undefined
-      : RULESET.basicAttacks.find(({ id }) => id === value.attackId);
-    if (
-      (value.actionType !== "Basic Attack" && value.actionType !== "Ability") ||
-      (!historicalRuleset &&
-        value.actionType === "Basic Attack" &&
-        (!attack ||
-          value.sourceCharacterId !== attack.characterId ||
-          value.attackType !== attack.attackType ||
-          value.rangePaces !== attack.rangePaces ||
-          value.damage !== attack.damage ||
-          value.rulesSourceAnchor !== attack.sourceAnchor)) ||
-      (historicalRuleset &&
-        (!Number.isInteger(value.rangePaces) ||
-          (value.rangePaces as number) < 1 ||
-          !Number.isInteger(value.damage) ||
-          (value.damage as number) < 0 ||
-          typeof value.rulesSourceAnchor !== "string" ||
-          value.rulesSourceAnchor.length === 0)) ||
-      (value.actionType === "Ability" &&
-        (typeof value.attackId !== "string" ||
-          value.attackId.length === 0 ||
-          typeof value.rulesSourceAnchor !== "string" ||
-          value.rulesSourceAnchor.length === 0)) ||
-      !Array.isArray(value.attackLegs) ||
-      value.attackLegs.length === 0 ||
-      value.attackLegs.length > 2 ||
-      !isRecord(value.physicalConfirmations) ||
-      value.physicalConfirmations.range !== true ||
-      value.physicalConfirmations.lineOfSight !== true ||
-      value.physicalConfirmations.legalBottleContact !== true ||
-      value.physicalConfirmations.terrainContact !== true ||
-      !Array.isArray(value.reactions) ||
-      !Array.isArray(value.effects) ||
-      !Array.isArray(value.eliminatedTeams) ||
-      !value.eliminatedTeams.every(
-        (team) => team === "Drow" || team === "Duergar",
-      ) ||
-      new Set(value.eliminatedTeams).size !== value.eliminatedTeams.length ||
-      (value.majorActionOverride !== null &&
-        (typeof value.majorActionOverride !== "string" ||
-          value.majorActionOverride.trim().length === 0)) ||
-      // Recorded Override for a state-invalid Ability choice; null when the
-      // resolution needed no Override.
-      (value.abilityOverride !== null &&
-        (typeof value.abilityOverride !== "string" ||
-          value.abilityOverride.trim().length === 0))
-    ) {
-      throw new Error("The canonical Action Resolution Event is invalid.");
-    }
-    const affectedCharacterIds = value.attackLegs.flatMap(
-      (leg: Record<string, unknown>, index: number): readonly string[] => {
-        if (
-          !isRecord(leg) ||
-          leg.sequence !== index + 1 ||
-          leg.kind !== (index === 0 ? "initial" : "redirected") ||
-          leg.sourceCharacterId !== value.sourceCharacterId ||
-          leg.attackId !== value.attackId ||
-          leg.rangePaces !== value.rangePaces ||
-          (index === 0 && leg.redirectedByReactionId !== null) ||
-          (index === 1 &&
-            (typeof leg.redirectedByReactionId !== "string" ||
-              leg.redirectedByReactionId.length === 0 ||
-              (!historicalRuleset &&
-                leg.redirectedByReactionId !==
-                  "duergar-monk-deflecting-palm"))) ||
-          leg.towardCharacterId !==
-            (index === 0 ? null : value.sourceCharacterId) ||
-          !Array.isArray(leg.affectedCharacterIds) ||
-          (index === 0 && leg.affectedCharacterIds.length === 0) ||
-          !leg.affectedCharacterIds.every(
-            (characterId) =>
-              typeof characterId === "string" &&
-              RULESET.characters.some(({ id }) => id === characterId),
-          )
-        ) {
-          throw new Error("The canonical Attack Leg is invalid.");
-        }
-        // Every entry was validated above as a known rules character id.
-        return leg.affectedCharacterIds as readonly string[];
-      },
-    );
-    if (
-      new Set(affectedCharacterIds).size !== affectedCharacterIds.length ||
-      value.effects.length !== affectedCharacterIds.length
-    ) {
-      throw new Error("The canonical Action Resolution contacts are invalid.");
-    }
-    const reactionList: readonly unknown[] = value.reactions;
-    reactionList.reduce<ReadonlySet<string>>((seenOwners, rawResolution) => {
-      if (!isRecord(rawResolution)) {
-        throw new Error("The canonical Action Resolution Reaction is invalid.");
+}
+function expectedVisitedTurnSlots(
+  value: Record<string, unknown>,
+): readonly number[] {
+  return Array.from(
+    { length: RULESET.characters.length + 4 },
+    (_, step) => step,
+  ).reduce<{
+    readonly slot: number;
+    readonly round: number;
+    readonly visited: readonly number[];
+    readonly done: boolean;
+  }>(
+    (position) => {
+      if (position.done) return position;
+      const wraps = position.slot === RULESET.characters.length;
+      const slot = wraps ? 1 : position.slot + 1;
+      const round = wraps ? position.round + 1 : position.round;
+      const nextVisited =
+        slot !== value.activeSlot || round !== value.round
+          ? [...position.visited, slot]
+          : position.visited;
+      if (nextVisited.length > RULESET.characters.length) {
+        return { slot, round, visited: nextVisited, done: true };
       }
-      const reactionResolution = rawResolution;
-      const reaction = historicalRuleset
-        ? null
-        : RULESET.reactions.find(
-            ({ id }) => id === reactionResolution.reactionId,
-          );
-      const owner = historicalRuleset
-        ? reactionResolution.ownerCharacterId
-        : reaction?.ownerCharacterId;
-      if (
-        (historicalRuleset &&
-          (typeof reactionResolution.reactionId !== "string" ||
-            reactionResolution.reactionId.length === 0)) ||
-        (!historicalRuleset && !reaction) ||
-        typeof owner !== "string" ||
-        owner.length === 0 ||
-        (!historicalRuleset && reactionResolution.ownerCharacterId !== owner) ||
-        typeof reactionResolution.protectedCharacterId !== "string" ||
-        !affectedCharacterIds.includes(
-          reactionResolution.protectedCharacterId,
-        ) ||
-        seenOwners.has(owner) ||
-        !Array.isArray(reactionResolution.warnings) ||
-        !reactionResolution.warnings.every(
-          (warning) => typeof warning === "string" && warning.length > 0,
-        ) ||
-        (reactionResolution.override !== null &&
-          (typeof reactionResolution.override !== "string" ||
-            reactionResolution.override.trim().length === 0)) ||
-        !Array.isArray(reactionResolution.operations) ||
-        !reactionResolution.operations.every(
-          (operation) =>
-            isRecord(operation) &&
-            (operation.type === "prevent-damage-and-effects" ||
-              (operation.type === "manual-movement" &&
-                operation.characterId === owner &&
-                typeof operation.instruction === "string" &&
-                operation.instruction.length > 0 &&
-                (historicalRuleset || operation.maxPaces === 2)) ||
-              (operation.type === "redirect-physical-attack" &&
-                operation.fromCharacterId === owner &&
-                operation.towardCharacterId === value.sourceCharacterId &&
-                (historicalRuleset || reaction?.name === "Deflecting Palm"))),
-        )
-      ) {
-        throw new Error("The canonical Action Resolution Reaction is invalid.");
-      }
-      return new Set([...seenOwners, owner]);
-    }, new Set<string>());
-    const redirectOwner = reactionList.find(
-      (rawResolution): rawResolution is Record<string, unknown> => {
-        if (!isRecord(rawResolution)) return false;
-        return (
-          typeof rawResolution.ownerCharacterId === "string" &&
-          Array.isArray(rawResolution.operations) &&
-          rawResolution.operations.some(
-            (operation) =>
-              isRecord(operation) &&
-              operation.type === "redirect-physical-attack",
-          )
-        );
-      },
-    );
-    const redirectOwnerId: string | null =
-      redirectOwner === undefined ||
-      typeof redirectOwner.ownerCharacterId !== "string"
-        ? null
-        : redirectOwner.ownerCharacterId;
-    const firstLeg: unknown = value.attackLegs[0];
-    const initialAffectedCharacterIds =
-      isRecord(firstLeg) && Array.isArray(firstLeg.affectedCharacterIds)
-        ? (firstLeg.affectedCharacterIds as readonly unknown[])
-        : [];
-    if (
-      (value.attackLegs.length === 2) !== Boolean(redirectOwnerId) ||
-      (redirectOwnerId !== null &&
-        !initialAffectedCharacterIds.includes(redirectOwnerId))
-    ) {
-      throw new Error("The canonical redirected Attack Leg is invalid.");
-    }
-    value.effects.forEach((effect, index) => {
-      if (
-        !isRecord(effect) ||
-        effect.characterId !== affectedCharacterIds[index] ||
-        !Number.isInteger(effect.damage) ||
-        (effect.damage as number) < 0 ||
-        (effect.damage as number) > MAX_STACKED_ATTACK_DAMAGE ||
-        !Number.isInteger(effect.hpBefore) ||
-        !Number.isInteger(effect.hpAfter) ||
-        (effect.hpBefore as number) < 0 ||
-        // Damage effects follow the attack ledger; Ability heal and revival
-        // effects raise HP without damage and are admitted for Abilities only.
-        ((effect.hpAfter as number) !==
-          Math.max(
-            0,
-            (effect.hpBefore as number) - (effect.damage as number),
-          ) &&
-          !(
-            value.actionType === "Ability" &&
-            (effect.damage as number) === 0 &&
-            (effect.hpAfter as number) > (effect.hpBefore as number)
-          )) ||
-        effect.downedBefore !== (effect.hpBefore === 0) ||
-        effect.downedAfter !== (effect.hpAfter === 0)
-      ) {
-        throw new Error("The canonical Action Resolution effect is invalid.");
-      }
-    });
-    return;
+      return {
+        slot,
+        round,
+        visited: nextVisited,
+        done: slot === value.activeSlot && round === value.round,
+      };
+    },
+    {
+      slot: value.fromSlot as number,
+      round: value.fromRound as number,
+      visited: [],
+      done: false,
+    },
+  ).visited;
+}
+function assertTurnSkippedSlots(
+  value: Record<string, unknown>,
+  visited: readonly number[],
+): void {
+  if (
+    visited.length > RULESET.characters.length ||
+    !Array.isArray(value.skippedSlots) ||
+    value.skippedSlots.length !== visited.length ||
+    !value.skippedSlots.every((skipped, index) => skipped === visited[index])
+  ) {
+    throw new Error("The canonical Finish Turn Event is invalid.");
   }
-  if (value.type === "EliminationContinued") {
-    if (
-      (value.eliminatedTeam !== "Drow" && value.eliminatedTeam !== "Duergar") ||
-      (value.outcome !== "Drow" && value.outcome !== "Duergar") ||
-      value.eliminatedTeam === value.outcome
-    ) {
-      throw new Error("The canonical Continue Event is invalid.");
-    }
-    return;
-  }
-  if (value.type === "SimultaneousEliminationRuled") {
-    if (
-      !Array.isArray(value.eliminatedTeams) ||
-      value.eliminatedTeams.length !== 2 ||
-      value.eliminatedTeams[0] !== "Drow" ||
-      value.eliminatedTeams[1] !== "Duergar" ||
-      (value.outcome !== "Drow" &&
-        value.outcome !== "Duergar" &&
-        value.outcome !== "draw") ||
-      typeof value.overrideEvidence !== "string" ||
-      value.overrideEvidence.trim().length === 0
-    ) {
-      throw new Error(
-        "The canonical simultaneous-elimination ruling is invalid.",
-      );
-    }
-    return;
-  }
-  if (value.type === "MatchEnded") {
-    if (
-      (value.outcome !== "Drow" &&
-        value.outcome !== "Duergar" &&
-        value.outcome !== "draw") ||
-      !Array.isArray(value.eliminatedTeams) ||
-      !value.eliminatedTeams.every(
-        (team: unknown) => team === "Drow" || team === "Duergar",
-      ) ||
-      new Set(value.eliminatedTeams).size !== value.eliminatedTeams.length ||
-      (value.eliminatedTeams.length === 0 && value.outcome === "draw") ||
-      (value.eliminatedTeams.length === 1 &&
-        (value.outcome === "draw" ||
-          value.eliminatedTeams[0] === value.outcome)) ||
-      (value.eliminatedTeams.length === 2 &&
-        (value.eliminatedTeams[0] !== "Drow" ||
-          value.eliminatedTeams[1] !== "Duergar"))
-    ) {
-      throw new Error("The canonical End Game Event is invalid.");
-    }
-    if (
-      value.decisionBasis !== "elimination" &&
-      value.decisionBasis !== "activeCount" &&
-      value.decisionBasis !== "activeHpTotal" &&
-      value.decisionBasis !== "coinFlip"
-    ) {
-      throw new Error("The canonical End Game Event is invalid.");
-    }
-    if (
-      !isRecord(value.finalCounts) ||
-      !Number.isInteger(value.finalCounts.Drow) ||
-      !Number.isInteger(value.finalCounts.Duergar) ||
-      (value.finalCounts.Drow as number) < 0 ||
-      (value.finalCounts.Duergar as number) < 0 ||
-      !isRecord(value.finalHpTotals) ||
-      !Number.isInteger(value.finalHpTotals.Drow) ||
-      !Number.isInteger(value.finalHpTotals.Duergar) ||
-      (value.finalHpTotals.Drow as number) < 0 ||
-      (value.finalHpTotals.Duergar as number) < 0
-    ) {
-      throw new Error("The canonical End Game Event is invalid.");
-    }
-    if (
-      value.coinFlipResult !== null &&
-      value.coinFlipResult !== "Drow" &&
-      value.coinFlipResult !== "Duergar"
-    ) {
-      throw new Error("The canonical End Game Event is invalid.");
-    }
-    if (
-      (value.decisionBasis === "coinFlip") !==
-      (value.coinFlipResult !== null)
-    ) {
-      throw new Error("The canonical End Game Event is invalid.");
-    }
-    return;
-  }
-  if (value.type === "MatchReopened") {
-    if (
-      !Number.isSafeInteger(value.endedSequence) ||
-      (value.endedSequence as number) < 2 ||
-      (value.endedSequence as number) >= (value.sequence as number)
-    ) {
-      throw new Error("The canonical Reopen Match Event is invalid.");
-    }
-    return;
-  }
-  if (value.type === "UndoApplied") {
-    if (
-      !Number.isSafeInteger(value.targetSequence) ||
-      (value.targetSequence as number) < 2 ||
-      (value.targetSequence as number) >= (value.sequence as number) ||
-      (value.targetType !== "InitiativeGenerated" &&
-        value.targetType !== "InitiativeRerolled" &&
-        value.targetType !== "DisplayNamesAssigned" &&
-        value.targetType !== "MatchStarted" &&
-        value.targetType !== "TurnFinished" &&
-        value.targetType !== "ActionResolved" &&
-        value.targetType !== "EliminationContinued" &&
-        value.targetType !== "SimultaneousEliminationRuled" &&
-        value.targetType !== "MatchReopened")
-    ) {
-      throw new Error("The canonical Undo Event is invalid.");
-    }
-    return;
+}
+function assertTurnFinishedEvent(value: Record<string, unknown>): void {
+  assertTurnFields(value);
+  assertTurnSkippedSlots(value, expectedVisitedTurnSlots(value));
+}
+function assertBasicAttackMetadata(
+  value: Record<string, unknown>,
+  historicalRuleset: boolean,
+): void {
+  const attack = historicalRuleset
+    ? undefined
+    : RULESET.basicAttacks.find(({ id }) => id === value.attackId);
+  if (
+    !historicalRuleset &&
+    value.actionType === "Basic Attack" &&
+    (!attack ||
+      value.sourceCharacterId !== attack.characterId ||
+      value.attackType !== attack.attackType ||
+      value.rangePaces !== attack.rangePaces ||
+      value.damage !== attack.damage ||
+      value.rulesSourceAnchor !== attack.sourceAnchor)
+  ) {
+    throw invalidActionResolution();
   }
   if (
-    (value.type !== "InitiativeGenerated" &&
-      value.type !== "InitiativeRerolled") ||
-    !Array.isArray(value.results) ||
-    !Array.isArray(value.tieOrder)
+    historicalRuleset &&
+    (!Number.isInteger(value.rangePaces) ||
+      (value.rangePaces as number) < 1 ||
+      !Number.isInteger(value.damage) ||
+      (value.damage as number) < 0 ||
+      typeof value.rulesSourceAnchor !== "string" ||
+      value.rulesSourceAnchor.length === 0)
   ) {
-    throw new Error("The canonical Match Event is structurally invalid.");
+    throw invalidActionResolution();
   }
-  const results: readonly unknown[] = value.results;
-  assertCanonicalState({
-    schemaVersion: MATCH_SCHEMA_VERSION,
-    rulesVersion: value.rulesVersion,
-    matchId: value.matchId,
-    phase: "setup",
-    sequence: value.sequence,
-    characters: RULESET.characters.map(({ id, baseHp }) => ({
-      characterId: id,
-      hp: baseHp,
-    })),
-    initiative: results,
-    displayNames: {},
-    spentReactionIds: [],
-    spentAbilityIds: [],
-    majorActionUsed: false,
-    eliminatedTeams: [],
-    acknowledgedEliminations: [],
-    outcome: null,
-    activeEffects: [],
+}
+function assertAbilityMetadata(value: Record<string, unknown>): void {
+  if (
+    value.actionType === "Ability" &&
+    (typeof value.attackId !== "string" ||
+      value.attackId.length === 0 ||
+      typeof value.rulesSourceAnchor !== "string" ||
+      value.rulesSourceAnchor.length === 0)
+  ) {
+    throw invalidActionResolution();
+  }
+  if (value.actionType !== "Basic Attack" && value.actionType !== "Ability") {
+    throw invalidActionResolution();
+  }
+}
+function assertActionResolutionMetadata(
+  value: Record<string, unknown>,
+  historicalRuleset: boolean,
+): void {
+  assertBasicAttackMetadata(value, historicalRuleset);
+  assertAbilityMetadata(value);
+}
+
+function assertActionResolutionCollections(
+  value: Record<string, unknown>,
+): void {
+  if (
+    !Array.isArray(value.attackLegs) ||
+    value.attackLegs.length === 0 ||
+    value.attackLegs.length > 2 ||
+    !isRecord(value.physicalConfirmations) ||
+    value.physicalConfirmations.range !== true ||
+    value.physicalConfirmations.lineOfSight !== true ||
+    value.physicalConfirmations.legalBottleContact !== true ||
+    value.physicalConfirmations.terrainContact !== true ||
+    !Array.isArray(value.reactions) ||
+    !Array.isArray(value.effects) ||
+    !Array.isArray(value.eliminatedTeams)
+  ) {
+    throw invalidActionResolution();
+  }
+}
+function assertActionResolutionTeamsAndOverrides(
+  value: Record<string, unknown>,
+): void {
+  if (
+    !Array.isArray(value.eliminatedTeams) ||
+    !value.eliminatedTeams.every(
+      (team) => team === "Drow" || team === "Duergar",
+    ) ||
+    new Set(value.eliminatedTeams).size !== value.eliminatedTeams.length ||
+    (value.majorActionOverride !== null &&
+      (typeof value.majorActionOverride !== "string" ||
+        value.majorActionOverride.trim().length === 0)) ||
+    (value.abilityOverride !== null &&
+      (typeof value.abilityOverride !== "string" ||
+        value.abilityOverride.trim().length === 0))
+  ) {
+    throw invalidActionResolution();
+  }
+}
+function assertAttackLegIdentity(
+  value: Record<string, unknown>,
+  leg: Record<string, unknown>,
+  index: number,
+): void {
+  if (
+    leg.sequence !== index + 1 ||
+    leg.kind !== (index === 0 ? "initial" : "redirected") ||
+    leg.sourceCharacterId !== value.sourceCharacterId ||
+    leg.attackId !== value.attackId ||
+    leg.rangePaces !== value.rangePaces
+  ) {
+    throw new Error("The canonical Attack Leg is invalid.");
+  }
+}
+function assertAttackLegRedirection(
+  leg: Record<string, unknown>,
+  index: number,
+  historicalRuleset: boolean,
+): void {
+  if (
+    (index === 0 && leg.redirectedByReactionId !== null) ||
+    (index === 1 &&
+      (typeof leg.redirectedByReactionId !== "string" ||
+        leg.redirectedByReactionId.length === 0 ||
+        (!historicalRuleset &&
+          leg.redirectedByReactionId !== "duergar-monk-deflecting-palm")))
+  ) {
+    throw new Error("The canonical Attack Leg is invalid.");
+  }
+}
+function assertAttackLegTargets(
+  value: Record<string, unknown>,
+  leg: Record<string, unknown>,
+  index: number,
+): readonly string[] {
+  if (
+    leg.towardCharacterId !== (index === 0 ? null : value.sourceCharacterId) ||
+    !Array.isArray(leg.affectedCharacterIds) ||
+    (index === 0 && leg.affectedCharacterIds.length === 0) ||
+    !leg.affectedCharacterIds.every(
+      (characterId) =>
+        typeof characterId === "string" &&
+        RULESET.characters.some(({ id }) => id === characterId),
+    )
+  ) {
+    throw new Error("The canonical Attack Leg is invalid.");
+  }
+  return leg.affectedCharacterIds as readonly string[];
+}
+function affectedIdsForLeg(
+  value: Record<string, unknown>,
+  context: {
+    readonly leg: unknown;
+    readonly index: number;
+    readonly historicalRuleset: boolean;
+  },
+): readonly string[] {
+  const { leg, index, historicalRuleset } = context;
+  if (!isRecord(leg)) {
+    throw new Error("The canonical Attack Leg is invalid.");
+  }
+  assertAttackLegIdentity(value, leg, index);
+  assertAttackLegRedirection(leg, index, historicalRuleset);
+  return assertAttackLegTargets(value, leg, index);
+}
+function assertActionResolutionContacts(
+  value: Record<string, unknown>,
+  historicalRuleset: boolean,
+): readonly string[] {
+  const affectedCharacterIds = (value.attackLegs as readonly unknown[]).flatMap(
+    (leg, index) => affectedIdsForLeg(value, { leg, index, historicalRuleset }),
+  );
+  if (
+    new Set(affectedCharacterIds).size !== affectedCharacterIds.length ||
+    (value.effects as readonly unknown[]).length !== affectedCharacterIds.length
+  ) {
+    throw new Error("The canonical Action Resolution contacts are invalid.");
+  }
+  return affectedCharacterIds;
+}
+function assertReactionIdentity(
+  reactionResolution: Record<string, unknown>,
+  context: {
+    readonly reaction: { readonly ownerCharacterId: string } | undefined;
+    readonly owner: unknown;
+    readonly historicalRuleset: boolean;
+  },
+): void {
+  const { reaction, owner, historicalRuleset } = context;
+  if (
+    (historicalRuleset &&
+      (typeof reactionResolution.reactionId !== "string" ||
+        reactionResolution.reactionId.length === 0)) ||
+    (!historicalRuleset && !reaction) ||
+    typeof owner !== "string" ||
+    owner.length === 0 ||
+    (!historicalRuleset && reactionResolution.ownerCharacterId !== owner)
+  ) {
+    throw new Error("The canonical Action Resolution Reaction is invalid.");
+  }
+}
+function assertReactionProtection(
+  reactionResolution: Record<string, unknown>,
+  affectedCharacterIds: readonly string[],
+): void {
+  if (
+    typeof reactionResolution.protectedCharacterId !== "string" ||
+    !affectedCharacterIds.includes(reactionResolution.protectedCharacterId)
+  ) {
+    throw new Error("The canonical Action Resolution Reaction is invalid.");
+  }
+}
+function isValidReactionOperation(
+  operation: unknown,
+  context: {
+    readonly owner: string;
+    readonly sourceCharacterId: unknown;
+    readonly reaction: { readonly name: string } | undefined;
+    readonly historicalRuleset: boolean;
+  },
+): boolean {
+  const { owner, sourceCharacterId, reaction, historicalRuleset } = context;
+  if (!isRecord(operation)) return false;
+  if (operation.type === "prevent-damage-and-effects") return true;
+  if (operation.type === "manual-movement") {
+    return (
+      operation.characterId === owner &&
+      typeof operation.instruction === "string" &&
+      operation.instruction.length > 0 &&
+      (historicalRuleset || operation.maxPaces === 2)
+    );
+  }
+  if (operation.type === "redirect-physical-attack") {
+    return (
+      operation.fromCharacterId === owner &&
+      operation.towardCharacterId === sourceCharacterId &&
+      (historicalRuleset || reaction?.name === "Deflecting Palm")
+    );
+  }
+  return false;
+}
+function assertReactionOperations(
+  reactionResolution: Record<string, unknown>,
+  context: {
+    readonly owner: string;
+    readonly value: Readonly<Record<string, unknown>>;
+    readonly reaction: { readonly name: string } | undefined;
+    readonly historicalRuleset: boolean;
+  },
+): void {
+  const { owner, value, reaction, historicalRuleset } = context;
+  if (
+    (reactionResolution.override !== null &&
+      (typeof reactionResolution.override !== "string" ||
+        reactionResolution.override.trim().length === 0)) ||
+    !Array.isArray(reactionResolution.operations) ||
+    !reactionResolution.operations.every((operation) =>
+      isValidReactionOperation(operation, {
+        owner,
+        sourceCharacterId: value.sourceCharacterId,
+        reaction,
+        historicalRuleset,
+      }),
+    )
+  ) {
+    throw new Error("The canonical Action Resolution Reaction is invalid.");
+  }
+}
+function assertReactionResolution(
+  rawResolution: unknown,
+  context: {
+    readonly value: Readonly<Record<string, unknown>>;
+    readonly affectedCharacterIds: readonly string[];
+    readonly historicalRuleset: boolean;
+    readonly seenOwners: ReadonlySet<string>;
+  },
+): string {
+  const { value, affectedCharacterIds, historicalRuleset, seenOwners } =
+    context;
+  if (!isRecord(rawResolution)) {
+    throw new Error("The canonical Action Resolution Reaction is invalid.");
+  }
+  const reactionResolution = rawResolution;
+  const reaction = historicalRuleset
+    ? undefined
+    : RULESET.reactions.find(({ id }) => id === reactionResolution.reactionId);
+  const owner = historicalRuleset
+    ? reactionResolution.ownerCharacterId
+    : reaction?.ownerCharacterId;
+  assertReactionIdentity(reactionResolution, {
+    reaction,
+    owner,
+    historicalRuleset,
   });
-  const expectedTies = [
-    ...new Set(results.map((entry) => (entry as InitiativeEntry).total)),
-  ]
+  assertReactionProtection(reactionResolution, affectedCharacterIds);
+  if (seenOwners.has(owner as string)) {
+    throw new Error("The canonical Action Resolution Reaction is invalid.");
+  }
+  if (
+    !Array.isArray(reactionResolution.warnings) ||
+    !reactionResolution.warnings.every(
+      (warning) => typeof warning === "string" && warning.length > 0,
+    )
+  ) {
+    throw new Error("The canonical Action Resolution Reaction is invalid.");
+  }
+  assertReactionOperations(reactionResolution, {
+    owner: owner as string,
+    value,
+    reaction,
+    historicalRuleset,
+  });
+  return owner as string;
+}
+function assertActionResolutionReactions(
+  value: Record<string, unknown>,
+  affectedCharacterIds: readonly string[],
+  historicalRuleset: boolean,
+): void {
+  const reactionList = value.reactions as readonly unknown[];
+  reactionList.reduce<ReadonlySet<string>>((seenOwners, rawResolution) => {
+    const owner = assertReactionResolution(rawResolution, {
+      value,
+      affectedCharacterIds,
+      historicalRuleset,
+      seenOwners,
+    });
+    return new Set([...seenOwners, owner]);
+  }, new Set<string>());
+}
+function hasRedirectOperation(rawResolution: unknown): boolean {
+  if (!isRecord(rawResolution)) return false;
+  return (
+    typeof rawResolution.ownerCharacterId === "string" &&
+    Array.isArray(rawResolution.operations) &&
+    rawResolution.operations.some(
+      (operation) =>
+        isRecord(operation) && operation.type === "redirect-physical-attack",
+    )
+  );
+}
+function assertActionResolutionRedirect(value: Record<string, unknown>): void {
+  const redirectOwner = (value.reactions as readonly unknown[]).find(
+    hasRedirectOperation,
+  );
+  const redirectOwnerId: string | null =
+    isRecord(redirectOwner) &&
+    typeof redirectOwner.ownerCharacterId === "string"
+      ? redirectOwner.ownerCharacterId
+      : null;
+  const firstLeg: unknown = (value.attackLegs as readonly unknown[])[0];
+  const initialAffectedCharacterIds =
+    isRecord(firstLeg) && Array.isArray(firstLeg.affectedCharacterIds)
+      ? (firstLeg.affectedCharacterIds as readonly unknown[])
+      : [];
+  if (
+    ((value.attackLegs as readonly unknown[]).length === 2) !==
+      Boolean(redirectOwnerId) ||
+    (redirectOwnerId !== null &&
+      !initialAffectedCharacterIds.includes(redirectOwnerId))
+  ) {
+    throw new Error("The canonical redirected Attack Leg is invalid.");
+  }
+}
+function assertActionEffect(
+  effect: unknown,
+  affectedCharacterId: unknown,
+  actionType: unknown,
+): void {
+  if (
+    !isRecord(effect) ||
+    effect.characterId !== affectedCharacterId ||
+    !Number.isInteger(effect.damage) ||
+    (effect.damage as number) < 0 ||
+    (effect.damage as number) > MAX_STACKED_ATTACK_DAMAGE ||
+    !Number.isInteger(effect.hpBefore) ||
+    !Number.isInteger(effect.hpAfter) ||
+    (effect.hpBefore as number) < 0 ||
+    ((effect.hpAfter as number) !==
+      Math.max(0, (effect.hpBefore as number) - (effect.damage as number)) &&
+      !(
+        actionType === "Ability" &&
+        (effect.damage as number) === 0 &&
+        (effect.hpAfter as number) > (effect.hpBefore as number)
+      )) ||
+    effect.downedBefore !== (effect.hpBefore === 0) ||
+    effect.downedAfter !== (effect.hpAfter === 0)
+  ) {
+    throw new Error("The canonical Action Resolution effect is invalid.");
+  }
+}
+function assertActionResolutionEffects(
+  value: Record<string, unknown>,
+  affectedCharacterIds: readonly string[],
+): void {
+  (value.effects as readonly unknown[]).forEach((effect, index) => {
+    assertActionEffect(effect, affectedCharacterIds[index], value.actionType);
+  });
+}
+function assertActionResolvedEvent(
+  value: Record<string, unknown>,
+  expectedRulesVersion?: string,
+): void {
+  const historicalRuleset =
+    typeof expectedRulesVersion === "string" &&
+    expectedRulesVersion !== RULESET.version;
+  assertActionResolutionMetadata(value, historicalRuleset);
+  assertActionResolutionCollections(value);
+  assertActionResolutionTeamsAndOverrides(value);
+  const affectedCharacterIds = assertActionResolutionContacts(
+    value,
+    historicalRuleset,
+  );
+  assertActionResolutionReactions(
+    value,
+    affectedCharacterIds,
+    historicalRuleset,
+  );
+  assertActionResolutionRedirect(value);
+  assertActionResolutionEffects(value, affectedCharacterIds);
+}
+function assertEliminationContinuedEvent(value: Record<string, unknown>): void {
+  if (
+    (value.eliminatedTeam !== "Drow" && value.eliminatedTeam !== "Duergar") ||
+    (value.outcome !== "Drow" && value.outcome !== "Duergar") ||
+    value.eliminatedTeam === value.outcome
+  ) {
+    throw new Error("The canonical Continue Event is invalid.");
+  }
+}
+function assertSimultaneousEliminationEvent(
+  value: Record<string, unknown>,
+): void {
+  if (
+    !Array.isArray(value.eliminatedTeams) ||
+    value.eliminatedTeams.length !== 2 ||
+    value.eliminatedTeams[0] !== "Drow" ||
+    value.eliminatedTeams[1] !== "Duergar" ||
+    (value.outcome !== "Drow" &&
+      value.outcome !== "Duergar" &&
+      value.outcome !== "draw") ||
+    typeof value.overrideEvidence !== "string" ||
+    value.overrideEvidence.trim().length === 0
+  ) {
+    throw new Error(
+      "The canonical simultaneous-elimination ruling is invalid.",
+    );
+  }
+}
+function assertEndedTeamsAndOutcome(value: Record<string, unknown>): void {
+  if (
+    (value.outcome !== "Drow" &&
+      value.outcome !== "Duergar" &&
+      value.outcome !== "draw") ||
+    !Array.isArray(value.eliminatedTeams) ||
+    !value.eliminatedTeams.every(
+      (team: unknown) => team === "Drow" || team === "Duergar",
+    ) ||
+    new Set(value.eliminatedTeams).size !== value.eliminatedTeams.length ||
+    (value.eliminatedTeams.length === 0 && value.outcome === "draw") ||
+    (value.eliminatedTeams.length === 1 &&
+      (value.outcome === "draw" ||
+        value.eliminatedTeams[0] === value.outcome)) ||
+    (value.eliminatedTeams.length === 2 &&
+      (value.eliminatedTeams[0] !== "Drow" ||
+        value.eliminatedTeams[1] !== "Duergar"))
+  ) {
+    throw new Error("The canonical End Game Event is invalid.");
+  }
+}
+function assertEndedDecisionBasis(value: Record<string, unknown>): void {
+  if (
+    value.decisionBasis !== "elimination" &&
+    value.decisionBasis !== "activeCount" &&
+    value.decisionBasis !== "activeHpTotal" &&
+    value.decisionBasis !== "coinFlip"
+  ) {
+    throw new Error("The canonical End Game Event is invalid.");
+  }
+}
+function assertEndedFinalTotals(value: Record<string, unknown>): void {
+  if (
+    !isRecord(value.finalCounts) ||
+    !Number.isInteger(value.finalCounts.Drow) ||
+    !Number.isInteger(value.finalCounts.Duergar) ||
+    (value.finalCounts.Drow as number) < 0 ||
+    (value.finalCounts.Duergar as number) < 0 ||
+    !isRecord(value.finalHpTotals) ||
+    !Number.isInteger(value.finalHpTotals.Drow) ||
+    !Number.isInteger(value.finalHpTotals.Duergar) ||
+    (value.finalHpTotals.Drow as number) < 0 ||
+    (value.finalHpTotals.Duergar as number) < 0
+  ) {
+    throw new Error("The canonical End Game Event is invalid.");
+  }
+}
+function assertEndedCoinFlip(value: Record<string, unknown>): void {
+  if (
+    (value.coinFlipResult !== null &&
+      value.coinFlipResult !== "Drow" &&
+      value.coinFlipResult !== "Duergar") ||
+    (value.decisionBasis === "coinFlip") !== (value.coinFlipResult !== null)
+  ) {
+    throw new Error("The canonical End Game Event is invalid.");
+  }
+}
+function assertMatchEndedEvent(value: Record<string, unknown>): void {
+  assertEndedTeamsAndOutcome(value);
+  assertEndedDecisionBasis(value);
+  assertEndedFinalTotals(value);
+  assertEndedCoinFlip(value);
+}
+function assertMatchReopenedEvent(value: Record<string, unknown>): void {
+  if (
+    !Number.isSafeInteger(value.endedSequence) ||
+    (value.endedSequence as number) < 2 ||
+    (value.endedSequence as number) >= (value.sequence as number)
+  ) {
+    throw new Error("The canonical Reopen Match Event is invalid.");
+  }
+}
+function assertUndoAppliedEvent(value: Record<string, unknown>): void {
+  if (
+    !Number.isSafeInteger(value.targetSequence) ||
+    (value.targetSequence as number) < 2 ||
+    (value.targetSequence as number) >= (value.sequence as number) ||
+    (value.targetType !== "InitiativeGenerated" &&
+      value.targetType !== "InitiativeRerolled" &&
+      value.targetType !== "DisplayNamesAssigned" &&
+      value.targetType !== "MatchStarted" &&
+      value.targetType !== "TurnFinished" &&
+      value.targetType !== "ActionResolved" &&
+      value.targetType !== "EliminationContinued" &&
+      value.targetType !== "SimultaneousEliminationRuled" &&
+      value.targetType !== "MatchReopened")
+  ) {
+    throw new Error("The canonical Undo Event is invalid.");
+  }
+}
+function expectedInitiativeTies(results: readonly unknown[]): readonly {
+  readonly total: number;
+  readonly initialCharacterIds: readonly string[];
+  readonly finalCharacterIds: readonly string[];
+}[] {
+  return [...new Set(results.map((entry) => (entry as InitiativeEntry).total))]
     .filter(
       (total) =>
         results.filter((entry) => (entry as InitiativeEntry).total === total)
@@ -507,6 +700,38 @@ export function assertCanonicalEvent(
         .filter((entry) => (entry as InitiativeEntry).total === total)
         .map((entry) => (entry as InitiativeEntry).characterId),
     }));
+}
+function assertInitiativeEvent(value: Record<string, unknown>): void {
+  if (
+    (value.type !== "InitiativeGenerated" &&
+      value.type !== "InitiativeRerolled") ||
+    !Array.isArray(value.results) ||
+    !Array.isArray(value.tieOrder)
+  ) {
+    throw new Error("The canonical Match Event is structurally invalid.");
+  }
+  const results = value.results as readonly unknown[];
+  assertCanonicalState({
+    schemaVersion: MATCH_SCHEMA_VERSION,
+    rulesVersion: value.rulesVersion,
+    matchId: value.matchId,
+    phase: "setup",
+    sequence: value.sequence,
+    characters: RULESET.characters.map(({ id, baseHp }) => ({
+      characterId: id,
+      hp: baseHp,
+    })),
+    initiative: results,
+    displayNames: {},
+    spentReactionIds: [],
+    spentAbilityIds: [],
+    majorActionUsed: false,
+    eliminatedTeams: [],
+    acknowledgedEliminations: [],
+    outcome: null,
+    activeEffects: [],
+  });
+  const expectedTies = expectedInitiativeTies(results);
   if (value.tieOrder.length !== expectedTies.length) {
     throw new Error("The canonical tied-group order is structurally invalid.");
   }
@@ -522,4 +747,54 @@ export function assertCanonicalEvent(
       finalCharacterIds: expected.finalCharacterIds,
     });
   });
+}
+export function assertCanonicalEvent(
+  value: unknown,
+  expectedRulesVersion?: string,
+): asserts value is MatchEvent {
+  if (!isRecord(value)) {
+    throw new Error("The canonical Match Event is structurally invalid.");
+  }
+  assertEventBase(value, expectedRulesVersion);
+  if (value.type === "SetupCreated") {
+    assertSetupEvent(value);
+    return;
+  }
+  if (value.type === "DisplayNamesAssigned") {
+    assertDisplayNamesEvent(value);
+    return;
+  }
+  if (value.type === "MatchStarted") {
+    assertMatchStartedEvent(value);
+    return;
+  }
+  if (value.type === "TurnFinished") {
+    assertTurnFinishedEvent(value);
+    return;
+  }
+  if (value.type === "ActionResolved") {
+    assertActionResolvedEvent(value, expectedRulesVersion);
+    return;
+  }
+  if (value.type === "EliminationContinued") {
+    assertEliminationContinuedEvent(value);
+    return;
+  }
+  if (value.type === "SimultaneousEliminationRuled") {
+    assertSimultaneousEliminationEvent(value);
+    return;
+  }
+  if (value.type === "MatchEnded") {
+    assertMatchEndedEvent(value);
+    return;
+  }
+  if (value.type === "MatchReopened") {
+    assertMatchReopenedEvent(value);
+    return;
+  }
+  if (value.type === "UndoApplied") {
+    assertUndoAppliedEvent(value);
+    return;
+  }
+  assertInitiativeEvent(value);
 }

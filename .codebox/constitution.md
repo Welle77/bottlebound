@@ -45,9 +45,11 @@ complete normalized candidate. Explicitly provider-qualified candidates and
 model suffixes still require a complete match.
 
 ```yaml
-default: frontier
+default: lightweight
 aliases:
-  frontier: [opencode/x-preview-f-free, muse-spark-1.2-contributor-free, opencode/muse-spark-1.2-contributor-free]
+  lightweight: [gpt-5.6-luna, claude-haiku-4.5]
+  general: [gpt-5.6-terra, claude-sonnet-5]
+  frontier: [gpt-5.6-sol, claude-opus-4.8]
 phases:
   planning: frontier
 ```

@@ -50,6 +50,18 @@ export function assertMatchStateStructure(
   value: unknown,
   schemaVersion: typeof MATCH_SCHEMA_VERSION = MATCH_SCHEMA_VERSION,
 ): asserts value is MatchState {
+  assertMatchStateHeader(value, schemaVersion);
+  assertMatchStateRoster(value);
+  assertMatchStateInitiative(value);
+  assertMatchStateTurn(value);
+  assertEndedMatchState(value);
+  assertMatchStatePersistence(value);
+}
+
+function assertMatchStateHeader(
+  value: unknown,
+  schemaVersion: typeof MATCH_SCHEMA_VERSION,
+): asserts value is MatchState {
   if (
     !isRecord(value) ||
     value.schemaVersion !== schemaVersion ||
@@ -65,6 +77,9 @@ export function assertMatchStateStructure(
   ) {
     throw new Error("The canonical Match State is structurally invalid.");
   }
+}
+
+function assertMatchStateRoster(value: MatchState): void {
   if (
     !Array.isArray(value.characters) ||
     value.characters.length !== RULESET.characters.length
@@ -96,6 +111,9 @@ export function assertMatchStateStructure(
       throw new Error("The canonical Match State roster is invalid.");
     }
   });
+}
+
+function assertMatchStateInitiative(value: MatchState): void {
   if (value.initiative === null) {
     if (value.phase !== "setup") {
       throw new Error("The Active Match initiative result is incomplete.");
@@ -106,76 +124,90 @@ export function assertMatchStateStructure(
   ) {
     throw new Error("The canonical initiative result is structurally invalid.");
   }
+}
+
+function assertMatchStateTurn(value: MatchState): void {
+  const state = value as unknown as Record<string, unknown>;
+  const round: unknown = state.round;
+  const activeSlot: unknown = state.activeSlot;
   if (
     (value.phase === "active" || value.phase === "ended") &&
-    (!Number.isSafeInteger(value.round) ||
-      (value.round as number) < 1 ||
-      !Number.isSafeInteger(value.activeSlot) ||
-      (value.activeSlot as number) < 1 ||
-      (value.activeSlot as number) > RULESET.characters.length)
+    (!Number.isSafeInteger(round) ||
+      (round as number) < 1 ||
+      !Number.isSafeInteger(activeSlot) ||
+      (activeSlot as number) < 1 ||
+      (activeSlot as number) > RULESET.characters.length)
   ) {
     throw new Error("The Active Match turn is structurally invalid.");
   }
+}
+
+function assertEndedMatchState(value: MatchState): void {
+  if (value.phase !== "ended") return;
+  assertEndedMatchMetadata(value);
+  assertEndedMatchDecision(value);
+}
+
+function assertEndedMatchMetadata(value: EndedMatchState): void {
+  const endedAt: unknown = value.endedAt;
+  const endedSequence: unknown = value.endedSequence;
+  const sequence: unknown = value.sequence;
+  const outcome: unknown = value.outcome;
   if (
-    value.phase === "ended" &&
-    (typeof value.endedAt !== "string" ||
-      value.endedAt.length === 0 ||
-      !Number.isSafeInteger(value.endedSequence) ||
-      (value.endedSequence as number) < 2 ||
-      (value.endedSequence as number) > (value.sequence as number) ||
-      value.outcome === null)
+    typeof endedAt !== "string" ||
+    endedAt.length === 0 ||
+    !Number.isSafeInteger(endedSequence) ||
+    (endedSequence as number) < 2 ||
+    !Number.isSafeInteger(sequence) ||
+    (endedSequence as number) > (sequence as number) ||
+    outcome === null
   ) {
     throw new Error("The Ended Match state is structurally invalid.");
   }
-  if (value.phase === "ended") {
-    const ended = value as unknown as EndedMatchState;
-    // Widened views keep every literal comparison live so persisted values
-    // outside the contract still fail validation exactly as before.
-    const decisionBasis: string = ended.decisionBasis;
-    if (
-      decisionBasis !== "elimination" &&
-      decisionBasis !== "activeCount" &&
-      decisionBasis !== "activeHpTotal" &&
-      decisionBasis !== "coinFlip"
-    ) {
-      throw new Error("The Ended Match decision basis is invalid.");
-    }
-    if (
-      !isRecord(ended.finalCounts) ||
-      !Number.isInteger((ended.finalCounts as FinalTeamCounts).Drow) ||
-      !Number.isInteger((ended.finalCounts as FinalTeamCounts).Duergar) ||
-      (ended.finalCounts as FinalTeamCounts).Drow < 0 ||
-      (ended.finalCounts as FinalTeamCounts).Duergar < 0 ||
-      !isRecord(ended.finalHpTotals) ||
-      !Number.isInteger((ended.finalHpTotals as FinalTeamCounts).Drow) ||
-      !Number.isInteger((ended.finalHpTotals as FinalTeamCounts).Duergar) ||
-      (ended.finalHpTotals as FinalTeamCounts).Drow < 0 ||
-      (ended.finalHpTotals as FinalTeamCounts).Duergar < 0
-    ) {
-      throw new Error("The Ended Match final team tallies are invalid.");
-    }
-    const coinFlipResult: string | null = ended.coinFlipResult;
-    if (
-      coinFlipResult !== null &&
-      coinFlipResult !== "Drow" &&
-      coinFlipResult !== "Duergar"
-    ) {
-      throw new Error("The Ended Match coin flip result is invalid.");
-    }
-    if (
-      (ended.decisionBasis === "coinFlip") !==
-      (ended.coinFlipResult !== null)
-    ) {
-      throw new Error("The Ended Match coin flip result is invalid.");
-    }
+}
+
+function assertEndedMatchDecision(value: EndedMatchState): void {
+  // Widened views keep every literal comparison live so persisted values
+  // outside the contract still fail validation exactly as before.
+  const decisionBasis: string = value.decisionBasis;
+  if (
+    decisionBasis !== "elimination" &&
+    decisionBasis !== "activeCount" &&
+    decisionBasis !== "activeHpTotal" &&
+    decisionBasis !== "coinFlip"
+  ) {
+    throw new Error("The Ended Match decision basis is invalid.");
   }
+  assertFinalTeamTallies(
+    value.finalCounts,
+    "The Ended Match final team tallies are invalid.",
+  );
+  assertFinalTeamTallies(
+    value.finalHpTotals,
+    "The Ended Match final team tallies are invalid.",
+  );
+  const coinFlipResult: string | null = value.coinFlipResult;
+  if (
+    coinFlipResult !== null &&
+    coinFlipResult !== "Drow" &&
+    coinFlipResult !== "Duergar"
+  ) {
+    throw new Error("The Ended Match coin flip result is invalid.");
+  }
+  if ((decisionBasis === "coinFlip") !== (coinFlipResult !== null)) {
+    throw new Error("The Ended Match coin flip result is invalid.");
+  }
+}
+
+function assertMatchStatePersistence(value: MatchState): void {
   // Single-schema persistence (ADR 0001): the parameter type is the one
   // current version, so these canonical checks apply unconditionally.
-  assertStringArray(value.spentAbilityIds, "spent Abilities");
-  if (!Array.isArray(value.activeEffects)) {
+  const state = value as unknown as Record<string, unknown>;
+  assertStringArray(state.spentAbilityIds, "spent Abilities");
+  if (!Array.isArray(state.activeEffects)) {
     throw new Error("The canonical active effects are structurally invalid.");
   }
-  const names = value.displayNames as Record<string, unknown>;
+  const names = state.displayNames;
   if (
     !isRecord(names) ||
     !Object.keys(names).every(
@@ -188,82 +220,109 @@ export function assertMatchStateStructure(
   ) {
     throw new Error("The canonical Match display names are invalid.");
   }
-  assertStringArray(value.spentReactionIds, "spent Reactions");
-  assertStringArray(value.eliminatedTeams, "Team Elimination state");
+  assertStringArray(state.spentReactionIds, "spent Reactions");
+  assertStringArray(state.eliminatedTeams, "Team Elimination state");
   assertStringArray(
-    value.acknowledgedEliminations,
+    state.acknowledgedEliminations,
     "acknowledged Team Elimination state",
   );
   if (
-    typeof value.majorActionUsed !== "boolean" ||
-    !value.eliminatedTeams.every(
+    typeof state.majorActionUsed !== "boolean" ||
+    !state.eliminatedTeams.every(
       (team) => team === "Drow" || team === "Duergar",
     ) ||
-    new Set(value.eliminatedTeams).size !== value.eliminatedTeams.length ||
-    !value.acknowledgedEliminations.every(
+    new Set(state.eliminatedTeams).size !== state.eliminatedTeams.length ||
+    !state.acknowledgedEliminations.every(
       (team) => team === "Drow" || team === "Duergar",
     ) ||
-    (value.outcome !== null &&
-      value.outcome !== "Drow" &&
-      value.outcome !== "Duergar" &&
-      value.outcome !== "draw")
+    (state.outcome !== null &&
+      state.outcome !== "Drow" &&
+      state.outcome !== "Duergar" &&
+      state.outcome !== "draw")
   ) {
     throw new Error("The canonical combat state is structurally invalid.");
+  }
+}
+
+function assertFinalTeamTallies(
+  value: unknown,
+  message: string,
+): asserts value is FinalTeamCounts {
+  if (
+    !isRecord(value) ||
+    !Number.isInteger(value.Drow) ||
+    !Number.isInteger(value.Duergar) ||
+    (value.Drow as number) < 0 ||
+    (value.Duergar as number) < 0
+  ) {
+    throw new Error(message);
   }
 }
 
 export function assertMatchSummaryStructure(
   value: unknown,
 ): asserts value is MatchSummary {
+  assertMatchSummaryHeader(value);
+  assertFinalTeamTallies(
+    value.finalCounts,
+    "The Match Summary is structurally invalid.",
+  );
+  assertFinalTeamTallies(
+    value.finalHpTotals,
+    "The Match Summary is structurally invalid.",
+  );
+  assertMatchSummaryCoinFlip(value);
+}
+
+function assertMatchSummaryHeader(
+  value: unknown,
+): asserts value is MatchSummary {
+  if (!isRecord(value)) {
+    throw new Error("The Match Summary is structurally invalid.");
+  }
+  const outcome: unknown = value.outcome;
+  const decisionBasis: unknown = value.decisionBasis;
+  const rulesVersion: unknown = value.rulesVersion;
+  const endedAt: unknown = value.endedAt;
   if (
-    !isRecord(value) ||
-    (value.outcome !== "Drow" &&
-      value.outcome !== "Duergar" &&
-      value.outcome !== "draw") ||
-    (value.decisionBasis !== "elimination" &&
-      value.decisionBasis !== "activeCount" &&
-      value.decisionBasis !== "activeHpTotal" &&
-      value.decisionBasis !== "coinFlip") ||
-    !isRecord(value.finalCounts) ||
-    !Number.isInteger((value.finalCounts as unknown as FinalTeamCounts).Drow) ||
-    !Number.isInteger(
-      (value.finalCounts as unknown as FinalTeamCounts).Duergar,
-    ) ||
-    (value.finalCounts as unknown as FinalTeamCounts).Drow < 0 ||
-    (value.finalCounts as unknown as FinalTeamCounts).Duergar < 0 ||
-    !isRecord(value.finalHpTotals) ||
-    !Number.isInteger(
-      (value.finalHpTotals as unknown as FinalTeamCounts).Drow,
-    ) ||
-    !Number.isInteger(
-      (value.finalHpTotals as unknown as FinalTeamCounts).Duergar,
-    ) ||
-    (value.finalHpTotals as unknown as FinalTeamCounts).Drow < 0 ||
-    (value.finalHpTotals as unknown as FinalTeamCounts).Duergar < 0 ||
-    typeof value.rulesVersion !== "string" ||
-    value.rulesVersion.length === 0 ||
-    typeof value.endedAt !== "string" ||
-    value.endedAt.length === 0
+    !isValidOutcome(outcome) ||
+    !isValidDecisionBasis(decisionBasis) ||
+    typeof rulesVersion !== "string" ||
+    rulesVersion.length === 0 ||
+    typeof endedAt !== "string" ||
+    endedAt.length === 0
   ) {
     throw new Error("The Match Summary is structurally invalid.");
   }
+}
+
+function isValidOutcome(value: unknown): boolean {
+  return value === "Drow" || value === "Duergar" || value === "draw";
+}
+
+function isValidDecisionBasis(value: unknown): boolean {
+  return (
+    value === "elimination" ||
+    value === "activeCount" ||
+    value === "activeHpTotal" ||
+    value === "coinFlip"
+  );
+}
+
+function assertMatchSummaryCoinFlip(value: MatchSummary): void {
+  const coinFlipResult: unknown = value.coinFlipResult;
+  const decisionBasis: unknown = value.decisionBasis;
   if (
-    value.coinFlipResult !== undefined &&
-    value.coinFlipResult !== "Drow" &&
-    value.coinFlipResult !== "Duergar"
+    coinFlipResult !== undefined &&
+    coinFlipResult !== "Drow" &&
+    coinFlipResult !== "Duergar"
   ) {
     throw new Error("The Match Summary coin flip result is invalid.");
   }
-  if (
-    value.decisionBasis === "coinFlip" &&
-    value.coinFlipResult === undefined
-  ) {
+  if (decisionBasis === "coinFlip" && coinFlipResult === undefined) {
     throw new Error("The Match Summary coin flip result is invalid.");
   }
-  if (
-    value.coinFlipResult !== undefined &&
-    value.decisionBasis !== "coinFlip"
-  ) {
+  if (coinFlipResult !== undefined && decisionBasis !== "coinFlip") {
     throw new Error("The Match Summary coin flip result is invalid.");
   }
 }
