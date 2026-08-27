@@ -117,19 +117,6 @@ export interface ShellState {
   readonly summary: MatchSummary | null;
 }
 
-/**
- * Internal storage shape of one reactive cell: a plain holder of the current
- * snapshot plus a `$state` revision counter. Reassigning the field and
- * bumping the counter together reproduce the deleted Ref discipline exactly —
- * wholesale replacement is the only visible change, and reads return the raw
- * installed value. Both write boundaries are module-private and lint-scoped
- * (`*Cell.value`, `*Revision.n`).
- */
-interface StoreCell<T> {
-  // eslint-disable-next-line functional/prefer-readonly-type -- the one mutable field whose reassignment IS the wholesale replacement boundary
-  value: T;
-}
-
 function createInitialShellState(): ShellState {
   return {
     network: navigator.onLine ? "online" : "offline",
@@ -151,7 +138,7 @@ function createInitialShellState(): ShellState {
   };
 }
 
-const shellCell: StoreCell<ShellState> = { value: createInitialShellState() };
+let shellSnapshot = createInitialShellState();
 const shellRevision = $state({ n: 0 });
 
 /**
@@ -162,28 +149,26 @@ export const state = {
   get current(): ShellState {
     // Reading the revision counter tracks every wholesale replacement.
     void shellRevision.n;
-    return shellCell.value;
+    return shellSnapshot;
   },
 };
 
-const rulesCell: StoreCell<RulesUiState> = {
-  value: createRulesUiState(RULESET.version),
-};
+let rulesSnapshot = createRulesUiState(RULESET.version);
 const rulesRevision = $state({ n: 0 });
 
 /** Reactive rules UI state with explicit wholesale replacement for dialog transitions. */
 export const rulesUi = {
   get current(): RulesUiState {
     void rulesRevision.n;
-    return rulesCell.value;
+    return rulesSnapshot;
   },
   set(next: RulesUiState): void {
-    rulesCell.value = next;
+    rulesSnapshot = next;
     rulesRevision.n += 1;
   },
 };
 
-const anchorCell: StoreCell<string | null> = { value: null };
+let pendingAnchorSnapshot: string | null = null;
 const anchorRevision = $state({ n: 0 });
 
 /**
@@ -193,16 +178,16 @@ const anchorRevision = $state({ n: 0 });
 export const pendingAnchorReveal = {
   get current(): string | null {
     void anchorRevision.n;
-    return anchorCell.value;
+    return pendingAnchorSnapshot;
   },
   set(next: string | null): void {
-    anchorCell.value = next;
+    pendingAnchorSnapshot = next;
     anchorRevision.n += 1;
   },
 };
 
 /** Replace the shell snapshot wholesale with a patched immutable copy. */
 export function patchShellState(patch: Partial<ShellState>): void {
-  shellCell.value = { ...shellCell.value, ...patch };
+  shellSnapshot = { ...shellSnapshot, ...patch };
   shellRevision.n += 1;
 }

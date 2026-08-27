@@ -41,12 +41,16 @@ async function startMatch(page: Page) {
   await page.getByRole("button", { name: "Start Match" }).click();
 }
 
-async function eliminateOpposingTeam(page: Page) {
+async function eliminateOpposingTeam(page: Page): Promise<{
+  readonly eliminatedTeam: keyof typeof TEAM_CHARACTERS;
+  readonly winner: keyof typeof TEAM_CHARACTERS;
+}> {
   const activeCard = page.locator("[data-active-character]");
   const sourceTeam = (await activeCard
     .getByText(/Drow|Duergar/, { exact: true })
     .textContent()) as "Drow" | "Duergar";
-  const eliminatedTeam = sourceTeam === "Drow" ? "Duergar" : "Drow";
+  const eliminatedTeam: keyof typeof TEAM_CHARACTERS =
+    sourceTeam === "Drow" ? "Duergar" : "Drow";
   const targets = TEAM_CHARACTERS[eliminatedTeam];
 
   for (let attack = 0; attack < 5; attack += 1) {

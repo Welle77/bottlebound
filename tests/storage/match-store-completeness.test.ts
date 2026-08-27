@@ -1,4 +1,3 @@
-/* eslint-disable functional/no-let, functional/immutable-data, functional/prefer-readonly-type -- Test harness builds event histories and storage fixtures incrementally; this is the sanctioned mutability boundary for tests. */
 import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it } from "vitest";
 
@@ -12,11 +11,12 @@ import {
   startMatch,
   undoLastEvent,
   type ActionResolvedEvent,
+  type ActiveMatchState,
   type MatchEvent,
   type MatchState,
 } from "../../src/domain/match";
 import { randomQueue } from "./match-store.test-helpers";
-import { IndexedDbMatchStore } from "../../src/storage/match-store";
+import { createIndexedDbMatchStore } from "../../src/storage/match-store";
 
 /**
  * Store-seam acceptance evidence: one committed Match history that combines
@@ -30,7 +30,7 @@ describe("IndexedDbMatchStore combined Display Name and Ability persistence", ()
   it("restores names, spent abilities, and effect ledgers across a store reopen", async () => {
     const factory = new IDBFactory();
     const databaseName = "completeness-roundtrip";
-    const firstStore = new IndexedDbMatchStore(factory, databaseName);
+    const firstStore = createIndexedDbMatchStore(factory, databaseName);
     const setup = createSetup("match-completeness", "2026-08-24T08:00:00.000Z");
     const named = assignDisplayNames(
       setup.state,
@@ -43,39 +43,21 @@ describe("IndexedDbMatchStore combined Display Name and Ability persistence", ()
       "2026-08-24T08:03:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-24T08:04:00.000Z");
-    const results: { event: MatchEvent; state: MatchState }[] = [
-      setup,
-      named,
-      generated,
-      started,
-    ];
 
-    let state = started.state;
-    const turn = (occurredAt: string) => {
-      const turned = finishTurn(state, occurredAt);
-      results.push(turned);
-      state = turned.state;
-    };
-
-    // Slots 1-2 close; slot 3 is the Ranger.
-    turn("2026-08-24T08:05:00.000Z");
-    turn("2026-08-24T08:06:00.000Z");
+    const turn1 = finishTurn(started.state, "2026-08-24T08:05:00.000Z");
+    const turn2 = finishTurn(turn1.state, "2026-08-24T08:06:00.000Z");
     const marked = resolveAbility(
-      state,
+      turn2.state,
       {
         abilityId: "duergar-ranger-hunter-s-mark",
         targetCharacterIds: ["drow-wizard"],
       },
       "2026-08-24T08:07:00.000Z",
     );
-    results.push(marked);
-    state = marked.state;
-
-    // Slots 3-4 close; slot 5 is the Wizard.
-    turn("2026-08-24T08:08:00.000Z");
-    turn("2026-08-24T08:09:00.000Z");
+    const turn3 = finishTurn(marked.state, "2026-08-24T08:08:00.000Z");
+    const turn4 = finishTurn(turn3.state, "2026-08-24T08:09:00.000Z");
     const attacked = resolveBasicAttack(
-      state,
+      turn4.state,
       {
         sourceCharacterId: "drow-wizard",
         affectedCharacterIds: ["duergar-fighter"],
@@ -89,39 +71,53 @@ describe("IndexedDbMatchStore combined Display Name and Ability persistence", ()
       },
       "2026-08-24T08:10:00.000Z",
     );
-    results.push(attacked);
-    state = attacked.state;
-
-    // Slots 5-8 close; slot 9 is the Fighter at 3/4 HP.
-    turn("2026-08-24T08:11:00.000Z");
-    turn("2026-08-24T08:12:00.000Z");
-    turn("2026-08-24T08:13:00.000Z");
-    turn("2026-08-24T08:14:00.000Z");
+    const turn5 = finishTurn(attacked.state, "2026-08-24T08:11:00.000Z");
+    const turn6 = finishTurn(turn5.state, "2026-08-24T08:12:00.000Z");
+    const turn7 = finishTurn(turn6.state, "2026-08-24T08:13:00.000Z");
+    const turn8 = finishTurn(turn7.state, "2026-08-24T08:14:00.000Z");
     const healed = resolveAbility(
-      state,
+      turn8.state,
       { abilityId: "duergar-fighter-second-wind" },
       "2026-08-24T08:15:00.000Z",
     );
-    results.push(healed);
-    state = healed.state;
 
-    expect(state.displayNames).toEqual({
+    const results = [
+      setup,
+      named,
+      generated,
+      started,
+      turn1,
+      turn2,
+      marked,
+      turn3,
+      turn4,
+      attacked,
+      turn5,
+      turn6,
+      turn7,
+      turn8,
+      healed,
+    ] as const;
+
+    const finalState = healed.state;
+
+    expect(finalState.displayNames).toEqual({
       "duergar-fighter": "Stone",
       "drow-wizard": "Web",
     });
-    expect(state.spentAbilityIds).toEqual([
+    expect(finalState.spentAbilityIds).toEqual([
       "duergar-ranger-hunter-s-mark",
       "duergar-fighter-second-wind",
     ]);
     expect(
-      state.activeEffects.some(
+      finalState.activeEffects.some(
         (effect) =>
           effect.kind === "hunters-mark" &&
           effect.affectedCharacterId === "drow-wizard",
       ),
     ).toBe(true);
     expect(
-      state.characters.find(
+      finalState.characters.find(
         ({ characterId }) => characterId === "duergar-fighter",
       )?.hp,
     ).toBe(4);
@@ -130,7 +126,7 @@ describe("IndexedDbMatchStore combined Display Name and Ability persistence", ()
       await firstStore.commit(result.event, result.state);
     }
 
-    const reopenedStore = new IndexedDbMatchStore(factory, databaseName);
+    const reopenedStore = createIndexedDbMatchStore(factory, databaseName);
     const restored = await reopenedStore.restore();
     if (!restored) throw new Error("The combined history must restore.");
     expect(restored.summary).toBeNull();
@@ -187,7 +183,7 @@ describe("IndexedDbMatchStore combined Display Name and Ability persistence", ()
   it("restores a recorded Ability Override sentence across a store reopen", async () => {
     const factory = new IDBFactory();
     const databaseName = "completeness-override-roundtrip";
-    const firstStore = new IndexedDbMatchStore(factory, databaseName);
+    const firstStore = createIndexedDbMatchStore(factory, databaseName);
     const setup = createSetup(
       "match-completeness-override",
       "2026-08-24T08:00:00.000Z",
@@ -198,28 +194,44 @@ describe("IndexedDbMatchStore combined Display Name and Ability persistence", ()
       "2026-08-24T08:03:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-24T08:04:00.000Z");
-    const history: { event: MatchEvent; state: MatchState }[] = [
-      setup,
-      generated,
-      started,
-    ];
-    let state = started.state;
-    let minute = 4;
-    const sorcererSlot = state.initiative.find(
+
+    const sorcererSlot = started.state.initiative.find(
       ({ characterId }) => characterId === "drow-sorcerer",
     )?.slot;
     if (sorcererSlot === undefined) {
       throw new Error("The initiative must contain the Drow Sorcerer.");
     }
-    while (state.activeSlot !== sorcererSlot) {
-      minute += 1;
+
+    const buildUntilSorcerer = (
+      current: ActiveMatchState,
+      history: readonly {
+        readonly event: MatchEvent;
+        readonly state: MatchState;
+      }[],
+      minute: number,
+    ): {
+      readonly state: ActiveMatchState;
+      readonly history: readonly {
+        readonly event: MatchEvent;
+        readonly state: MatchState;
+      }[];
+      readonly minute: number;
+    } => {
+      if (current.activeSlot === sorcererSlot) {
+        return { state: current, history, minute };
+      }
+      const nextMinute = minute + 1;
       const turned = finishTurn(
-        state,
-        `2026-08-24T08:${String(minute).padStart(2, "0")}:00.000Z`,
+        current,
+        `2026-08-24T08:${String(nextMinute).padStart(2, "0")}:00.000Z`,
       );
-      history.push(turned);
-      state = turned.state;
-    }
+      return buildUntilSorcerer(turned.state, [...history, turned], nextMinute);
+    };
+
+    const initialHistory = [setup, generated, started] as const;
+    const built = buildUntilSorcerer(started.state, [...initialHistory], 4);
+    const history = built.history;
+    const state = built.state;
 
     // The sorcerer targets its own Wizard, violating the enemy relation
     // policy; the referee sentence must ride the committed event.
@@ -244,10 +256,9 @@ describe("IndexedDbMatchStore combined Display Name and Ability persistence", ()
     for (const record of history) {
       await firstStore.commit(record.event, record.state);
     }
-    history.push(overridden);
     await firstStore.commit(overridden.event, overridden.state);
 
-    const reopenedStore = new IndexedDbMatchStore(factory, databaseName);
+    const reopenedStore = createIndexedDbMatchStore(factory, databaseName);
     const restored = await reopenedStore.restore();
     if (!restored) throw new Error("The overridden history must restore.");
     // Restore validates every event canonically and replays the history

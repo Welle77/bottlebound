@@ -9,13 +9,13 @@ import {
   undoLastEvent,
 } from "../../src/domain/match";
 import { randomQueue } from "./match-store.test-helpers";
-import { IndexedDbMatchStore } from "../../src/storage/match-store";
+import { createIndexedDbMatchStore } from "../../src/storage/match-store";
 
 describe("IndexedDbMatchStore Display Name persistence", () => {
   it("preserves assigned names across a store reopen and Start Match", async () => {
     const factory = new IDBFactory();
     const databaseName = "display-names-reopen";
-    const firstStore = new IndexedDbMatchStore(factory, databaseName);
+    const firstStore = createIndexedDbMatchStore(factory, databaseName);
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     const named = assignDisplayNames(
       setup.state,
@@ -26,7 +26,7 @@ describe("IndexedDbMatchStore Display Name persistence", () => {
       await firstStore.commit(result.event, result.state);
     }
 
-    const reopenedStore = new IndexedDbMatchStore(factory, databaseName);
+    const reopenedStore = createIndexedDbMatchStore(factory, databaseName);
 
     await expect(reopenedStore.restore()).resolves.toEqual({
       state: named.state,
@@ -51,7 +51,7 @@ describe("IndexedDbMatchStore Display Name persistence", () => {
   });
 
   it("commits and restores an Undo that restores the previous name map exactly", async () => {
-    const store = new IndexedDbMatchStore(
+    const store = createIndexedDbMatchStore(
       new IDBFactory(),
       "display-names-undo",
     );

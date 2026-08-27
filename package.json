@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && svelte-check --tsconfig ./tsconfig.json && vite build",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings=0",
+    "tsc": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:focused": "vitest run tests/shell-state.test.ts tests/readiness.test.ts tests/domain/match.test.ts tests/storage/canonical-storage-probe.test.ts tests/storage/match-store.test.ts tests/rules-reference/rules-reference.contract.test.ts",

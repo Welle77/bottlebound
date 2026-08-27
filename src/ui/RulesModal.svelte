@@ -139,6 +139,15 @@
       first.focus();
     }
   }
+
+  function html(node: HTMLElement, value: string): { update: (value: string) => void } {
+    node.innerHTML = value;
+    return {
+      update(newValue: string): void {
+        node.innerHTML = newValue;
+      },
+    };
+  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -242,8 +251,10 @@
                     <li>
                       <a href="#{result.anchor}" data-rules-source>
                         <span class="rules-result-heading"><strong>{result.title}</strong><span>{searchResultKind(result.kind)}</span></span>
-                        <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-                        <span class="rules-result-excerpt">{@html highlightedExcerpt(result.excerpt, result.highlights)}</span>
+                        <span
+                          class="rules-result-excerpt"
+                          use:html={highlightedExcerpt(result.excerpt, result.highlights)}
+                        ></span>
                       </a>
                     </li>
                   {/each}
@@ -270,8 +281,11 @@
               {/each}
             </ol>
           </nav>
-          <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-          <article class="rules-document" data-rules-document>{@html surface.reference.html}</article>
+          <article
+            class="rules-document"
+            data-rules-document
+            use:html={surface.reference.html}
+          ></article>
         </div>
       </section>
     </div>

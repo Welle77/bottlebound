@@ -22,25 +22,42 @@ export type ShellReadings = {
   readonly confirmation: string | null;
 };
 
+function createReadingsCollector() {
+  let readings: readonly ShellReadings[] = [];
+  return {
+    get readings(): readonly ShellReadings[] {
+      return readings;
+    },
+    add(value: ShellReadings): void {
+      readings = [...readings, value];
+    },
+  };
+}
+
 /**
  * Start observing the shell snapshot the way a component template does.
  * Callers must `await settle()` to let a queued observation run; every
  * snapshot replacement then appends the then-current reading.
  */
-/* eslint-disable functional/immutable-data, functional/prefer-readonly-type --
-   This probe is the single sanctioned mutability boundary of the store
-   tests: it encapsulates an append-only collector and exposes it read-only. */
-export function trackShellReadings() {
-  const readings: ShellReadings[] = [];
+export function trackShellReadings(): {
+  readonly readings: readonly ShellReadings[];
+  readonly stop: () => void;
+} {
+  const collector = createReadingsCollector();
   const stop = $effect.root(() => {
     $effect(() => {
-      readings.push({
+      collector.add({
         saving: state.current.saving,
         confirmation: state.current.confirmation,
       });
     });
   });
-  return { readings, stop } as const;
+  return {
+    get readings(): readonly ShellReadings[] {
+      return collector.readings;
+    },
+    stop,
+  } as const;
 }
 
 /** Deterministic flush helper so tests state their intent once. */

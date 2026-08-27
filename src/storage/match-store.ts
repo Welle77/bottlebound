@@ -279,17 +279,26 @@ async function writeCommit(context: ReadonlyDeepCommitContext): Promise<void> {
   await context.completion;
 }
 
-export class IndexedDbMatchStore {
-  private databasePromise: Promise<IDBDatabase> | null = null;
+export type MatchStore = {
+  readonly commit: (event: MatchEvent, state: MatchState) => Promise<void>;
+  readonly restore: () => Promise<RestoredMatch | null>;
+  readonly getSummary: () => Promise<MatchSummary | null>;
+  readonly deleteSummary: (confirmed: boolean) => Promise<void>;
+  readonly deleteMatch: (matchId: string, confirmed: boolean) => Promise<void>;
+};
 
-  constructor(
-    private readonly factory: IDBFactory = globalThis.indexedDB,
-    private readonly databaseName = DEFAULT_DATABASE_NAME,
-  ) {}
+export type IndexedDbMatchStore = MatchStore;
 
-  private open(): Promise<IDBDatabase> {
-    const promise = (this.databasePromise ??= new Promise((resolve, reject) => {
-      const request = this.factory.open(this.databaseName, DATABASE_VERSION);
+export function createIndexedDbMatchStore(
+  factory: IDBFactory = globalThis.indexedDB,
+  databaseName = DEFAULT_DATABASE_NAME,
+): MatchStore {
+  let databasePromise: Promise<IDBDatabase> | null = null;
+
+  function open(): Promise<IDBDatabase> {
+    if (databasePromise) return databasePromise;
+    const promise = new Promise<IDBDatabase>((resolve, reject) => {
+      const request = factory.open(databaseName, DATABASE_VERSION);
       request.addEventListener("upgradeneeded", () => {
         const database = request.result;
         if (!database.objectStoreNames.contains(METADATA_STORE)) {
@@ -326,13 +335,14 @@ export class IndexedDbMatchStore {
         },
         { once: true },
       );
-    }));
+    });
+    databasePromise = promise;
     return promise;
   }
 
-  async commit(event: MatchEvent, state: MatchState): Promise<void> {
+  async function commit(event: MatchEvent, state: MatchState): Promise<void> {
     assertCommit(event, state);
-    const database = await this.open();
+    const database = await open();
     const transaction = database.transaction(
       [METADATA_STORE, SNAPSHOT_STORE, EVENT_STORE, SUMMARY_STORE],
       "readwrite",
@@ -359,8 +369,8 @@ export class IndexedDbMatchStore {
     await writeCommit(context);
   }
 
-  async restore(): Promise<RestoredMatch | null> {
-    const database = await this.open();
+  async function restore(): Promise<RestoredMatch | null> {
+    const database = await open();
     const transaction = database.transaction(
       [METADATA_STORE, SNAPSHOT_STORE, EVENT_STORE, SUMMARY_STORE],
       "readwrite",
@@ -415,8 +425,8 @@ export class IndexedDbMatchStore {
     };
   }
 
-  async getSummary(): Promise<MatchSummary | null> {
-    const database = await this.open();
+  async function getSummary(): Promise<MatchSummary | null> {
+    const database = await open();
     const transaction = database.transaction([SUMMARY_STORE], "readonly");
     const completion = transactionComplete(transaction);
     const raw = await getRecord<unknown>(
@@ -429,18 +439,18 @@ export class IndexedDbMatchStore {
     return raw;
   }
 
-  async deleteSummary(confirmed: boolean): Promise<void> {
+  async function deleteSummary(confirmed: boolean): Promise<void> {
     if (!confirmed) throw new Error("Remove confirmation is required.");
-    const database = await this.open();
+    const database = await open();
     const transaction = database.transaction([SUMMARY_STORE], "readwrite");
     const completion = transactionComplete(transaction);
     transaction.objectStore(SUMMARY_STORE).delete(LATEST_SUMMARY_KEY);
     await completion;
   }
 
-  async deleteMatch(matchId: string, confirmed: boolean): Promise<void> {
+  async function deleteMatch(matchId: string, confirmed: boolean): Promise<void> {
     if (!confirmed) throw new Error("Discard confirmation is required.");
-    const database = await this.open();
+    const database = await open();
     const transaction = database.transaction(
       [METADATA_STORE, SNAPSHOT_STORE, EVENT_STORE, SUMMARY_STORE],
       "readwrite",
@@ -473,4 +483,6 @@ export class IndexedDbMatchStore {
     }
     await completion;
   }
+
+  return { commit, restore, getSummary, deleteSummary, deleteMatch };
 }

@@ -21,7 +21,10 @@ import {
 import { RULESET } from "../../src/domain/ruleset";
 import { assertCanonicalEvent } from "../../src/storage/match-store-canonical-event";
 import { initiativeCharacterId } from "../domain/match-test-support";
-import { IndexedDbMatchStore } from "../../src/storage/match-store";
+import {
+  createIndexedDbMatchStore,
+  type IndexedDbMatchStore,
+} from "../../src/storage/match-store";
 
 function queuedRandom(...values: number[]) {
   let offset = 0;
@@ -49,7 +52,7 @@ function toEndedViaStore(
   factory: IDBFactory,
   databaseName: string,
 ): Promise<IndexedDbMatchStore> {
-  return Promise.resolve(new IndexedDbMatchStore(factory, databaseName));
+  return Promise.resolve(createIndexedDbMatchStore(factory, databaseName));
 }
 
 describe("Manual End Game Decision Basis contract", () => {
@@ -192,7 +195,7 @@ describe("Manual End Game Decision Basis contract", () => {
 
     // store persistence for coinFlip summary (second tie with opposite flip)
     const factory = new IDBFactory();
-    const store = new IndexedDbMatchStore(factory, "coinflip-embed-store");
+    const store = createIndexedDbMatchStore(factory, "coinflip-embed-store");
     const sSetup = createSetup("coinflip-store", "2026-08-23T11:00:00.000Z");
     const sGen = generateInitiative(
       sSetup.state,
@@ -282,11 +285,14 @@ describe("Manual End Game Decision Basis contract", () => {
     });
 
     expect(() =>
-      finishTurn(ended.state as ActiveMatchState, "2026-08-23T13:04:00.000Z"),
+      finishTurn(
+        ended.state as unknown as ActiveMatchState,
+        "2026-08-23T13:04:00.000Z",
+      ),
     ).toThrow("read-only");
     expect(() =>
       resolveBasicAttack(
-        ended.state as ActiveMatchState,
+        ended.state as unknown as ActiveMatchState,
         {
           sourceCharacterId: initiativeCharacterId(started.state, 0),
           affectedCharacterIds: ["duergar-ranger"],
@@ -426,7 +432,7 @@ describe("Manual End Game Decision Basis contract", () => {
 describe("Match Summary lifecycle contract", () => {
   it("writes W07 fields atomically with End Game and replaces on next End Game", async () => {
     const factory = new IDBFactory();
-    const store = new IndexedDbMatchStore(factory, "summary-atomic");
+    const store = createIndexedDbMatchStore(factory, "summary-atomic");
     const setup = createSetup("summary-match-1", "2026-08-23T16:00:00.000Z");
     const generated = generateInitiative(
       setup.state,
@@ -476,7 +482,7 @@ describe("Match Summary lifecycle contract", () => {
 
   it("retains prior summary when starting another Match and does not expose partial summary on failed End Game", async () => {
     const factory = new IDBFactory();
-    const store = new IndexedDbMatchStore(factory, "summary-retention");
+    const store = createIndexedDbMatchStore(factory, "summary-retention");
     const setup = createSetup("summary-retain-1", "2026-08-23T17:00:00.000Z");
     const generated = generateInitiative(
       setup.state,
@@ -533,7 +539,7 @@ describe("Match Summary lifecycle contract", () => {
 
   it("distinct removal paths require confirmation and produce distinct effects", async () => {
     const factory = new IDBFactory();
-    const store = new IndexedDbMatchStore(factory, "removal-paths");
+    const store = createIndexedDbMatchStore(factory, "removal-paths");
     const setup = createSetup("removal-ended", "2026-08-23T18:00:00.000Z");
     const generated = generateInitiative(
       setup.state,
@@ -602,7 +608,7 @@ describe("Match Summary lifecycle contract", () => {
 
     // Instead test active-phase delete preserves prior summary: setup active store with summary present
     const factory2 = new IDBFactory();
-    const store2 = new IndexedDbMatchStore(
+    const store2 = createIndexedDbMatchStore(
       factory2,
       "active-delete-preserves-summary",
     );

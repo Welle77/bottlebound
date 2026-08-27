@@ -1,4 +1,3 @@
-/* eslint-disable functional/no-let, functional/immutable-data -- Test harness builds event histories and storage fixtures incrementally; this is the sanctioned mutability boundary for tests. */
 import { describe, expect, it } from "vitest";
 
 import {
@@ -41,22 +40,24 @@ function markedHistory(): ActiveMatchState {
     "2026-08-24T09:00:00.000Z",
   );
   const started = startMatch(generated.state, "2026-08-24T09:00:00.000Z");
-  let state = started.state;
   // The Ranger holds initiative slot 1, so the Mark is cast on its turn.
   const marked = resolveAbility(
-    state,
+    started.state,
     {
       abilityId: "duergar-ranger-hunter-s-mark",
       targetCharacterIds: ["drow-wizard"],
     },
     "2026-08-24T09:01:00.000Z",
   );
-  state = marked.state;
-  while (state.activeSlot !== slotOf(state, "duergar-fighter")) {
-    const turned = finishTurn(state, "2026-08-24T09:02:00.000Z");
-    state = turned.state;
-  }
-  return state;
+  const findFighterState = (current: ActiveMatchState): ActiveMatchState => {
+    if (current.activeSlot === slotOf(current, "duergar-fighter")) {
+      return current;
+    }
+    return findFighterState(
+      finishTurn(current, "2026-08-24T09:02:00.000Z").state,
+    );
+  };
+  return findFighterState(marked.state);
 }
 
 describe("canonical Action Resolution recorded Ability Override", () => {
@@ -95,8 +96,10 @@ describe("canonical Action Resolution recorded Ability Override", () => {
   });
 
   it("rejects persisted events that omit the recorded Override field", () => {
-    const legacy: MatchEvent = { ...overriddenResolution() };
-    delete (legacy as unknown as Record<string, unknown>).abilityOverride;
+    const base = overriddenResolution() as unknown as Record<string, unknown>;
+    const { abilityOverride, ...legacyWithoutOverride } = base;
+    void abilityOverride;
+    const legacy = legacyWithoutOverride as unknown as MatchEvent;
     expect(() => {
       assertCanonicalEvent(legacy);
     }).toThrow("The canonical Action Resolution Event is invalid.");

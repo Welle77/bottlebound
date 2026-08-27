@@ -1,4 +1,3 @@
-/* eslint-disable functional/no-let, functional/immutable-data, functional/prefer-readonly-type, functional/prefer-immutable-types -- Test harnesses build event histories and mutable run accumulators incrementally; this is the sanctioned mutability boundary for tests. */
 import {
   createSetup,
   finishTurn,
@@ -23,29 +22,35 @@ import { RULESET } from "../../src/domain/ruleset";
 export const AUDIT_ROLLS = [9, 14, 2, 18, 6, 12, 17, 1, 10, 15, 7, 13];
 export const BASE_TIME = "2026-08-24T09:00:00.000Z";
 
-/**
- * Mutable test accumulator. Field writes stay inside class methods, which is
- * the repository's sanctioned mutability boundary for test harness state.
- */
-export class AuditRun {
-  events: MatchEvent[] = [];
-  state: ActiveMatchState;
+export type AuditRun = {
+  readonly events: readonly MatchEvent[];
+  readonly state: ActiveMatchState;
+} & {
+  readonly record: (result: CommandResult) => ActiveMatchState;
+  readonly recordEvent: (event: MatchEvent) => void;
+};
 
-  constructor(initialState: ActiveMatchState) {
-    this.state = initialState;
-  }
-
-  record(result: CommandResult): ActiveMatchState {
-    // Audit runs only replay commands whose results stay Active; the
-    // constructor input and every recorded result satisfy that contract.
-    this.state = result.state as ActiveMatchState;
-    this.events.push(result.event);
-    return this.state;
-  }
-
-  recordEvent(event: MatchEvent): void {
-    this.events.push(event);
-  }
+export function createAuditRun(initialState: ActiveMatchState): AuditRun {
+  let events: readonly MatchEvent[] = [];
+  let state: ActiveMatchState = initialState;
+  return {
+    get events(): readonly MatchEvent[] {
+      return events;
+    },
+    get state(): ActiveMatchState {
+      return state;
+    },
+    record(result: CommandResult): ActiveMatchState {
+      // Audit runs only replay commands whose results stay Active; the
+      // constructor input and every recorded result satisfy that contract.
+      state = result.state as ActiveMatchState;
+      events = [...events, result.event];
+      return state;
+    },
+    recordEvent(event: MatchEvent): void {
+      events = [...events, event];
+    },
+  };
 }
 
 export function abilityId(ownerCharacterId: string, name: string): string {
@@ -67,7 +72,7 @@ export function startedAuditMatch(matchId: string): AuditRun {
     BASE_TIME,
   );
   const started = startMatch(generated.state, BASE_TIME);
-  const run = new AuditRun(started.state);
+  const run = createAuditRun(started.state);
   run.record(setup);
   run.record(generated);
   run.record(started);
@@ -88,7 +93,7 @@ export function stamp(step: number): string {
 }
 
 export function play(
-  run: AuditRun,
+  run: Readonly<AuditRun>,
   result: CommandResult<ActiveMatchState>,
 ): ActiveMatchState {
   return run.record(result);
@@ -96,18 +101,24 @@ export function play(
 
 /** Finishes turns until the given character begins a fresh, unacted turn. */
 export function advanceTo(
-  run: AuditRun,
+  run: Readonly<AuditRun>,
   characterId: string,
 ): ActiveMatchState {
-  let current = run.state;
-  const targetSlot = slotOf(current, characterId);
-  for (let step = 0; step < 40; step += 1) {
+  const targetSlot = slotOf(run.state, characterId);
+  const advanceStep = (
+    current: ActiveMatchState,
+    step: number,
+  ): ActiveMatchState => {
     if (current.activeSlot === targetSlot && !current.majorActionUsed) {
       return current;
     }
-    current = play(run, finishTurn(current, stamp(50 + run.events.length)));
-  }
-  throw new Error("advanceTo exceeded one initiative pass.");
+    if (step >= 40) {
+      throw new Error("advanceTo exceeded one initiative pass.");
+    }
+    const next = play(run, finishTurn(current, stamp(50 + run.events.length)));
+    return advanceStep(next, step + 1);
+  };
+  return advanceStep(run.state, 0);
 }
 
 export interface CastRequest {
@@ -118,7 +129,7 @@ export interface CastRequest {
 
 /** Advances to the source's turn and commits one Ability resolution. */
 export function cast(
-  run: AuditRun,
+  run: Readonly<AuditRun>,
   sourceCharacterId: string,
   request: CastRequest,
 ): ActiveMatchState {

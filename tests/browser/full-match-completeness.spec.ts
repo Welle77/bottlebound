@@ -173,7 +173,9 @@ test("one named Match mixes Basic Attack, every ability interaction, undo, and E
       activeName.startsWith(name),
     );
     if (index >= 0) {
-      const [, script] = pendingRoundOne[index];
+      const entry = pendingRoundOne[index];
+      if (entry === undefined) throw new Error("Missing pending script.");
+      const [, script] = entry;
       await script(page);
       pendingRoundOne.splice(index, 1);
     }

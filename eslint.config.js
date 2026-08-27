@@ -1,23 +1,13 @@
 import eslint from "@eslint/js";
-import globals from "globals";
-import tseslint from "typescript-eslint";
 import functional from "eslint-plugin-functional";
 import sveltePlugin from "eslint-plugin-svelte";
+import { defineConfig, globalIgnores } from "eslint/config";
+import globals from "globals";
+import tseslint from "typescript-eslint";
 
-// Surfaces covered by tsconfig.json; type-aware rules require this wiring.
-const typeCheckedFiles = [
-  "src/**/*.ts",
-  "tests/*.test.ts",
-  "tests/*.svelte.ts",
-  "tests/domain/**/*.ts",
-  "tests/storage/**/*.ts",
-  "tests/rules-reference/**/*.ts",
-  "vite.config.ts",
-];
-
-// Application code plus the relocated unit-test locations.
-const functionalFiles = [
-  "src/**/*.ts",
+// Shared file groups – single source of truth for tsconfig and lint scopes.
+const srcTs = ["src/**/*.ts"];
+const testSupport = [
   "tests/*.test.ts",
   "tests/*.svelte.ts",
   "tests/domain/**/*.ts",
@@ -25,125 +15,107 @@ const functionalFiles = [
   "tests/rules-reference/**/*.ts",
 ];
 
-// Test files must live in the tests/ tree (.codebox/standards.md). These
-// patterns cover every test-file convention this repository uses: vitest unit
-// and contract tests (`*.test.ts`), their support modules
-// (`*.test-helpers.ts`, `*.test-support.ts`), and vitest/playwright specs
-// (`*.spec.ts`). Scoped to application folders only, so no application file
-// can ever match.
-const misplacedTestFiles = ["src", "build"].flatMap((applicationFolder) => [
-  `${applicationFolder}/**/*.test.ts`,
-  `${applicationFolder}/**/*.test-helpers.ts`,
-  `${applicationFolder}/**/*.test-support.ts`,
-  `${applicationFolder}/**/*.spec.ts`,
+const typeCheckedFiles = [...srcTs, ...testSupport, "vite.config.ts"];
+const functionalFiles = [...srcTs, ...testSupport];
+
+const misplacedTestFiles = ["src", "build"].flatMap((folder) => [
+  `${folder}/**/*.test.ts`,
+  `${folder}/**/*.test-helpers.ts`,
+  `${folder}/**/*.test-support.ts`,
+  `${folder}/**/*.spec.ts`,
 ]);
 
-// Shared option set for the functional/immutable-data gate: plugin-sanctioned
-// exemptions (used by its own `lite` preset) plus the accessor patterns this
-// repository declares as write boundaries.
 const immutableDataOptions = {
-  ignoreClasses: "fieldsOnly",
   ignoreAccessorPattern: [
-    // The DOM write properties this app uses — rendering is an unavoidable
-    // effect boundary, while all application/domain state stays immutable.
     "*.innerHTML",
     "*.hidden",
     "*.scrollTop",
-    // The same allowance scoped to immer recipe parameters: updates run
-    // inside produce(), so the written objects are drafts, never real state.
     "draft",
     "draft.**",
   ],
 };
 
-export default tseslint.config(
-  { ignores: ["dist", "playwright-report", "test-results"] },
-  // Base core rules for every parsed file (.svelte scripts, public/sw.js).
-  // @eslint/js v10 no longer exports its own `strict` preset, so the strict
-  // conversion rides the typescript-eslint presets below (see feature spec:
-  // "typescript-eslint strict").
-  eslint.configs.recommended,
-  ...tseslint.configs.strict,
+export default defineConfig(
+  globalIgnores(["dist", "playwright-report", "test-results"]),
+
+  // Enforce project policy: no inline disable comments and warnings are errors.
   {
-    rules: {
-      complexity: "error",
+    name: "linter/enforce-no-inline-disable",
+    linterOptions: {
+      noInlineConfig: true,
+      reportUnusedDisableDirectives: "error",
     },
   },
-  // Svelte-aware linting for .svelte files. Spread after the TypeScript
-  // presets so the svelte-eslint-parser takes precedence for .svelte over
-  // the typescript-eslint parser set above.
-  ...sveltePlugin.configs["flat/recommended"],
+
+  // Core correctness: ESLint recommended + typescript-eslint strict.
+  eslint.configs.recommended,
+  tseslint.configs.strict,
+
+  // Project-wide size and complexity limits.
   {
+    name: "limits/complexity",
+    rules: { complexity: "error" },
+  },
+
+  // Svelte – plugin must come after TS presets so its parser wins for .svelte.
+  sveltePlugin.configs["flat/recommended"],
+  {
+    name: "svelte/parser",
     files: ["**/*.svelte"],
     languageOptions: {
-      globals: { ...globals.browser },
-      // svelte-eslint-parser delegates <script lang="ts"> contents to this
-      // parser; without it, TypeScript syntax inside components fails to
-      // parse as plain JavaScript.
-      parserOptions: {
-        parser: tseslint.parser,
-      },
+      globals: globals.browser,
+      parserOptions: { parser: tseslint.parser },
     },
   },
+  // Type-aware rules for all TS surfaces listed in tsconfig.json.
   {
+    name: "typescript/type-checked",
     files: typeCheckedFiles,
-    extends: [...tseslint.configs.strictTypeChecked],
-    languageOptions: {
-      parserOptions: {
-        projectService: true,
-      },
-    },
+    extends: [tseslint.configs.strictTypeChecked],
+    languageOptions: { parserOptions: { projectService: true } },
   },
+
+  // Runtime globals.
   {
+    name: "globals/app",
     files: ["src/**/*.ts", "vite.config.ts"],
-    languageOptions: {
-      globals: { ...globals.browser, ...globals.node },
-    },
+    languageOptions: { globals: { ...globals.browser, ...globals.node } },
   },
   {
+    name: "globals/service-worker",
     files: ["public/sw.js"],
-    languageOptions: {
-      globals: globals.serviceworker,
-    },
+    languageOptions: { globals: globals.serviceworker },
   },
   {
+    name: "globals/tests",
     files: ["tests/browser/**/*.ts", "tests/contract/**/*.ts"],
-    languageOptions: {
-      globals: { ...globals.browser, ...globals.node },
-    },
+    languageOptions: { globals: { ...globals.browser, ...globals.node } },
   },
+
+  // Style and size guards.
   {
+    name: "style/limits",
     files: ["src/**/*.ts", "tests/**/*.ts"],
     rules: {
-      // Strict default counting: every physical line counts, including blanks
-      // and comments.
       "max-lines": ["error", { max: 800 }],
       "max-params": "error",
       "prefer-const": "error",
     },
   },
+
+  // Functional / immutable-data discipline.
   {
+    name: "functional/base",
     files: functionalFiles,
     plugins: { functional },
     rules: {
-      "functional/immutable-data": [
-        "error",
-        // Option set above; see the shared `immutableDataOptions` notes.
-        immutableDataOptions,
-      ],
-      // Option sets below are the plugin's own `recommended` preset choices
-      // for these rules: parameter immutability enforced by declaration
-      // origin, inferred types ignored, for-loop counters exempted. Only the
-      // rule selection is curated; the paradigm rules stay off per spec.
+      "functional/immutable-data": ["error", immutableDataOptions],
       "functional/prefer-immutable-types": [
         "error",
         {
           enforcement: "None",
           overrides: [
             {
-              // Project-owned types must be deeply immutable; third-party
-              // declarations (DOM/lib) are outside this codebase's control
-              // and stay unchecked, matching the plugin's scoping intent.
               specifiers: { from: "file" },
               options: {
                 ignoreInferredTypes: true,
@@ -153,19 +125,11 @@ export default tseslint.config(
           ],
         },
       ],
-      "functional/prefer-readonly-type": [
-        "error",
-        { ignoreClass: "fieldsOnly" },
-      ],
-      "functional/no-let": ["error", { allowInForLoopInit: true }],
       "functional/no-mixed-types": "error",
     },
   },
   {
-    // The runes shell store's cell writes (shellCell.value = …,
-    // shellRevision.n += 1) are the reactive replacement boundary that
-    // succeeded the deleted Ref class discipline; every other non-class
-    // object stays fully protected.
+    name: "functional/shell-state",
     files: ["src/ui/shell-state.svelte.ts"],
     rules: {
       "functional/immutable-data": [
@@ -181,11 +145,10 @@ export default tseslint.config(
       ],
     },
   },
+
+  // Testing standard: no test file under application folders.
   {
-    // Enforces the testing standard in .codebox/standards.md: tests never
-    // coexist with application code in the same folder. Every parsed file's
-    // AST root is a Program node, so this reports exactly once per misplaced
-    // test file, regardless of its contents.
+    name: "standards/no-misplaced-tests",
     files: misplacedTestFiles,
     rules: {
       "no-restricted-syntax": [

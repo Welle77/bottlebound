@@ -16,7 +16,7 @@ import {
   type MatchState,
   type ActiveMatchState,
 } from "../../src/domain/match";
-import { IndexedDbMatchStore } from "../../src/storage/match-store";
+import { createIndexedDbMatchStore } from "../../src/storage/match-store";
 import { initiativeCharacterId } from "../domain/match-test-support";
 import {
   randomQueue,
@@ -25,7 +25,7 @@ import {
 
 describe("IndexedDbMatchStore", () => {
   it("needs confirmation and then removes the Match and all history", async () => {
-    const store = new IndexedDbMatchStore(new IDBFactory(), "delete-match");
+    const store = createIndexedDbMatchStore(new IDBFactory(), "delete-match");
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     await store.commit(setup.event, setup.state);
 
@@ -39,7 +39,7 @@ describe("IndexedDbMatchStore", () => {
   });
 
   it("atomically commits and restores the exact Active Match", async () => {
-    const store = new IndexedDbMatchStore(new IDBFactory(), "restore-active");
+    const store = createIndexedDbMatchStore(new IDBFactory(), "restore-active");
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     const generated = generateInitiative(
       setup.state,
@@ -62,7 +62,7 @@ describe("IndexedDbMatchStore", () => {
 
   it("restores Continue, End Game, Reopen, Undo, and confirmed Ended Match removal exactly", async () => {
     const factory = new IDBFactory();
-    const store = new IndexedDbMatchStore(factory, "elimination-lifecycle");
+    const store = createIndexedDbMatchStore(factory, "elimination-lifecycle");
     const setup = createSetup("match-elimination", "2026-08-22T14:00:00.000Z");
     const generated = generateInitiative(
       setup.state,
@@ -165,7 +165,7 @@ describe("IndexedDbMatchStore", () => {
     "atomically restores a %s simultaneous ruling, End Game, Reopen, and Undo",
     async (outcome) => {
       const factory = new IDBFactory();
-      const store = new IndexedDbMatchStore(factory, `simultaneous-${outcome}`);
+      const store = createIndexedDbMatchStore(factory, `simultaneous-${outcome}`);
       const { results, finalState } = simultaneousEliminationRun(
         `match-simultaneous-${outcome}`,
       );
@@ -218,7 +218,7 @@ describe("IndexedDbMatchStore", () => {
   );
 
   it("keeps the unresolved simultaneous result when ruling storage fails", async () => {
-    const store = new IndexedDbMatchStore(
+    const store = createIndexedDbMatchStore(
       new IDBFactory(),
       "failed-simultaneous-ruling",
     );
@@ -250,7 +250,7 @@ describe("IndexedDbMatchStore", () => {
   });
 
   it("keeps the last committed Active Match when Finish Turn fails", async () => {
-    const store = new IndexedDbMatchStore(new IDBFactory(), "failed-finish");
+    const store = createIndexedDbMatchStore(new IDBFactory(), "failed-finish");
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     const generated = generateInitiative(
       setup.state,
@@ -279,7 +279,7 @@ describe("IndexedDbMatchStore", () => {
 
   it("atomically appends Undo history and restores its exact snapshot", async () => {
     const factory = new IDBFactory();
-    const store = new IndexedDbMatchStore(factory, "restore-undo");
+    const store = createIndexedDbMatchStore(factory, "restore-undo");
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     const generated = generateInitiative(
       setup.state,
@@ -298,7 +298,7 @@ describe("IndexedDbMatchStore", () => {
 
     await store.commit(undone.event, undone.state);
 
-    const restarted = new IndexedDbMatchStore(factory, "restore-undo");
+    const restarted = createIndexedDbMatchStore(factory, "restore-undo");
     await expect(restarted.restore()).resolves.toEqual({
       state: undone.state,
       events: [...history, undone.event],
@@ -307,7 +307,7 @@ describe("IndexedDbMatchStore", () => {
   });
 
   it("keeps the last committed Match when the Undo transaction fails", async () => {
-    const store = new IndexedDbMatchStore(new IDBFactory(), "failed-undo");
+    const store = createIndexedDbMatchStore(new IDBFactory(), "failed-undo");
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     const generated = generateInitiative(
       setup.state,

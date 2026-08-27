@@ -14,26 +14,25 @@ type WorkerEvent = {
   readonly respondWith: (response: Promise<unknown>) => void;
 };
 
-class TestCell<T> {
-  #value: T;
-  constructor(value: T) {
-    this.#value = value;
-  }
-  get current(): T {
-    return this.#value;
-  }
-  set(next: T): void {
-    this.#value = next;
-  }
+function createTestCell<T>(initialValue: T) {
+  let value = initialValue;
+  return {
+    get current(): T {
+      return value;
+    },
+    set(next: T): void {
+      value = next;
+    },
+  };
 }
 
 describe("service worker navigation responses", () => {
   it("does not use a redirected cached response for a navigation", async () => {
-    const listeners = new TestCell<
+    const listeners = createTestCell<
       ReadonlyArray<readonly [string, (event: WorkerEvent) => void]>
     >([]);
     const redirectedResponse = { redirected: true };
-    const responsePromiseCell = new TestCell<Promise<unknown> | undefined>(
+    const responsePromiseCell = createTestCell<Promise<unknown> | undefined>(
       undefined,
     );
     const cachesApi = {

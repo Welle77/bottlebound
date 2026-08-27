@@ -571,17 +571,20 @@ test("restore consistency after failed End Game and Reopen transactions", async 
   });
   await page.getByRole("button", { name: "End Game" }).click();
   await page.evaluate(() => {
-    const add = IDBObjectStore.prototype.add as unknown as (
-      ...args: unknown[]
-    ) => unknown;
-    IDBObjectStore.prototype.add = function (...args: unknown[]) {
-      if ((this as IDBObjectStore).name === "events") {
+    const add =
+      IDBObjectStore.prototype.add as unknown as typeof IDBObjectStore.prototype.add;
+    const patched = function (
+      this: IDBObjectStore,
+      ...args: Parameters<typeof IDBObjectStore.prototype.add>
+    ): ReturnType<typeof IDBObjectStore.prototype.add> {
+      if (this.name === "events") {
         throw new DOMException("Injected storage failure", "DataError");
       }
       return (
-        add as unknown as (this: IDBObjectStore, ...a: unknown[]) => unknown
+        add as unknown as typeof IDBObjectStore.prototype.add
       ).apply(this, args as never);
-    };
+    } as unknown as typeof IDBObjectStore.prototype.add;
+    IDBObjectStore.prototype.add = patched;
   });
   await page.getByRole("button", { name: "Confirm End Game" }).click();
   await expect(
@@ -625,17 +628,20 @@ test("restore consistency after failed End Game and Reopen transactions", async 
     ).__originalAdd2 = originalAdd;
   });
   await page.evaluate(() => {
-    const add = IDBObjectStore.prototype.add as unknown as (
-      ...args: unknown[]
-    ) => unknown;
-    IDBObjectStore.prototype.add = function (...args: unknown[]) {
-      if ((this as IDBObjectStore).name === "events") {
+    const add =
+      IDBObjectStore.prototype.add as unknown as typeof IDBObjectStore.prototype.add;
+    const patched = function (
+      this: IDBObjectStore,
+      ...args: Parameters<typeof IDBObjectStore.prototype.add>
+    ): ReturnType<typeof IDBObjectStore.prototype.add> {
+      if (this.name === "events") {
         throw new DOMException("Injected storage failure", "DataError");
       }
       return (
-        add as unknown as (this: IDBObjectStore, ...a: unknown[]) => unknown
+        add as unknown as typeof IDBObjectStore.prototype.add
       ).apply(this, args as never);
-    };
+    } as unknown as typeof IDBObjectStore.prototype.add;
+    IDBObjectStore.prototype.add = patched;
   });
   await page.getByRole("button", { name: "Reopen Match" }).click();
   await expect(page.getByText(/could not commit/)).toBeVisible();

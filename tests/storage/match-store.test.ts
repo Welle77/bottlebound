@@ -10,7 +10,7 @@ import {
   undoLastEvent,
   type MatchState,
 } from "../../src/domain/match";
-import { IndexedDbMatchStore } from "../../src/storage/match-store";
+import { createIndexedDbMatchStore } from "../../src/storage/match-store";
 import {
   overwriteStoredEvent,
   randomQueue,
@@ -21,7 +21,7 @@ import {
 
 describe("IndexedDbMatchStore", () => {
   it("atomically restores and undoes one redirected Action Resolution", async () => {
-    const store = new IndexedDbMatchStore(new IDBFactory(), "restore-redirect");
+    const store = createIndexedDbMatchStore(new IDBFactory(), "restore-redirect");
     const setup = createSetup("match-redirect", "2026-08-22T14:00:00.000Z");
     const generated = generateInitiative(
       setup.state,
@@ -101,7 +101,7 @@ describe("IndexedDbMatchStore", () => {
   });
 
   it("atomically restores and repeatedly undoes an Action Resolution", async () => {
-    const store = new IndexedDbMatchStore(new IDBFactory(), "restore-action");
+    const store = createIndexedDbMatchStore(new IDBFactory(), "restore-action");
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     const generated = generateInitiative(
       setup.state,
@@ -182,7 +182,7 @@ describe("IndexedDbMatchStore", () => {
   });
 
   it("keeps the prior Action Resolution state when the next atomic write fails", async () => {
-    const store = new IndexedDbMatchStore(new IDBFactory(), "failed-action");
+    const store = createIndexedDbMatchStore(new IDBFactory(), "failed-action");
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     const generated = generateInitiative(
       setup.state,
@@ -226,7 +226,7 @@ describe("IndexedDbMatchStore", () => {
   });
 
   it("commits and restores the exact Setup snapshot and event sequence", async () => {
-    const store = new IndexedDbMatchStore(new IDBFactory(), "restore-setup");
+    const store = createIndexedDbMatchStore(new IDBFactory(), "restore-setup");
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     await store.commit(setup.event, setup.state);
     const generated = generateInitiative(
@@ -246,7 +246,7 @@ describe("IndexedDbMatchStore", () => {
   it("restores an internally consistent Match with an unavailable saved rules version", async () => {
     const factory = new IDBFactory();
     const databaseName = "restore-prior-rules";
-    const store = new IndexedDbMatchStore(factory, databaseName);
+    const store = createIndexedDbMatchStore(factory, databaseName);
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     await store.commit(setup.event, setup.state);
     await rewriteStoredRulesVersion(factory, databaseName, "BB-prior-release");
@@ -265,7 +265,7 @@ describe("IndexedDbMatchStore", () => {
   it("restores an unavailable-version Match with combat history from recorded evidence", async () => {
     const factory = new IDBFactory();
     const databaseName = "restore-prior-rules-combat";
-    const store = new IndexedDbMatchStore(factory, databaseName);
+    const store = createIndexedDbMatchStore(factory, databaseName);
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     const generated = generateInitiative(
       setup.state,
@@ -346,7 +346,7 @@ describe("IndexedDbMatchStore", () => {
   it("rejects retired-schema persisted data through the public restore API without altering records", async () => {
     const factory = new IDBFactory();
     const databaseName = "retired-schema";
-    const store = new IndexedDbMatchStore(factory, databaseName);
+    const store = createIndexedDbMatchStore(factory, databaseName);
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     await store.commit(setup.event, setup.state);
     await rewriteCurrentSnapshotAsRetiredSchema(factory, databaseName);
@@ -357,7 +357,7 @@ describe("IndexedDbMatchStore", () => {
   });
 
   it("keeps the last committed sequence when an atomic commit fails", async () => {
-    const store = new IndexedDbMatchStore(new IDBFactory(), "failed-commit");
+    const store = createIndexedDbMatchStore(new IDBFactory(), "failed-commit");
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     await store.commit(setup.event, setup.state);
 
@@ -381,7 +381,7 @@ describe("IndexedDbMatchStore", () => {
   });
 
   it("rejects incompatible, structurally invalid, and partial canonical data", async () => {
-    const store = new IndexedDbMatchStore(new IDBFactory(), "invalid-data");
+    const store = createIndexedDbMatchStore(new IDBFactory(), "invalid-data");
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     await store.commit(setup.event, setup.state);
 
@@ -461,7 +461,7 @@ describe("IndexedDbMatchStore", () => {
   it("rejects stored initiative history with corrupted digital coin flips", async () => {
     const factory = new IDBFactory();
     const databaseName = "corrupted-coin-flip";
-    const store = new IndexedDbMatchStore(factory, databaseName);
+    const store = createIndexedDbMatchStore(factory, databaseName);
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     await store.commit(setup.event, setup.state);
     const tied = generateInitiative(

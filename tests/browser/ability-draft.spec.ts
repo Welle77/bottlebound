@@ -356,7 +356,7 @@ test("a Downed Active Character cannot open the ability list and Basic Attack is
 
   // The Active Character records every contact of its own throws, so its
   // turn ends with it Downed while still holding the initiative slot.
-  for (let remaining = character.hp; remaining > 0; remaining -= 1) {
+  for (let remaining: number = character.hp; remaining > 0; remaining -= 1) {
     await page.getByRole("button", { name: "Basic Attack" }).click();
     await page.locator(`[data-hit-character="${character.id}"]`).check();
     await completePhysicalChecks(page);

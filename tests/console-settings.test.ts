@@ -1,4 +1,3 @@
-/* eslint-disable functional/immutable-data, functional/prefer-readonly-type -- Test harness builds event histories and storage fixtures incrementally; this is the sanctioned mutability boundary for tests. */
 import { describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_REQUIRE_PHYSICAL_CONFIRMATIONS,
@@ -7,21 +6,24 @@ import {
   type SettingsStorage,
 } from "../src/ui/console-settings";
 
-class MemoryStorage implements SettingsStorage {
-  readonly #values: Map<string, string>;
-  constructor(initial: Record<string, string> = {}) {
-    this.#values = new Map(Object.entries(initial));
-  }
-  getItem(key: string): string | null {
-    return this.#values.get(key) ?? null;
-  }
-  setItem(key: string, value: string): void {
-    this.#values.set(key, value);
-  }
+function createMemoryStorage(
+  initial: Readonly<Record<string, string>> = {},
+): SettingsStorage {
+  let values: ReadonlyMap<string, string> = new Map(Object.entries(initial));
+  return {
+    getItem(key: string): string | null {
+      return values.get(key) ?? null;
+    },
+    setItem(key: string, value: string): void {
+      values = new Map([...values, [key, value]]);
+    },
+  };
 }
 
-function memoryStorage(initial?: Record<string, string>): SettingsStorage {
-  return new MemoryStorage(initial);
+function memoryStorage(
+  initial?: Readonly<Record<string, string>>,
+): SettingsStorage {
+  return createMemoryStorage(initial);
 }
 
 describe("loadRequirePhysicalConfirmations", () => {

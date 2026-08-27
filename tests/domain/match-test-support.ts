@@ -10,21 +10,19 @@ import {
   type RandomSource,
 } from "../../src/domain/match";
 
-class QueueCursor {
-  private readonly values: readonly number[];
-  #position = 0;
-  constructor(values: readonly number[]) {
-    this.values = values;
-  }
-  take(): number | undefined {
-    const value = this.values[this.#position];
-    this.#position += 1;
-    return value;
-  }
+function createQueueCursor(values: readonly number[]) {
+  let position = 0;
+  return {
+    take(): number | undefined {
+      const value = values[position];
+      position += 1;
+      return value;
+    },
+  };
 }
 
 export function queuedRandom(...values: readonly number[]): RandomSource {
-  const cursor = new QueueCursor(values);
+  const cursor = createQueueCursor(values);
   return {
     nextUint32: () => {
       const value = cursor.take();

@@ -2,6 +2,6 @@ allowBuilds:
   esbuild: true
   workerd: true
 minimumReleaseAgeExclude:
-  - '@types/node@26.4.0'
+  - "@types/node@26.4.0"
   - miniflare@5.20260826.0-alpha
   - wrangler@4.127.0

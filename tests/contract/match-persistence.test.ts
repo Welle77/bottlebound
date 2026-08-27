@@ -12,7 +12,7 @@ import {
   type MatchEvent,
   type MatchState,
 } from "../../src/domain/match";
-import { IndexedDbMatchStore } from "../../src/storage/match-store";
+import { createIndexedDbMatchStore } from "../../src/storage/match-store";
 
 function randomQueue(values: number[]) {
   let index = 0;
@@ -29,7 +29,7 @@ function randomQueue(values: number[]) {
 describe("Match command persistence contract", () => {
   it("commits one matching event and snapshot for every Match command", async () => {
     const factory = new IDBFactory();
-    const store = new IndexedDbMatchStore(factory, "all-command-persistence");
+    const store = createIndexedDbMatchStore(factory, "all-command-persistence");
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     const generated = generateInitiative(
       setup.state,
@@ -65,7 +65,7 @@ describe("Match command persistence contract", () => {
     );
     await store.commit(undone.event, undone.state);
 
-    const restarted = new IndexedDbMatchStore(
+    const restarted = createIndexedDbMatchStore(
       factory,
       "all-command-persistence",
     );
@@ -83,7 +83,7 @@ describe("Match command persistence contract", () => {
   it("records and replay-checks digital coin flips for a tied group larger than two", async () => {
     const factory = new IDBFactory();
     const databaseName = "recorded-coin-flip-contract";
-    const store = new IndexedDbMatchStore(factory, databaseName);
+    const store = createIndexedDbMatchStore(factory, databaseName);
     const setup = createSetup("match-coin-flips", "2026-08-22T14:00:00.000Z");
     const generated = generateInitiative(
       setup.state,
@@ -125,7 +125,7 @@ describe("Match command persistence contract", () => {
     await store.commit(setup.event, setup.state);
     await store.commit(generated.event, generated.state);
 
-    const restarted = new IndexedDbMatchStore(factory, databaseName);
+    const restarted = createIndexedDbMatchStore(factory, databaseName);
     await expect(restarted.restore()).resolves.toEqual({
       state: generated.state,
       events: [setup.event, generated.event],
@@ -144,7 +144,7 @@ describe("Match command persistence contract", () => {
       randomQueue([19, 19, 18, 18, 17, 14, 12, 11, 12, 11, 11, 10]),
       "2026-08-22T14:01:00.000Z",
     );
-    const rerollFirstStore = new IndexedDbMatchStore(
+    const rerollFirstStore = createIndexedDbMatchStore(
       factory,
       "reroll-before-generate-contract",
     );
@@ -174,7 +174,7 @@ describe("Match command persistence contract", () => {
       ]),
       { occurredAt: "2026-08-22T14:02:00.000Z", confirmed: true },
     );
-    const generatedTwiceStore = new IndexedDbMatchStore(
+    const generatedTwiceStore = createIndexedDbMatchStore(
       factory,
       "generate-after-generate-contract",
     );

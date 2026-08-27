@@ -1,4 +1,3 @@
-/* eslint-disable functional/no-let, functional/prefer-immutable-types -- Test harnesses build event histories and mutable run accumulators incrementally; this is the sanctioned mutability boundary for tests. */
 import { describe, expect, it } from "vitest";
 
 import {
@@ -291,7 +290,7 @@ describe("rules coverage audit: Basic Attacks carry character-based effects", ()
 
 describe("rules coverage audit: card life-state gates", () => {
   function withCharacterAt(
-    run: AuditRun,
+    run: Readonly<AuditRun>,
     characterId: string,
     hp: number,
   ): ActiveMatchState {
@@ -481,17 +480,21 @@ describe("rules coverage audit: Powerful prohibition and expiry boundaries", () 
 
     // Advance through the Wizard's next turn; her buff expires at its end
     // while the Bard's own buff waits for her next turn's end.
-    let wizardEnded = finishTurn(current, stamp(3));
-    while (
-      wizardEnded.event.activeSlot !== 2 &&
-      !wizardEnded.event.skippedSlots.includes(2)
-    ) {
-      run.recordEvent(wizardEnded.event);
-      wizardEnded = finishTurn(
-        wizardEnded.state,
-        stamp(60 + run.events.length),
+    const findWizardEnded = (
+      candidate: ReturnType<typeof finishTurn>,
+    ): ReturnType<typeof finishTurn> => {
+      if (
+        candidate.event.activeSlot === 2 ||
+        candidate.event.skippedSlots.includes(2)
+      ) {
+        return candidate;
+      }
+      run.recordEvent(candidate.event);
+      return findWizardEnded(
+        finishTurn(candidate.state, stamp(60 + run.events.length)),
       );
-    }
+    };
+    const wizardEnded = findWizardEnded(finishTurn(current, stamp(3)));
     run.record(wizardEnded);
     expect(wizardEnded.event.activeSlot).toBe(2);
 
@@ -516,16 +519,25 @@ describe("rules coverage audit: Powerful prohibition and expiry boundaries", () 
       step: 1,
     });
 
-    let current = run.state;
-    for (let step = 0; step < 40; step += 1) {
+    const findExpiryState = (
+      current: ActiveMatchState,
+      step: number,
+    ): ActiveMatchState => {
       if (
         current.round === 2 &&
         current.activeSlot === slotOf(current, "duergar-ranger")
       ) {
-        break;
+        return current;
       }
-      current = play(run, finishTurn(current, stamp(70 + step)));
-    }
+      if (step >= 40) {
+        throw new Error("Hunter's Mark expiry search exceeded 40 steps");
+      }
+      return findExpiryState(
+        play(run, finishTurn(current, stamp(70 + step))),
+        step + 1,
+      );
+    };
+    const current = findExpiryState(run.state, 0);
     expect(current.round).toBe(2);
     expect(current.activeSlot).toBe(slotOf(current, "duergar-ranger"));
     expect(
