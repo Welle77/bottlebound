@@ -1,4 +1,4 @@
-import { RULESET } from "./ruleset";
+import { MATCH_CONFIGURATION } from "./match-configuration";
 import { cryptoRandomSource, nextBounded } from "./match-random";
 import type {
   ActiveMatchState,
@@ -15,7 +15,9 @@ import type {
 } from "./match-types";
 
 export function teamOfCharacter(characterId: CharacterId): Team {
-  const character = RULESET.characters.find(({ id }) => id === characterId);
+  const character = MATCH_CONFIGURATION.characters.find(
+    ({ id }) => id === characterId,
+  );
   if (!character) throw new Error("The Match references an unknown character.");
   return character.team;
 }
@@ -145,7 +147,7 @@ export function endMatch(
       type: "MatchEnded",
       matchId: state.matchId,
       sequence,
-      rulesVersion: state.rulesVersion,
+      configurationVersion: state.configurationVersion,
       occurredAt,
       outcome: preview.outcome,
       eliminatedTeams: [...state.eliminatedTeams],
@@ -164,7 +166,7 @@ export function reopenMatch(
   const sequence = state.sequence + 1;
   const active: ActiveMatchState = {
     schemaVersion: state.schemaVersion,
-    rulesVersion: state.rulesVersion,
+    configurationVersion: state.configurationVersion,
     matchId: state.matchId,
     phase: "active",
     sequence,
@@ -189,7 +191,7 @@ export function reopenMatch(
       type: "MatchReopened",
       matchId: state.matchId,
       sequence,
-      rulesVersion: state.rulesVersion,
+      configurationVersion: state.configurationVersion,
       occurredAt,
       endedSequence: state.endedSequence,
     },

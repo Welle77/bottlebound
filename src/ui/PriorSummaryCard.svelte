@@ -38,7 +38,7 @@
       <div><dt>Decision Basis</dt><dd>{basisText}</dd></div>
       <div><dt>Active counts</dt><dd>Drow {summary.finalCounts.Drow} · Duergar {summary.finalCounts.Duergar}</dd></div>
       <div><dt>Active HP totals</dt><dd>Drow {summary.finalHpTotals.Drow} · Duergar {summary.finalHpTotals.Duergar}</dd></div>
-      <div><dt>Ruleset</dt><dd>{summary.rulesVersion}</dd></div>
+      <div><dt>Match Configuration</dt><dd>{summary.configurationVersion}</dd></div>
       <div><dt>Ended</dt><dd>{summary.endedAt}</dd></div>
     </dl>
     <p class="device-note">On this device only. No export.</p>

@@ -16,7 +16,7 @@ import {
   type ActiveMatchState,
   type MatchEvent,
 } from "../../src/domain/match";
-import { RULESET } from "../../src/domain/ruleset";
+import { MATCH_CONFIGURATION } from "../../src/domain/match-configuration";
 import {
   initiativeCharacterId,
   queuedRandom,
@@ -293,7 +293,7 @@ describe("Active Match commands", () => {
           progress.current,
           {
             sourceCharacterId,
-            affectedCharacterIds: RULESET.characters
+            affectedCharacterIds: MATCH_CONFIGURATION.characters
               .filter(({ team }) => team === "Duergar")
               .map(({ id }) => id),
             physicalConfirmations: {

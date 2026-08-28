@@ -35,7 +35,12 @@ export {
   isTeam,
 } from "./match-types";
 
-export { isAbilityName } from "./ruleset";
+export { isAbilityName } from "./match-configuration";
+
+export {
+  MATCH_CONFIGURATION,
+  MATCH_CONFIGURATION_VERSION,
+} from "./match-configuration";
 
 export { cryptoRandomSource } from "./match-random";
 
@@ -135,6 +140,7 @@ export type {
   UndoPreview,
 } from "./match-types";
 
-export type { AbilityName } from "./ruleset";
+export type { AbilityName } from "./match-configuration";
+export type { MatchConfigurationVersion } from "./match-configuration";
 
 export type { AbilityInput } from "./match-abilities";

@@ -1,4 +1,8 @@
-import { RULESET, type AbilityName, type StructuredAbility } from "./ruleset";
+import {
+  MATCH_CONFIGURATION,
+  type AbilityName,
+  type MatchConfigurationAbility,
+} from "./match-configuration";
 import type { ProtectiveReactionInput } from "./match-types";
 import type {
   AbilityId,
@@ -31,14 +35,16 @@ function abilityWarnings(
     : [];
 }
 
-function getAbilityOrThrow(abilityId: AbilityId): StructuredAbility {
-  const ability = RULESET.abilities.find((entry) => entry.id === abilityId);
+function getAbilityOrThrow(abilityId: AbilityId): MatchConfigurationAbility {
+  const ability = MATCH_CONFIGURATION.abilities.find(
+    (entry) => entry.id === abilityId,
+  );
   if (!ability) throw new Error("The ability is unknown.");
   return ability;
 }
 
 function buildAbilityEffects(
-  ability: StructuredAbility,
+  ability: MatchConfigurationAbility,
   context: {
     readonly affectedIds: readonly CharacterId[];
     readonly sequence: number;
@@ -181,7 +187,7 @@ type AbilityTargetInput = {
 
 type AbilityTargetContext = {
   readonly state: ActiveMatchState;
-  readonly ability: StructuredAbility;
+  readonly ability: MatchConfigurationAbility;
   readonly input: AbilityTargetInput;
   readonly abilityOverride: string | null;
 };
@@ -223,7 +229,7 @@ function hasDeflectingPalm(
   selections: readonly ProtectiveReactionInput[],
 ): boolean {
   return selections.some((selection) => {
-    const reaction = RULESET.reactions.find(
+    const reaction = MATCH_CONFIGURATION.reactions.find(
       ({ id }) => id === selection.reactionId,
     );
     return reaction?.name === "Deflecting Palm";
@@ -281,7 +287,7 @@ function resolvePhysicalAttackTargetIds(
 }
 
 function selfDefaultTargetIds(
-  ability: StructuredAbility,
+  ability: MatchConfigurationAbility,
 ): readonly CharacterId[] {
   if (
     ability.name === "Second Wind" ||
@@ -296,7 +302,7 @@ function selfDefaultTargetIds(
 
 function validateAbsoluteUtilityLifeState(
   state: ActiveMatchState,
-  ability: StructuredAbility,
+  ability: MatchConfigurationAbility,
   targetIds: readonly CharacterId[],
 ): void {
   if (
@@ -328,7 +334,7 @@ function validateAbsoluteUtilityLifeState(
 
 function validateUtilityTarget(context: {
   readonly state: ActiveMatchState;
-  readonly ability: StructuredAbility;
+  readonly ability: MatchConfigurationAbility;
   readonly targetId: CharacterId;
   readonly abilityOverride: string | null;
 }): void {
@@ -361,7 +367,7 @@ function validateUtilityTarget(context: {
 
 function validateEliminatedTeamRevival(
   state: ActiveMatchState,
-  ability: StructuredAbility,
+  ability: MatchConfigurationAbility,
   targetIds: readonly CharacterId[],
 ): void {
   if (ability.name !== "Revivify" && ability.name !== "Lay on Hands") {

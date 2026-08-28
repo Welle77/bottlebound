@@ -225,11 +225,11 @@ function assertLiveCommittedCommit(
 
 export function assertCommit(event: MatchEvent, state: MatchState): void {
   assertCanonicalState(state);
-  assertCanonicalEvent(event, state.rulesVersion);
+  assertCanonicalEvent(event, state.configurationVersion);
   if (
     event.matchId !== state.matchId ||
     event.sequence !== state.sequence ||
-    event.rulesVersion !== state.rulesVersion
+    event.configurationVersion !== state.configurationVersion
   ) {
     throw new Error(
       "The Match Event and snapshot do not describe one sequence.",
@@ -291,13 +291,13 @@ export function assertRestoredMatch(
     metadata.matchId !== state.matchId ||
     metadata.sequence !== state.sequence ||
     metadata.schemaVersion !== MATCH_SCHEMA_VERSION ||
-    metadata.rulesVersion !== state.rulesVersion ||
+    metadata.configurationVersion !== state.configurationVersion ||
     events.length !== state.sequence
   ) {
     throw new Error("Saved canonical data has a partial sequence.");
   }
   events.forEach((event, index) => {
-    assertCanonicalEvent(event, state.rulesVersion);
+    assertCanonicalEvent(event, state.configurationVersion);
     if (
       event.matchId !== state.matchId ||
       event.sequence !== index + 1 ||
@@ -312,7 +312,7 @@ export function assertRestoredMatch(
   const lastEvent = events.at(-1);
   if (lastEvent === undefined)
     throw new Error("Saved canonical data has no Match Event.");
-  assertCanonicalEvent(lastEvent, state.rulesVersion);
+  assertCanonicalEvent(lastEvent, state.configurationVersion);
   assertCommit(lastEvent, state);
   if (
     !canonicalMatchRecordsEqual(

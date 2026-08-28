@@ -1,4 +1,4 @@
-import { RULESET } from "./ruleset";
+import { MATCH_CONFIGURATION } from "./match-configuration";
 import { isTeam } from "./match-types";
 import type {
   ActiveEffect,
@@ -46,7 +46,7 @@ function nextTurnPosition(state: ActiveMatchState): TurnPosition {
       const activeSlot = wraps ? 1 : position.activeSlot + 1;
       const round = wraps ? position.round + 1 : position.round;
       const entry = state.initiative[activeSlot - 1];
-      const character = RULESET.characters.find(
+      const character = MATCH_CONFIGURATION.characters.find(
         ({ id }) => id === entry?.characterId,
       );
       if (
@@ -233,7 +233,7 @@ export function finishTurn(
       type: "TurnFinished",
       matchId: state.matchId,
       sequence,
-      rulesVersion: state.rulesVersion,
+      configurationVersion: state.configurationVersion,
       occurredAt,
       fromRound: state.round,
       fromSlot: state.activeSlot,
@@ -278,7 +278,7 @@ export function acknowledgeElimination(
       type: "EliminationContinued",
       matchId: state.matchId,
       sequence,
-      rulesVersion: state.rulesVersion,
+      configurationVersion: state.configurationVersion,
       occurredAt,
       eliminatedTeam,
       outcome: state.outcome,
@@ -319,7 +319,7 @@ export function ruleSimultaneousElimination(
       type: "SimultaneousEliminationRuled",
       matchId: state.matchId,
       sequence,
-      rulesVersion: state.rulesVersion,
+      configurationVersion: state.configurationVersion,
       occurredAt,
       eliminatedTeams,
       outcome,

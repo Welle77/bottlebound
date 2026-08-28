@@ -4,7 +4,7 @@
     SetupMatchState,
     Team,
   } from "../domain/match";
-  import { RULESET } from "../domain/ruleset";
+  import { MATCH_CONFIGURATION } from "../domain/match-configuration";
   import { modifierLabel } from "./format";
   import CharacterName from "./CharacterName.svelte";
 
@@ -16,7 +16,7 @@
   type InitiativeRow = {
     readonly key: CharacterId;
     readonly slot: number;
-    readonly character: RulesetCharacter;
+    readonly character: (typeof MATCH_CONFIGURATION.characters)[number];
     readonly team: Team;
     readonly roll: number;
     readonly modifier: string;
@@ -25,14 +25,12 @@
   }
   type RosterRow = {
     readonly key: CharacterId;
-    readonly character: RulesetCharacter;
+    readonly character: (typeof MATCH_CONFIGURATION.characters)[number];
     readonly team: Team;
     readonly hp: number;
     readonly baseHp: number;
     readonly modifier: string;
   }
-
-  type RulesetCharacter = (typeof RULESET.characters)[number];
 
   const initiativeRows = $derived.by((): readonly InitiativeRow[] => {
     const initiative = match.initiative;
@@ -44,7 +42,7 @@
       ]),
     );
     return initiative.map((entry): InitiativeRow => {
-      const character = RULESET.characters.find(
+      const character = MATCH_CONFIGURATION.characters.find(
         ({ id }) => id === entry.characterId,
       );
       if (!character)
@@ -66,7 +64,7 @@
   const rosterRows = $derived.by((): readonly RosterRow[] => {
     if (match.initiative) return [];
     return match.characters.map((entry): RosterRow => {
-      const character = RULESET.characters.find(
+      const character = MATCH_CONFIGURATION.characters.find(
         ({ id }) => id === entry.characterId,
       );
       if (!character)

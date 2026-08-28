@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CharacterId, MatchState } from "../domain/match";
-  import { RULESET } from "../domain/ruleset";
+  import { MATCH_CONFIGURATION } from "../domain/match-configuration";
   import {
     draftAffectedCharacterIds,
     patchShellState,
@@ -81,7 +81,7 @@
       valid choices.
     </p>
     <div class="contact-list">
-      {#each RULESET.characters as character (character.id)}
+      {#each MATCH_CONFIGURATION.characters as character (character.id)}
         {@const order = model.activeLeg.indexOf(character.id)}
         {@const duplicate = model.closedCharacterIds.has(character.id)}
         {@const closedLegIndex = duplicate

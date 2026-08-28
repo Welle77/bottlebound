@@ -235,7 +235,7 @@ describe("canonical Ability attack metadata", () => {
     }).not.toThrow();
   });
 
-  it("restores historical Ability and Basic Attack records without current metadata", () => {
+  it("rejects an Action Resolution without current metadata", () => {
     const historicalRulesVersion = "BB-retired";
     const withoutCurrentMetadata = (event: ActionResolvedEvent) => {
       const { attackType, rangePaces, damage, ...historical } = event;
@@ -244,7 +244,7 @@ describe("canonical Ability attack metadata", () => {
       void damage;
       return {
         ...historical,
-        rulesVersion: historicalRulesVersion,
+        configurationVersion: historicalRulesVersion,
         attackLegs: historical.attackLegs.map((leg) => {
           const { rangePaces: legRangePaces, ...withoutRange } = leg;
           void legRangePaces;
@@ -258,26 +258,21 @@ describe("canonical Ability attack metadata", () => {
         withoutCurrentMetadata(overriddenResolution()),
         historicalRulesVersion,
       );
-      assertCanonicalEvent(
-        withoutCurrentMetadata(redirectedResolution()),
-        historicalRulesVersion,
-      );
-    }).not.toThrow();
+    }).toThrow("configuration version is incompatible");
   });
 
-  it("allows retired Ability ids and attack metadata only for historical Rulesets", () => {
+  it("rejects retired Ability ids and attack metadata", () => {
     const event = overriddenResolution();
     const historicalRulesVersion = "BB-retired";
     const attackId = "duergar-ranger-retired-mark";
     const historical = {
       ...event,
-      rulesVersion: historicalRulesVersion,
+      configurationVersion: historicalRulesVersion,
       attackId,
       abilityId: null,
       attackType: "retired-ability-attack",
       rangePaces: 9,
       damage: 2,
-      rulesSourceAnchor: "retired-ability-card",
       attackLegs: event.attackLegs.map((leg) => ({
         ...leg,
         attackId,
@@ -287,25 +282,21 @@ describe("canonical Ability attack metadata", () => {
 
     expect(() => {
       assertCanonicalEvent(historical, historicalRulesVersion);
-    }).not.toThrow();
-    expect(() => {
-      assertCanonicalEvent(historical);
-    }).toThrow("The canonical Action Resolution Event is invalid.");
+    }).toThrow("configuration version is incompatible");
   });
 
-  it("allows retired Reaction ids and attack metadata only for historical Rulesets", () => {
+  it("rejects retired Reaction ids and attack metadata", () => {
     const event = redirectedResolution();
     const historicalRulesVersion = "BB-retired";
     const attackId = "duergar-monk-retired-basic-attack";
     const reactionId = "duergar-monk-retired-deflection";
     const historical = {
       ...event,
-      rulesVersion: historicalRulesVersion,
+      configurationVersion: historicalRulesVersion,
       attackId,
       attackType: "retired-thrown-attack",
       rangePaces: 9,
       damage: 2,
-      rulesSourceAnchor: "retired-basic-attack",
       attackLegs: event.attackLegs.map((leg) => ({
         ...leg,
         attackId,
@@ -321,10 +312,7 @@ describe("canonical Ability attack metadata", () => {
 
     expect(() => {
       assertCanonicalEvent(historical, historicalRulesVersion);
-    }).not.toThrow();
-    expect(() => {
-      assertCanonicalEvent(historical);
-    }).toThrow("The canonical Action Resolution Event is invalid.");
+    }).toThrow("configuration version is incompatible");
   });
 });
 
@@ -352,14 +340,14 @@ describe("canonical active-effect persistence", () => {
     }
   });
 
-  it("allows retired effect and spent Ability ids for a historical Ruleset", () => {
+  it("rejects retired effect and spent Ability ids", () => {
     const { state } = markedResolution();
     const effect = state.activeEffects[0];
     if (!effect) throw new Error("Hunter's Mark must apply one active effect.");
     const historicalRulesVersion = "BB-retired";
     const historical = {
       ...state,
-      rulesVersion: historicalRulesVersion,
+      configurationVersion: historicalRulesVersion,
       spentAbilityIds: ["duergar-ranger-retired-mark"],
       spentReactionIds: ["retired-deflecting-palm"],
       activeEffects: [{ ...effect, abilityId: "duergar-ranger-retired-mark" }],
@@ -367,10 +355,7 @@ describe("canonical active-effect persistence", () => {
 
     expect(() => {
       assertCanonicalState(historical, historicalRulesVersion);
-    }).not.toThrow();
-    expect(() => {
-      assertCanonicalState({ ...historical, rulesVersion: state.rulesVersion });
-    }).toThrow("The canonical spent Abilities is structurally invalid.");
+    }).toThrow("configuration version is incompatible");
   });
 });
 

@@ -13,21 +13,21 @@ const sourcePath = new URL("../../bottlebound_rules_final.md", import.meta.url);
 
 const records: readonly RulesReferenceRecord[] = [
   {
-    kind: "section",
+    kind: "heading",
     title: "15. Character Ability Cards",
     anchor: "section-15-character-ability-cards",
     sourceOrder: 100,
     text: "Character Ability Cards Backstab and Shadow Step",
   },
   {
-    kind: "ability",
+    kind: "heading",
     title: "Backstab",
     anchor: "ability-rogue-backstab",
     sourceOrder: 140,
     text: "Backstab Melee 2 paces Line of Sight Yes Ball Required Yes",
   },
   {
-    kind: "quick-reference",
+    kind: "heading",
     title: "Line of Sight",
     anchor: "quick-reference-line-of-sight",
     sourceOrder: 220,
@@ -58,10 +58,10 @@ describe("rules search", () => {
   test("returns only records that contain every query term", () => {
     expect(
       searchRules(records, "line sight").map(({ anchor }) => anchor),
-    ).toEqual(["ability-rogue-backstab", "quick-reference-line-of-sight"]);
+    ).toEqual(["quick-reference-line-of-sight", "ability-rogue-backstab"]);
   });
 
-  test("ranks exact titles first, then ability cards, then stable source order", () => {
+  test("ranks exact titles first, then stable source order", () => {
     expect(
       searchRules(records, "Backstab").map(({ anchor }) => anchor),
     ).toEqual(["ability-rogue-backstab", "section-15-character-ability-cards"]);
@@ -101,7 +101,9 @@ describe("rules search", () => {
   });
 
   test("merges overlapping term ranges into one visible union", () => {
-    const [result] = searchRules(records, "back backstab");
+    const result = searchRules(records, "back backstab").find(
+      ({ title }) => title === "Backstab",
+    );
 
     expect(result?.highlights).toEqual([
       { start: 0, end: 8, text: "Backstab" },
@@ -116,20 +118,42 @@ describe("rules search", () => {
       searchRules(reference.records, "unsafe movement").map(
         ({ anchor }) => anchor,
       ),
-    ).toContain("section-4-battlefield-setup");
+    ).toContain("rules-heading-4-battlefield-setup");
 
     const backstab = searchRules(reference.records, "Backstab").map(
       ({ anchor }) => anchor,
     );
-    expect(backstab[0]).toBe("ability-rogue-backstab");
-    expect(backstab).toContain("section-11-damage-combos-persistent-effects");
-    expect(backstab).toContain("section-15-character-ability-cards");
+    expect(backstab[0]).toBe("rules-heading-backstab");
+    expect(backstab).toContain(
+      "rules-heading-11-damage-combos-persistent-effects",
+    );
 
     expect(
-      searchRules(reference.records, "rogue ball required").map(
+      searchRules(reference.records, "ball required").map(
         ({ anchor }) => anchor,
       ),
-    ).toContain("ability-rogue-backstab");
+    ).toContain("rules-heading-backstab");
+  });
+
+  test("searches generic headings after level, number, position, and order changes", () => {
+    const reference = buildRulesReference(
+      `# Guide
+
+### 20. Movement
+
+Rules about safe movement.
+
+## 3. Initiative
+
+Rules about initiative.
+`,
+      "current-guide",
+    );
+
+    expect(searchRules(reference.records, "safe movement")).toHaveLength(1);
+    expect(searchRules(reference.records, "initiative")[0]?.title).toBe(
+      "3. Initiative",
+    );
   });
 
   test("returns no results for a query without normalized terms", () => {

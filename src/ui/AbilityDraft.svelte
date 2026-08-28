@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { RULESET } from "../domain/ruleset";
+  import { MATCH_CONFIGURATION } from "../domain/match-configuration";
   import { cancelAbilityDraft, confirmAbility } from "../app/actions";
   import type { CharacterId, Team } from "../domain/match";
   import {
@@ -69,13 +69,15 @@
     if (!draft || draft.kind !== "ability" || match?.phase !== "active") {
       return null;
     }
-    const ability = RULESET.abilities.find(({ id }) => id === draft.abilityId);
+    const ability = MATCH_CONFIGURATION.abilities.find(
+      ({ id }) => id === draft.abilityId,
+    );
     if (!ability) {
       throw new Error("The Action Draft references an unknown ability.");
     }
-    if (draft.rulesVersion !== match.rulesVersion) {
+    if (draft.configurationVersion !== match.configurationVersion) {
       throw new Error(
-        "The Action Draft does not match the Active Match Ruleset.",
+        "The Action Draft does not match the active Match Configuration.",
       );
     }
     return {
@@ -188,7 +190,7 @@
       }));
     const reactionReviews: readonly ReactionReview[] = draft.reactions.flatMap(
       (selection) => {
-        const reaction = RULESET.reactions.find(
+        const reaction = MATCH_CONFIGURATION.reactions.find(
           ({ id }) => id === selection.reactionId,
         );
         if (!reaction) return [];
@@ -259,7 +261,7 @@
     return (event) => {
       if (!(event.currentTarget instanceof HTMLInputElement)) return;
       const currentDraft = state.current.actionDraft;
-      const ability = RULESET.abilities.find(
+      const ability = MATCH_CONFIGURATION.abilities.find(
         ({ id }) => id === currentDraft?.abilityId,
       );
       if (!currentDraft || currentDraft.kind !== "ability" || !ability) return;
@@ -309,7 +311,7 @@
 
   function handleOpenRules(event: MouseEvent): void {
     if (!(event.currentTarget instanceof HTMLButtonElement)) return;
-    openRules(event.currentTarget, base?.ability.sourceAnchor ?? null);
+    openRules(event.currentTarget, base?.ability.name ?? MATCH_CONFIGURATION.labels.ability);
   }
 </script>
 
@@ -318,14 +320,14 @@
     <!-- Single-line runs: specs regex-match across these phrases and read
          raw textContent from the source paragraph. -->
     <p><strong>Source:</strong> <CharacterName character={b.sourceCharacter} displayNames={b.match.displayNames} /></p>
-    <p><strong>Ability:</strong> {b.ability.name} · {b.ability.actionType === "powerful" ? "Powerful" : "Standard"}</p>
+    <p><strong>{MATCH_CONFIGURATION.labels.ability}:</strong> {b.ability.name} · {b.ability.actionType === "powerful" ? MATCH_CONFIGURATION.labels.powerfulAbility : MATCH_CONFIGURATION.labels.standardAbility}</p>
     <p><strong>Range:</strong> {b.ability.range}</p>
     <p><strong>Effect:</strong> {b.ability.rulesText}</p>
     <button
       id={`rules-ability-draft-${b.ability.id}`}
       class="rules-context-link"
       type="button"
-      data-open-rules-anchor={b.ability.sourceAnchor}
+      data-open-rules-query={b.ability.name}
       onclick={handleOpenRules}
     >
       {b.ability.name} rules

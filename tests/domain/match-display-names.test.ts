@@ -12,7 +12,7 @@ import {
   undoLastEvent,
   type MatchState,
 } from "../../src/domain/match";
-import { RULES_VERSION } from "../../src/domain/ruleset";
+import { MATCH_CONFIGURATION_VERSION } from "../../src/domain/match-configuration";
 import { queuedRandom } from "./match-test-support";
 
 describe("Display Name assignment", () => {
@@ -32,7 +32,7 @@ describe("Display Name assignment", () => {
       type: "DisplayNamesAssigned",
       matchId: "match-1",
       sequence: 2,
-      rulesVersion: RULES_VERSION,
+      configurationVersion: MATCH_CONFIGURATION_VERSION,
       occurredAt: "2026-08-22T14:01:00.000Z",
       displayNames: {
         "drow-rogue": "Silk",

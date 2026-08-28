@@ -2,6 +2,7 @@ import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it } from "vitest";
 
 import {
+  MATCH_CONFIGURATION_VERSION,
   MATCH_SCHEMA_VERSION,
   createSetup,
   finishTurn,
@@ -27,6 +28,22 @@ function randomQueue(values: number[]) {
 }
 
 describe("Match command persistence contract", () => {
+  it("identifies persisted Matches by Match Configuration and the current schema", () => {
+    const setup = createSetup(
+      "configuration-identity",
+      "2026-08-22T14:00:00.000Z",
+    );
+
+    expect(setup.state).toMatchObject({
+      configurationVersion: MATCH_CONFIGURATION_VERSION,
+      schemaVersion: MATCH_SCHEMA_VERSION,
+    });
+    expect(setup.event).toMatchObject({
+      configurationVersion: MATCH_CONFIGURATION_VERSION,
+    });
+    expect(MATCH_SCHEMA_VERSION).toBe(4);
+  });
+
   it("commits one matching event and snapshot for every Match command", async () => {
     const factory = new IDBFactory();
     const store = createIndexedDbMatchStore(factory, "all-command-persistence");
@@ -75,7 +92,7 @@ describe("Match command persistence contract", () => {
       summary: null,
     });
     expect(undone.state.schemaVersion).toBe(MATCH_SCHEMA_VERSION);
-    expect(MATCH_SCHEMA_VERSION).toBe(3);
+    expect(MATCH_SCHEMA_VERSION).toBe(4);
     expect(generated.event.type).toBe("InitiativeGenerated");
     expect(rerolled.event.type).toBe("InitiativeRerolled");
   });

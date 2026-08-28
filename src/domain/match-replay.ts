@@ -1,4 +1,4 @@
-import { RULESET } from "./ruleset";
+import { MATCH_CONFIGURATION } from "./match-configuration";
 import { isAbilityId, isActionKind, isTeam } from "./match-types";
 import { resolveAbility } from "./match-abilities";
 import { resolveBasicAttack } from "./match-combat";
@@ -7,7 +7,7 @@ import {
   assertMatchStateStructure,
   canonicalMatchRecordsEqual,
 } from "./match-history";
-import { createSetupForRulesVersion } from "./match-setup";
+import { createSetupForConfigurationVersion } from "./match-setup";
 import {
   acknowledgeElimination,
   finishTurn,
@@ -74,9 +74,9 @@ function validateHistoricalActionResolution(
   state: ActiveMatchState,
   event: ActionResolvedEvent,
 ): void {
-  if (event.rulesVersion !== state.rulesVersion) {
+  if (event.configurationVersion !== state.configurationVersion) {
     throw new Error(
-      "The Action Resolution rules version does not follow Match State.",
+      "The Action Resolution configuration version does not follow Match State.",
     );
   }
   if (!isActionKind(event.actionType)) {
@@ -397,7 +397,7 @@ function applyActionResolved(
     current,
     "The Action Resolution cannot apply to this Match State.",
   );
-  if (active.rulesVersion !== RULESET.version) {
+  if (active.configurationVersion !== MATCH_CONFIGURATION.version) {
     return applyHistoricalActionResolution(active, event);
   }
   if (event.actionType === "Ability") {
@@ -568,10 +568,10 @@ export function restoreStateFromEvents(
   if (!first || first.type !== "SetupCreated") {
     throw new Error("Undo needs a complete Match Event history.");
   }
-  const initial: MatchState = createSetupForRulesVersion(
+  const initial: MatchState = createSetupForConfigurationVersion(
     first.matchId,
     first.occurredAt,
-    first.rulesVersion,
+    first.configurationVersion,
   ).state;
   const current: MatchState = events
     .slice(1)
@@ -631,7 +631,7 @@ export function undoLastEvent(
       type: "UndoApplied",
       matchId: state.matchId,
       sequence: state.sequence + 1,
-      rulesVersion: state.rulesVersion,
+      configurationVersion: state.configurationVersion,
       occurredAt,
       targetSequence: preview.target.sequence,
       targetType: preview.target.type,

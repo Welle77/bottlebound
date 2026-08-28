@@ -1,4 +1,4 @@
-export const MATCH_SCHEMA_VERSION = 3;
+export const MATCH_SCHEMA_VERSION = 4;
 
 export const TEAMS = ["Drow", "Duergar"] as const;
 
@@ -41,7 +41,7 @@ export function isCharacterId(value: string): value is CharacterId {
   return (CHARACTER_IDS as readonly string[]).includes(value);
 }
 
-/** Every unlimited Basic Attack printed in the authoritative Ruleset. */
+/** Every unlimited Basic Attack owned by the application configuration. */
 export type BasicAttackId =
   | "drow-rogue-basic-attack"
   | "drow-druid-basic-attack"
@@ -56,7 +56,7 @@ export type BasicAttackId =
   | "duergar-warlock-basic-attack"
   | "duergar-cleric-basic-attack";
 
-/** Every one-shot Ability card printed in the authoritative Ruleset. */
+/** Every one-shot Ability card owned by the application configuration. */
 export type AbilityId =
   | "drow-rogue-backstab"
   | "drow-rogue-vanish"
@@ -348,14 +348,14 @@ export type CoinFlipTieBreakStep = {
 };
 
 /**
- * Optional referee-assigned Display Names keyed by Ruleset character id.
- * Absent keys mean the character keeps its Ruleset name alone.
+ * Optional referee-assigned Display Names keyed by configured character id.
+ * Absent keys mean the character keeps its configured name alone.
  */
-export type DisplayNames = Readonly<Record<CharacterId, string>>;
+export type DisplayNames = Readonly<Partial<Record<CharacterId, string>>>;
 
 export type SetupMatchState = {
   readonly schemaVersion: typeof MATCH_SCHEMA_VERSION;
-  readonly rulesVersion: string;
+  readonly configurationVersion: string;
   readonly matchId: string;
   readonly phase: Extract<Phase, "setup">;
   readonly sequence: number;
@@ -367,7 +367,7 @@ export type SetupMatchState = {
 
 export type ActiveMatchState = {
   readonly schemaVersion: typeof MATCH_SCHEMA_VERSION;
-  readonly rulesVersion: string;
+  readonly configurationVersion: string;
   readonly matchId: string;
   readonly phase: Extract<Phase, "active">;
   readonly sequence: number;
@@ -381,7 +381,7 @@ export type ActiveMatchState = {
 
 export type EndedMatchState = {
   readonly schemaVersion: typeof MATCH_SCHEMA_VERSION;
-  readonly rulesVersion: string;
+  readonly configurationVersion: string;
   readonly matchId: string;
   readonly phase: Extract<Phase, "ended">;
   readonly sequence: number;
@@ -406,7 +406,7 @@ export type MatchState = SetupMatchState | ActiveMatchState | EndedMatchState;
 type EventBase = {
   readonly matchId: string;
   readonly sequence: number;
-  readonly rulesVersion: string;
+  readonly configurationVersion: string;
   readonly occurredAt: string;
 };
 
@@ -473,7 +473,7 @@ export type MatchSummary = {
   readonly decisionBasis: DecisionBasis;
   readonly finalCounts: FinalTeamCounts;
   readonly finalHpTotals: FinalTeamCounts;
-  readonly rulesVersion: string;
+  readonly configurationVersion: string;
   readonly endedAt: string;
   readonly coinFlipResult?: Team;
 };
@@ -575,7 +575,6 @@ export type ActionResolvedEvent = {
   readonly attackType: AttackKind;
   readonly rangePaces: 2 | 6 | 8;
   readonly damage: 1;
-  readonly rulesSourceAnchor: string;
   readonly attackLegs: readonly AttackLeg[];
   readonly physicalConfirmations: PhysicalConfirmations;
   readonly reactions: readonly ProtectiveReactionResolution[];

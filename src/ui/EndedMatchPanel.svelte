@@ -37,7 +37,7 @@
         : "",
       endedAt: match.endedAt,
       round: match.round,
-      rulesVersion: match.rulesVersion,
+      configurationVersion: match.configurationVersion,
     };
   });
 
@@ -66,7 +66,7 @@
       {#if view.hpTotalsText}<div><dt>Active HP totals</dt><dd>{view.hpTotalsText}</dd></div>{/if}
       <div><dt>Ended</dt><dd>{view.endedAt}</dd></div>
       <div><dt>Final round</dt><dd>{view.round}</dd></div>
-      <div><dt>Ruleset</dt><dd>{view.rulesVersion}</dd></div>
+      <div><dt>Match Configuration</dt><dd>{view.configurationVersion}</dd></div>
     </dl>
     <p>This Match is read-only. Reopen it to make corrections, or remove its complete local history.</p>
     <div class="match-actions">

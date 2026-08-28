@@ -25,6 +25,12 @@ export default defineConfig({
     conditions: ["browser"],
   },
   test: {
-    exclude: ["tests/browser/**", "node_modules/**", ".opencode/**", "dist/**"],
+    exclude: [
+      "tests/browser/**",
+      "node_modules/**",
+      ".opencode/**",
+      ".worktrees/**",
+      "dist/**",
+    ],
   },
 });

@@ -78,10 +78,10 @@ export function overwriteStoredEvent(
   });
 }
 
-export function rewriteStoredRulesVersion(
+export function rewriteStoredConfigurationVersion(
   factory: IDBFactory,
   databaseName: string,
-  rulesVersion: string,
+  configurationVersion: string,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const open = factory.open(databaseName);
@@ -108,7 +108,7 @@ export function rewriteStoredRulesVersion(
               string,
               unknown
             >[]) {
-              const rewritten = { ...value, rulesVersion };
+              const rewritten = { ...value, configurationVersion };
               if (storeName === "metadata") {
                 store.put(rewritten, "current-match");
               } else {
@@ -199,6 +199,69 @@ export function rewriteCurrentSnapshotAsRetiredSchema(
             snapshots.put({ ...retiredSchemaSnapshot, schemaVersion: 2 });
           }
         });
+        transaction.addEventListener(
+          "complete",
+          () => {
+            resolve();
+          },
+          {
+            once: true,
+          },
+        );
+        transaction.addEventListener(
+          "error",
+          () => {
+            reject(
+              transaction.error ??
+                new Error("The IndexedDB transaction failed."),
+            );
+          },
+          { once: true },
+        );
+      },
+      { once: true },
+    );
+  });
+}
+
+/** Rewrites current records to the immediately prior T02 schema number. */
+export function rewriteCurrentSnapshotAsPriorConfigurationSchema(
+  factory: IDBFactory,
+  databaseName: string,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const open = factory.open(databaseName);
+    open.addEventListener(
+      "error",
+      () => {
+        reject(open.error ?? new Error("The Match database could not open."));
+      },
+      { once: true },
+    );
+    open.addEventListener(
+      "success",
+      () => {
+        const transaction = open.result.transaction(
+          ["metadata", "snapshots"],
+          "readwrite",
+        );
+        for (const storeName of ["metadata", "snapshots"]) {
+          const store = transaction.objectStore(storeName);
+          const request = store.getAll();
+          request.addEventListener("success", () => {
+            for (const value of request.result as readonly Record<
+              string,
+              unknown
+            >[]) {
+              const rewritten = { ...value, schemaVersion: 3 };
+              if (storeName === "metadata") {
+                store.put(rewritten, "current-match");
+              } else {
+                store.put(rewritten);
+              }
+            }
+          });
+        }
         transaction.addEventListener(
           "complete",
           () => {

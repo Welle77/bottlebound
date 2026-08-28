@@ -27,7 +27,7 @@ type CurrentMatchMetadata = {
   readonly matchId: string;
   readonly sequence: number;
   readonly schemaVersion: number;
-  readonly rulesVersion: string;
+  readonly configurationVersion: string;
 };
 
 type CommitContext = {
@@ -234,7 +234,8 @@ async function validateExistingCommit(
     context.event.sequence !== expectedSequence ||
     (context.current !== undefined &&
       (context.current.matchId !== context.event.matchId ||
-        context.current.rulesVersion !== context.state.rulesVersion))
+        context.current.configurationVersion !==
+          context.state.configurationVersion))
   ) {
     await abortCommit(
       context,
@@ -264,7 +265,7 @@ async function writeCommit(context: ReadonlyDeepCommitContext): Promise<void> {
         matchId: context.state.matchId,
         sequence: context.state.sequence,
         schemaVersion: MATCH_SCHEMA_VERSION,
-        rulesVersion: context.state.rulesVersion,
+        configurationVersion: context.state.configurationVersion,
       } satisfies CurrentMatchMetadata,
       CURRENT_MATCH_KEY,
     );

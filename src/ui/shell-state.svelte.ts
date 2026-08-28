@@ -1,8 +1,8 @@
 /**
  * Runes-backed reactive shell state.
  *
- * Owns every reactive Console cell: the {@link ShellState} snapshot, the
- * rules UI state, and the pending Rules-anchor reveal. Each cell pairs a
+ * Owns every reactive Console cell: the {@link ShellState} snapshot and the
+ * Rules UI state. Each cell pairs a
  * plain snapshot holder with a `$state` revision counter, so reactivity
  * fires exactly when a cell is replaced wholesale and never on in-place
  * mutation — matching the functional-style discipline: consumers never
@@ -20,7 +20,7 @@ import {
   type MatchSummary,
   type ProtectiveReactionInput,
 } from "../domain/match";
-import { RULESET, type PhysicalAttackCheck } from "../domain/ruleset";
+import type { PhysicalAttackCheck } from "../domain/match-configuration";
 import type {
   AppShellCacheState,
   NetworkState,
@@ -46,8 +46,8 @@ export type ActionDraft = {
   /** Which command opened this draft; ability drafts resolve through resolveAbility. */
   readonly kind: "basic" | "ability";
   readonly sourceCharacterId: CharacterId;
-  readonly rulesVersion: string;
-  /** The chosen Ruleset ability; null for Basic Attack drafts. */
+  readonly configurationVersion: string;
+  /** The chosen configured ability; null for Basic Attack drafts. */
   readonly abilityId: AbilityId | null;
   /**
    * Chosen targets for targeted-attack and ally/enemy/utility ability
@@ -155,7 +155,7 @@ export const state = {
   },
 };
 
-let rulesSnapshot = createRulesUiState(RULESET.version);
+let rulesSnapshot = createRulesUiState();
 const rulesRevision = $state({ n: 0 });
 
 /** Reactive rules UI state with explicit wholesale replacement for dialog transitions. */
@@ -167,24 +167,6 @@ export const rulesUi = {
   set(next: RulesUiState): void {
     rulesSnapshot = next;
     rulesRevision.n += 1;
-  },
-};
-
-let pendingAnchorSnapshot: string | null = null;
-const anchorRevision = $state({ n: 0 });
-
-/**
- * Anchor requested through openRules that the next Rules modal mount must
- * reveal; consumed and cleared by the RulesModal component.
- */
-export const pendingAnchorReveal = {
-  get current(): string | null {
-    void anchorRevision.n;
-    return pendingAnchorSnapshot;
-  },
-  set(next: string | null): void {
-    pendingAnchorSnapshot = next;
-    anchorRevision.n += 1;
   },
 };
 

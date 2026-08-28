@@ -1,6 +1,9 @@
 <script lang="ts">
-  import type { MatchState } from "../domain/match";
-  import type { StructuredAbility } from "../domain/ruleset";
+import type { MatchState } from "../domain/match";
+import {
+  MATCH_CONFIGURATION,
+  type MatchConfigurationAbility,
+} from "../domain/match-configuration";
   import { closeAbilityPicker, openAbilityDraft } from "../app/actions";
   import { rulesCharacterOf, unspentAbilities } from "./ability-draft";
   import { openRules } from "./rules-dialog";
@@ -20,14 +23,16 @@
   });
   const abilities = $derived(unspentAbilities(match));
 
-  function abilityMeta(ability: StructuredAbility): string {
-    return `${ability.actionType === "powerful" ? "Powerful Ability" : "Standard Ability"} · Range ${ability.range}${ability.targetPolicy.lifeState === "active" ? " · Active targets" : ""}`;
+  function abilityMeta(ability: MatchConfigurationAbility): string {
+    return `${ability.actionType === "powerful" ? MATCH_CONFIGURATION.labels.powerfulAbility : MATCH_CONFIGURATION.labels.standardAbility} · Range ${ability.range}${ability.targetPolicy.lifeState === "active" ? " · Active targets" : ""}`;
   }
 
-  function handleOpenRules(ability: StructuredAbility): (event: MouseEvent) => void {
+  function handleOpenRules(
+    ability: MatchConfigurationAbility,
+  ): (event: MouseEvent) => void {
     return (event) => {
       if (!(event.currentTarget instanceof HTMLButtonElement)) return;
-      openRules(event.currentTarget, ability.sourceAnchor);
+      openRules(event.currentTarget, ability.name);
     };
   }
 </script>
@@ -54,7 +59,7 @@
               id={`rules-ability-${ability.id}`}
               class="rules-context-link"
               type="button"
-              data-open-rules-anchor={ability.sourceAnchor}
+              data-open-rules-query={ability.name}
               onclick={handleOpenRules(ability)}
             >
               {ability.name} rules

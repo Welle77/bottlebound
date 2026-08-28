@@ -1,5 +1,4 @@
 export type RulesUiState = {
-  readonly version: string;
   readonly open: boolean;
   readonly query: string;
   readonly selectedAnchor: string | null;
@@ -7,9 +6,8 @@ export type RulesUiState = {
   readonly openerId: string | null;
 };
 
-export function createRulesUiState(version: string): RulesUiState {
+export function createRulesUiState(): RulesUiState {
   return {
-    version,
     open: false,
     query: "",
     selectedAnchor: null,
@@ -18,9 +16,15 @@ export function createRulesUiState(version: string): RulesUiState {
   };
 }
 
-export function retainRulesVersion(
+export function openRulesWithQuery(
   state: RulesUiState,
-  version: string,
+  query: string,
 ): RulesUiState {
-  return state.version === version ? state : createRulesUiState(version);
+  return {
+    ...state,
+    open: true,
+    query,
+    selectedAnchor: null,
+    scrollTop: 0,
+  };
 }

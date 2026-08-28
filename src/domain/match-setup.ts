@@ -1,4 +1,7 @@
-import { RULESET, RULES_VERSION } from "./ruleset";
+import {
+  MATCH_CONFIGURATION,
+  MATCH_CONFIGURATION_VERSION,
+} from "./match-configuration";
 import { nextBounded, orderByCoinFlips } from "./match-random";
 import {
   initialCombatState,
@@ -22,21 +25,21 @@ import type {
   TieOrder,
 } from "./match-types";
 
-export function createSetupForRulesVersion(
+export function createSetupForConfigurationVersion(
   matchId: string,
   occurredAt: string,
-  rulesVersion: string,
+  configurationVersion: string,
 ): CommandResult<SetupMatchState, SetupCreatedEvent> {
   if (matchId.length === 0) {
     throw new Error("A Match identifier is required.");
   }
   const state: SetupMatchState = {
     schemaVersion: MATCH_SCHEMA_VERSION,
-    rulesVersion,
+    configurationVersion,
     matchId,
     phase: "setup",
     sequence: 1,
-    characters: RULESET.characters.map(({ id, baseHp }) => ({
+    characters: MATCH_CONFIGURATION.characters.map(({ id, baseHp }) => ({
       characterId: id,
       hp: baseHp,
       currentMaxHp: baseHp,
@@ -53,7 +56,7 @@ export function createSetupForRulesVersion(
       type: "SetupCreated",
       matchId,
       sequence: 1,
-      rulesVersion,
+      configurationVersion,
       occurredAt,
     },
   };
@@ -63,7 +66,11 @@ export function createSetup(
   matchId: string,
   occurredAt: string,
 ): CommandResult<SetupMatchState, SetupCreatedEvent> {
-  return createSetupForRulesVersion(matchId, occurredAt, RULES_VERSION);
+  return createSetupForConfigurationVersion(
+    matchId,
+    occurredAt,
+    MATCH_CONFIGURATION_VERSION,
+  );
 }
 
 /**
@@ -115,7 +122,7 @@ export function assignDisplayNames(
       type: "DisplayNamesAssigned",
       matchId: state.matchId,
       sequence,
-      rulesVersion: state.rulesVersion,
+      configurationVersion: state.configurationVersion,
       occurredAt,
       displayNames,
     },
@@ -129,7 +136,7 @@ function rollInitiative(
   readonly results: readonly InitiativeEntry[];
   readonly tieOrder: readonly TieOrder[];
 } {
-  const unsorted = RULESET.characters.map((character) => {
+  const unsorted = MATCH_CONFIGURATION.characters.map((character) => {
     const roll = nextBounded(random, 20) + 1;
     return {
       characterId: character.id,
@@ -163,7 +170,7 @@ function rollInitiative(
     slot: index + 1,
   }));
 
-  if (state.characters.length !== RULESET.characters.length) {
+  if (state.characters.length !== MATCH_CONFIGURATION.characters.length) {
     throw new Error("The Setup roster is incomplete.");
   }
   return { results, tieOrder };
@@ -191,7 +198,7 @@ function initiativeCommand(
       type,
       matchId: state.matchId,
       sequence,
-      rulesVersion: state.rulesVersion,
+      configurationVersion: state.configurationVersion,
       occurredAt,
       results,
       tieOrder,
@@ -241,12 +248,14 @@ export function startMatch(
     state.initiative?.map(({ characterId }) => characterId),
   );
   if (
-    state.initiative?.length !== RULESET.characters.length ||
-    characterIds.size !== RULESET.characters.length ||
+    state.initiative?.length !== MATCH_CONFIGURATION.characters.length ||
+    characterIds.size !== MATCH_CONFIGURATION.characters.length ||
     state.initiative.some(
       (entry, index) =>
         entry.slot !== index + 1 ||
-        !RULESET.characters.some(({ id }) => id === entry.characterId),
+        !MATCH_CONFIGURATION.characters.some(
+          ({ id }) => id === entry.characterId,
+        ),
     )
   ) {
     throw new Error("A complete 12-slot initiative result is required.");
@@ -265,7 +274,7 @@ export function startMatch(
       type: "MatchStarted",
       matchId: state.matchId,
       sequence,
-      rulesVersion: state.rulesVersion,
+      configurationVersion: state.configurationVersion,
       occurredAt,
       round: 1,
       activeSlot: 1,

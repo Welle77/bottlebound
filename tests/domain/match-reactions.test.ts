@@ -8,7 +8,7 @@ import {
   restoreStateFromEvents,
   startMatch,
 } from "../../src/domain/match";
-import { RULESET } from "../../src/domain/ruleset";
+import { MATCH_CONFIGURATION } from "../../src/domain/match-configuration";
 import { initiativeCharacterId, queuedRandom } from "./match-test-support";
 
 describe("Active Match commands", () => {
@@ -134,7 +134,7 @@ describe("Active Match commands", () => {
     );
     const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
     const sourceCharacterId = initiativeCharacterId(started.state, 0);
-    const attack = RULESET.basicAttacks.find(
+    const attack = MATCH_CONFIGURATION.basicAttacks.find(
       ({ characterId }) => characterId === sourceCharacterId,
     );
     if (!attack) throw new Error("The test expected a Basic Attack entry.");

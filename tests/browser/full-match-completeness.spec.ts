@@ -196,7 +196,7 @@ test("one named Match mixes Basic Attack, every ability interaction, undo, and E
     page.getByRole("checkbox", { name: CHECK_TOGGLE_LABEL }),
   ).toBeHidden();
   const silkRow = page.locator("[data-active-order-row]", { hasText: "Silk" });
-  await expect(silkRow.locator(".display-name-ruleset")).toHaveText("Rogue");
+  await expect(silkRow.locator(".display-name-character")).toHaveText("Rogue");
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Wizard" }),
   ).toContainText("2/3");

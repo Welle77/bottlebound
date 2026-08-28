@@ -35,14 +35,14 @@
   function handleDelegatedClick(event: MouseEvent): void {
     const target = event.target instanceof Element ? event.target : null;
     if (!target) return;
-    // Transport for the setup panel's contextual rules anchors, which carry
+    // Transport for the setup panel's contextual Rules queries, which carry
     // no individual listeners; every other control below is a real wired
     // button/input.
     const anchorButton = target.closest<HTMLElement>(
-      "[data-open-rules-anchor]",
+      "[data-open-rules-query]",
     );
     if (anchorButton) {
-      openRules(anchorButton, anchorButton.dataset.openRulesAnchor ?? null);
+      openRules(anchorButton, anchorButton.dataset.openRulesQuery);
     }
   }
 </script>
@@ -73,7 +73,7 @@
               id="rules-tie-break"
               class="rules-context-link"
               type="button"
-              data-open-rules-anchor="section-6-initiative-game-clock"
+             data-open-rules-query="Initiative"
             >
               Exact tie-break rules
             </button>
@@ -82,7 +82,7 @@
               id="rules-initiative"
               class="rules-context-link"
               type="button"
-              data-open-rules-anchor="section-6-initiative-game-clock"
+              data-open-rules-query="Initiative"
             >
               Initiative rules
             </button>

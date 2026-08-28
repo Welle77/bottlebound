@@ -5,7 +5,7 @@
     type MatchState,
     type ReactionId,
   } from "../domain/match";
-  import { RULESET } from "../domain/ruleset";
+  import { MATCH_CONFIGURATION } from "../domain/match-configuration";
   import { rulesCharacterOf } from "./ability-draft";
   import { patchShellState, state } from "./shell-state.svelte";
   import CharacterName from "./CharacterName.svelte";
@@ -45,11 +45,13 @@
       choice: (typeof choices)[number],
       override: boolean,
     ): ReactionRow | null => {
-      const reaction = RULESET.reactions.find(
+      const reaction = MATCH_CONFIGURATION.reactions.find(
         ({ id }) => id === choice.reactionId,
       );
       const owner = reaction
-        ? RULESET.characters.find(({ id }) => id === reaction.ownerCharacterId)
+        ? MATCH_CONFIGURATION.characters.find(
+            ({ id }) => id === reaction.ownerCharacterId,
+          )
         : undefined;
       if (!reaction || !owner) return null;
       return {
@@ -99,7 +101,7 @@
               reactionId,
               protectedCharacterId,
               override: row.override
-                ? "Referee allowed a state-invalid Reaction."
+                ? MATCH_CONFIGURATION.refereeInstructions.stateInvalidReaction
                 : null,
             },
           ]

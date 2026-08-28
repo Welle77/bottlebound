@@ -7,7 +7,7 @@ import {
   type InitiativeEntry,
   type MatchEvent,
 } from "../domain/match";
-import { RULESET } from "../domain/ruleset";
+import { MATCH_CONFIGURATION } from "../domain/match-configuration";
 import {
   assertActionResolutionEffectCollections,
   assertActionResolutionMetadata,
@@ -30,20 +30,25 @@ const invalidActionResolution = () =>
   new Error("The canonical Action Resolution Event is invalid.");
 function assertEventBase(
   value: Record<string, unknown>,
-  expectedRulesVersion?: string,
+  expectedConfigurationVersion?: string,
 ): void {
   if (
     typeof value.matchId !== "string" ||
     !Number.isSafeInteger(value.sequence) ||
     (value.sequence as number) < 1 ||
-    typeof value.rulesVersion !== "string" ||
-    value.rulesVersion.length === 0 ||
-    (expectedRulesVersion !== undefined &&
-      value.rulesVersion !== expectedRulesVersion) ||
+    typeof value.configurationVersion !== "string" ||
+    value.configurationVersion.length === 0 ||
+    (expectedConfigurationVersion !== undefined &&
+      value.configurationVersion !== expectedConfigurationVersion) ||
     typeof value.occurredAt !== "string" ||
     value.occurredAt.length === 0
   ) {
     throw new Error("The canonical Match Event is structurally invalid.");
+  }
+  if (value.configurationVersion !== MATCH_CONFIGURATION.version) {
+    throw new Error(
+      "The canonical Match Event configuration version is incompatible.",
+    );
   }
 }
 function assertSetupEvent(value: Record<string, unknown>): void {
@@ -62,7 +67,7 @@ function assertDisplayNamesEvent(value: Record<string, unknown>): void {
         typeof names[characterId] === "string" &&
         names[characterId].length > 0 &&
         names[characterId].trim() === names[characterId] &&
-        RULESET.characters.some(({ id }) => id === characterId),
+        MATCH_CONFIGURATION.characters.some(({ id }) => id === characterId),
     )
   ) {
     throw new Error("The canonical Display Name assignment is invalid.");
@@ -85,15 +90,15 @@ function assertTurnFields(value: Record<string, unknown>): void {
     (value.fromRound as number) < 1 ||
     (value.round as number) < 1 ||
     (value.fromSlot as number) < 1 ||
-    (value.fromSlot as number) > RULESET.characters.length ||
+    (value.fromSlot as number) > MATCH_CONFIGURATION.characters.length ||
     (value.activeSlot as number) < 1 ||
-    (value.activeSlot as number) > RULESET.characters.length ||
+    (value.activeSlot as number) > MATCH_CONFIGURATION.characters.length ||
     !Array.isArray(value.skippedSlots) ||
     !value.skippedSlots.every(
       (slot) =>
         Number.isSafeInteger(slot) &&
         (slot as number) >= 1 &&
-        (slot as number) <= RULESET.characters.length,
+        (slot as number) <= MATCH_CONFIGURATION.characters.length,
     )
   ) {
     throw new Error("The canonical Finish Turn Event is invalid.");
@@ -103,7 +108,7 @@ function expectedVisitedTurnSlots(
   value: Record<string, unknown>,
 ): readonly number[] {
   return Array.from(
-    { length: RULESET.characters.length + 4 },
+    { length: MATCH_CONFIGURATION.characters.length + 4 },
     (_, step) => step,
   ).reduce<{
     readonly slot: number;
@@ -113,14 +118,14 @@ function expectedVisitedTurnSlots(
   }>(
     (position) => {
       if (position.done) return position;
-      const wraps = position.slot === RULESET.characters.length;
+      const wraps = position.slot === MATCH_CONFIGURATION.characters.length;
       const slot = wraps ? 1 : position.slot + 1;
       const round = wraps ? position.round + 1 : position.round;
       const nextVisited =
         slot !== value.activeSlot || round !== value.round
           ? [...position.visited, slot]
           : position.visited;
-      if (nextVisited.length > RULESET.characters.length) {
+      if (nextVisited.length > MATCH_CONFIGURATION.characters.length) {
         return { slot, round, visited: nextVisited, done: true };
       }
       return {
@@ -143,7 +148,7 @@ function assertTurnSkippedSlots(
   visited: readonly number[],
 ): void {
   if (
-    visited.length > RULESET.characters.length ||
+    visited.length > MATCH_CONFIGURATION.characters.length ||
     !Array.isArray(value.skippedSlots) ||
     value.skippedSlots.length !== visited.length ||
     !value.skippedSlots.every((skipped, index) => skipped === visited[index])
@@ -151,13 +156,10 @@ function assertTurnSkippedSlots(
     throw new Error("The canonical Finish Turn Event is invalid.");
   }
 }
-function assertTurnFinishedEvent(
-  value: Record<string, unknown>,
-  historicalRuleset: boolean,
-): void {
+function assertTurnFinishedEvent(value: Record<string, unknown>): void {
   assertTurnFields(value);
   assertTurnSkippedSlots(value, expectedVisitedTurnSlots(value));
-  assertExpiredEffectCollection(value.expiredEffects, historicalRuleset);
+  assertExpiredEffectCollection(value.expiredEffects);
 }
 
 function assertActionResolutionCollections(
@@ -216,15 +218,13 @@ function assertAttackLegIdentity(
 function assertAttackLegRedirection(
   leg: Record<string, unknown>,
   index: number,
-  historicalRuleset: boolean,
 ): void {
   if (
     (index === 0 && leg.redirectedByReactionId !== null) ||
     (index === 1 &&
       (typeof leg.redirectedByReactionId !== "string" ||
         leg.redirectedByReactionId.length === 0 ||
-        (!historicalRuleset &&
-          leg.redirectedByReactionId !== "duergar-monk-deflecting-palm")))
+        leg.redirectedByReactionId !== "duergar-monk-deflecting-palm"))
   ) {
     throw new Error("The canonical Attack Leg is invalid.");
   }
@@ -252,7 +252,7 @@ function characterIdsFrom(value: unknown): readonly CharacterId[] | null {
       ids === null ||
       typeof characterId !== "string" ||
       !isCharacterId(characterId) ||
-      !RULESET.characters.some(({ id }) => id === characterId)
+      !MATCH_CONFIGURATION.characters.some(({ id }) => id === characterId)
     ) {
       return null;
     }
@@ -265,23 +265,21 @@ function affectedIdsForLeg(
   context: {
     readonly leg: unknown;
     readonly index: number;
-    readonly historicalRuleset: boolean;
   },
 ): readonly CharacterId[] {
-  const { leg, index, historicalRuleset } = context;
+  const { leg, index } = context;
   if (!isRecord(leg)) {
     throw new Error("The canonical Attack Leg is invalid.");
   }
   assertAttackLegIdentity(value, leg, index);
-  assertAttackLegRedirection(leg, index, historicalRuleset);
+  assertAttackLegRedirection(leg, index);
   return assertAttackLegTargets(value, leg, index);
 }
 function assertActionResolutionContacts(
   value: Record<string, unknown>,
-  historicalRuleset: boolean,
 ): readonly CharacterId[] {
   const affectedCharacterIds = (value.attackLegs as readonly unknown[]).flatMap(
-    (leg, index) => affectedIdsForLeg(value, { leg, index, historicalRuleset }),
+    (leg, index) => affectedIdsForLeg(value, { leg, index }),
   );
   if (
     new Set(affectedCharacterIds).size !== affectedCharacterIds.length ||
@@ -296,18 +294,14 @@ function assertReactionIdentity(
   context: {
     readonly reaction: { readonly ownerCharacterId: string } | undefined;
     readonly owner: unknown;
-    readonly historicalRuleset: boolean;
   },
 ): void {
-  const { reaction, owner, historicalRuleset } = context;
+  const { reaction, owner } = context;
   if (
-    (historicalRuleset &&
-      (typeof reactionResolution.reactionId !== "string" ||
-        reactionResolution.reactionId.length === 0)) ||
-    (!historicalRuleset && !reaction) ||
+    !reaction ||
     typeof owner !== "string" ||
     owner.length === 0 ||
-    (!historicalRuleset && reactionResolution.ownerCharacterId !== owner)
+    reactionResolution.ownerCharacterId !== owner
   ) {
     throw new Error("The canonical Action Resolution Reaction is invalid.");
   }
@@ -331,10 +325,9 @@ function isValidReactionOperation(
     readonly owner: string;
     readonly sourceCharacterId: unknown;
     readonly reaction: { readonly name: string } | undefined;
-    readonly historicalRuleset: boolean;
   },
 ): boolean {
-  const { owner, sourceCharacterId, reaction, historicalRuleset } = context;
+  const { owner, sourceCharacterId, reaction } = context;
   if (!isRecord(operation)) return false;
   if (operation.type === "prevent-damage-and-effects") return true;
   if (operation.type === "manual-movement") {
@@ -342,14 +335,14 @@ function isValidReactionOperation(
       operation.characterId === owner &&
       typeof operation.instruction === "string" &&
       operation.instruction.length > 0 &&
-      (historicalRuleset || operation.maxPaces === 2)
+      operation.maxPaces === 2
     );
   }
   if (operation.type === "redirect-physical-attack") {
     return (
       operation.fromCharacterId === owner &&
       operation.towardCharacterId === sourceCharacterId &&
-      (historicalRuleset || reaction?.name === "Deflecting Palm")
+      reaction?.name === "Deflecting Palm"
     );
   }
   return false;
@@ -360,10 +353,9 @@ function assertReactionOperations(
     readonly owner: string;
     readonly value: Readonly<Record<string, unknown>>;
     readonly reaction: { readonly name: string } | undefined;
-    readonly historicalRuleset: boolean;
   },
 ): void {
-  const { owner, value, reaction, historicalRuleset } = context;
+  const { owner, value, reaction } = context;
   if (
     (reactionResolution.override !== null &&
       (typeof reactionResolution.override !== "string" ||
@@ -374,7 +366,6 @@ function assertReactionOperations(
         owner,
         sourceCharacterId: value.sourceCharacterId,
         reaction,
-        historicalRuleset,
       }),
     )
   ) {
@@ -386,26 +377,21 @@ function assertReactionResolution(
   context: {
     readonly value: Readonly<Record<string, unknown>>;
     readonly affectedCharacterIds: readonly CharacterId[];
-    readonly historicalRuleset: boolean;
     readonly seenOwners: ReadonlySet<string>;
   },
 ): string {
-  const { value, affectedCharacterIds, historicalRuleset, seenOwners } =
-    context;
+  const { value, affectedCharacterIds, seenOwners } = context;
   if (!isRecord(rawResolution)) {
     throw new Error("The canonical Action Resolution Reaction is invalid.");
   }
   const reactionResolution = rawResolution;
-  const reaction = historicalRuleset
-    ? undefined
-    : RULESET.reactions.find(({ id }) => id === reactionResolution.reactionId);
-  const owner = historicalRuleset
-    ? reactionResolution.ownerCharacterId
-    : reaction?.ownerCharacterId;
+  const reaction = MATCH_CONFIGURATION.reactions.find(
+    ({ id }) => id === reactionResolution.reactionId,
+  );
+  const owner = reaction?.ownerCharacterId;
   assertReactionIdentity(reactionResolution, {
     reaction,
     owner,
-    historicalRuleset,
   });
   assertReactionProtection(reactionResolution, affectedCharacterIds);
   if (seenOwners.has(owner as string)) {
@@ -423,21 +409,18 @@ function assertReactionResolution(
     owner: owner as string,
     value,
     reaction,
-    historicalRuleset,
   });
   return owner as string;
 }
 function assertActionResolutionReactions(
   value: Record<string, unknown>,
   affectedCharacterIds: readonly CharacterId[],
-  historicalRuleset: boolean,
 ): void {
   const reactionList = value.reactions as readonly unknown[];
   reactionList.reduce<ReadonlySet<string>>((seenOwners, rawResolution) => {
     const owner = assertReactionResolution(rawResolution, {
       value,
       affectedCharacterIds,
-      historicalRuleset,
       seenOwners,
     });
     return new Set([...seenOwners, owner]);
@@ -516,26 +499,13 @@ function assertActionResolutionEffects(
     assertActionEffect(effect, affectedCharacterId, value.actionType);
   });
 }
-function assertActionResolvedEvent(
-  value: Record<string, unknown>,
-  expectedRulesVersion?: string,
-): void {
-  const historicalRuleset =
-    typeof expectedRulesVersion === "string" &&
-    expectedRulesVersion !== RULESET.version;
-  assertActionResolutionMetadata(value, historicalRuleset);
+function assertActionResolvedEvent(value: Record<string, unknown>): void {
+  assertActionResolutionMetadata(value);
   assertActionResolutionCollections(value);
-  assertActionResolutionEffectCollections(value, historicalRuleset);
+  assertActionResolutionEffectCollections(value);
   assertActionResolutionTeamsAndOverrides(value);
-  const affectedCharacterIds = assertActionResolutionContacts(
-    value,
-    historicalRuleset,
-  );
-  assertActionResolutionReactions(
-    value,
-    affectedCharacterIds,
-    historicalRuleset,
-  );
+  const affectedCharacterIds = assertActionResolutionContacts(value);
+  assertActionResolutionReactions(value, affectedCharacterIds);
   assertActionResolutionRedirect(value);
   assertActionResolutionEffects(value, affectedCharacterIds);
 }
@@ -615,7 +585,7 @@ function expectedInitiativeTies(results: readonly unknown[]): readonly {
     )
     .map((total) => ({
       total,
-      initialCharacterIds: RULESET.characters
+      initialCharacterIds: MATCH_CONFIGURATION.characters
         .filter((character) =>
           results.some(
             (entry) =>
@@ -641,11 +611,11 @@ function assertInitiativeEvent(value: Record<string, unknown>): void {
   const results = value.results as readonly unknown[];
   assertCanonicalState({
     schemaVersion: MATCH_SCHEMA_VERSION,
-    rulesVersion: value.rulesVersion,
+    configurationVersion: value.configurationVersion,
     matchId: value.matchId,
     phase: "setup",
     sequence: value.sequence,
-    characters: RULESET.characters.map(({ id, baseHp }) => ({
+    characters: MATCH_CONFIGURATION.characters.map(({ id, baseHp }) => ({
       characterId: id,
       hp: baseHp,
     })),
@@ -678,12 +648,12 @@ function assertInitiativeEvent(value: Record<string, unknown>): void {
 }
 export function assertCanonicalEvent(
   value: unknown,
-  expectedRulesVersion?: string,
+  expectedConfigurationVersion?: string,
 ): asserts value is MatchEvent {
   if (!isRecord(value)) {
     throw new Error("The canonical Match Event is structurally invalid.");
   }
-  assertEventBase(value, expectedRulesVersion);
+  assertEventBase(value, expectedConfigurationVersion);
   if (value.type === "SetupCreated") {
     assertSetupEvent(value);
     return;
@@ -697,15 +667,11 @@ export function assertCanonicalEvent(
     return;
   }
   if (value.type === "TurnFinished") {
-    assertTurnFinishedEvent(
-      value,
-      typeof expectedRulesVersion === "string" &&
-        expectedRulesVersion !== RULESET.version,
-    );
+    assertTurnFinishedEvent(value);
     return;
   }
   if (value.type === "ActionResolved") {
-    assertActionResolvedEvent(value, expectedRulesVersion);
+    assertActionResolvedEvent(value);
     return;
   }
   if (value.type === "EliminationContinued") {

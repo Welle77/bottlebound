@@ -2,8 +2,8 @@
   import type { CharacterId, DisplayNames } from "../domain/match";
 
   // One character name with its optional Display Name primary and the
-  // Ruleset name secondary as muted context; without a distinct Display
-  // Name it falls back to the Ruleset name alone. The sole name renderer —
+  // Application character name secondary as muted context; without a distinct
+  // Display Name it falls back to the application name alone. The sole name renderer —
   // the escaped characterNameHtml() template was deleted with the legacy
   // renderer (T10).
   let {
@@ -18,7 +18,7 @@
 </script>
 
 {#if displayName && displayName !== character.name}
-  {displayName} <span class="display-name-ruleset">{character.name}</span>
+  {displayName} <span class="display-name-character">{character.name}</span>
 {:else}
   {character.name}
 {/if}
