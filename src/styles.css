@@ -68,13 +68,12 @@ button:disabled {
 }
 
 .hero {
-  max-width: 45rem;
   margin-bottom: var(--space-5);
 }
 
 .hero-heading {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
 }
@@ -150,32 +149,6 @@ dd {
   border-radius: var(--radius);
   background: var(--surface);
   padding: clamp(1rem, 4vw, 2rem);
-}
-
-.undo-confirmation {
-  grid-template-columns: 1fr;
-}
-
-.undo-comparison {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.undo-state {
-  min-width: 0;
-  border: 0.125rem solid var(--border);
-  border-radius: 0.5rem;
-  background: var(--surface);
-  padding: var(--space-3);
-}
-
-.undo-state h4 {
-  margin: 0 0 var(--space-1);
-  font-size: 1.1rem;
-}
-
-.undo-state>p {
-  margin-bottom: var(--space-1);
 }
 
 .readiness-panel {
@@ -336,6 +309,7 @@ dd {
 }
 
 .turn-card.active-character {
+  position: relative;
   border-color: var(--accent);
   box-shadow: inset 0.35rem 0 0 var(--accent);
 }
@@ -456,8 +430,36 @@ dd {
 }
 
 .active-match>.match-actions {
+  align-items: center;
   flex-wrap: nowrap;
   margin-bottom: var(--space-3);
+}
+
+.action-usage {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.action-usage-marker {
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 0.125rem solid var(--border);
+  border-radius: 50%;
+  background: transparent;
+}
+
+.action-usage-marker.spent {
+  border-color: var(--accent);
+  background: var(--accent);
 }
 
 .active-match>.match-actions>button {
@@ -536,7 +538,7 @@ dd {
 .reaction-review-list,
 .attack-leg-review-list {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 
 .contact-control,
@@ -544,12 +546,13 @@ dd {
 .override-control,
 .reaction-control {
   display: flex;
-  min-height: 3rem;
+  min-height: 3.5rem;
   align-items: center;
   gap: var(--space-2);
   border: 0.0625rem solid var(--border);
   border-radius: 0.5rem;
-  padding: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  line-height: 1.4;
   cursor: pointer;
 }
 
@@ -565,6 +568,7 @@ dd {
   width: 1.5rem;
   height: 1.5rem;
   flex: 0 0 auto;
+  margin-top: 0.1rem;
 }
 
 .contact-team-cards {
@@ -634,7 +638,11 @@ dd {
 }
 
 .ability-option .match-actions {
-  justify-content: start;
+  width: 100%;
+}
+
+.ability-list .match-actions button {
+  width: 100%;
 }
 
 .target-overrides {
@@ -756,13 +764,17 @@ dd {
   margin-bottom: var(--space-2);
 }
 
-.undo-modal > p:not(.eyebrow) {
+.undo-modal>p:not(.eyebrow) {
   color: var(--text-muted);
   line-height: 1.45;
 }
 
 .undo-modal .button-row {
   margin-top: var(--space-4);
+}
+
+.undo-modal .button-row button {
+  flex: 1 1 0;
 }
 
 .blocking-error,
@@ -1026,14 +1038,6 @@ dd {
 
   .confirmation-panel .button-row {
     margin-top: 0;
-  }
-
-  .undo-confirmation {
-    grid-template-columns: 1fr;
-  }
-
-  .undo-comparison {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .turn-cards {

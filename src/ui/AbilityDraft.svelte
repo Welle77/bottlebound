@@ -11,7 +11,6 @@
     rulesCharacterOf,
     targetCandidates,
   } from "./ability-draft";
-  import { openRules } from "./rules-dialog";
   import {
     patchShellState,
     state,
@@ -295,10 +294,6 @@
     });
   }
 
-  function handleOpenRules(event: MouseEvent): void {
-    if (!(event.currentTarget instanceof HTMLButtonElement)) return;
-    openRules(event.currentTarget, base?.ability.name ?? MATCH_CONFIGURATION.labels.ability);
-  }
 </script>
 
 {#snippet abilityProfile(b: AbilityDraftBase)}
@@ -309,15 +304,6 @@
     <p><strong>{MATCH_CONFIGURATION.labels.ability}:</strong> {b.ability.name} · {b.ability.actionType === "powerful" ? MATCH_CONFIGURATION.labels.powerfulAbility : MATCH_CONFIGURATION.labels.standardAbility}</p>
     <p><strong>Range:</strong> {b.ability.range}</p>
     <p><strong>Effect:</strong> {b.ability.rulesText}</p>
-    <button
-      id={`rules-ability-draft-${b.ability.id}`}
-      class="rules-context-link"
-      type="button"
-      data-open-rules-query={b.ability.name}
-      onclick={handleOpenRules}
-    >
-      {b.ability.name} rules
-    </button>
   </div>
 {/snippet}
 

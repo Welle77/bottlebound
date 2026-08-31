@@ -178,6 +178,8 @@
     const promptKind = getPromptKind(match);
     const activeHp = requireHp(hpByCharacter, activeEntry.characterId);
     const nextHp = requireHp(hpByCharacter, nextEntry.characterId);
+    const actionsUsed =
+      match.actionsUsed ?? (match.majorActionUsed ? 1 : 0);
     return {
       match,
       activeSlot: activeEntry.slot,
@@ -187,6 +189,7 @@
       activeHp,
       nextHp,
       activeDowned,
+      actionsUsed,
       moveAvailable:
         !saving &&
         !activeDowned &&
@@ -294,6 +297,22 @@
           </div>
           <div><dt>Slot</dt><dd>{view.activeSlot}</dd></div>
         </dl>
+        <div
+          class="action-usage"
+          aria-label={`${view.actionsUsed} of 2 actions used`}
+        >
+          <span class="action-usage-label">Actions</span>
+          <span
+            class:spent={view.actionsUsed >= 1}
+            class="action-usage-marker"
+            aria-hidden="true"
+          ></span>
+          <span
+            class:spent={view.actionsUsed >= 2}
+            class="action-usage-marker"
+            aria-hidden="true"
+          ></span>
+        </div>
       </article>
     </div>
     {#if !view.combatAvailable}

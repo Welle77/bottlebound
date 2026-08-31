@@ -231,19 +231,7 @@ test("one named Match mixes Basic Attack, every ability interaction, undo, and E
   await expect(
     page.getByRole("heading", { name: "Undo Action Resolution?" }),
   ).toBeVisible();
-  await expect(page.locator("[data-undo-current]")).toContainText(
-    "Spent Abilities:",
-  );
-  await expect(page.locator("[data-undo-current]")).toContainText(
-    "Arcane Bolt",
-  );
-  await expect(page.locator("[data-undo-current]")).toContainText("Ember");
-  await expect(page.locator("[data-undo-restored]")).toContainText(
-    "Blessing of Battle",
-  );
-  await expect(page.locator("[data-undo-restored]")).not.toContainText(
-    "Arcane Bolt",
-  );
+  await expect(page.getByText(/Are you sure you want to undo this action/)).toBeVisible();
   await page.getByRole("button", { name: "Confirm Undo" }).click();
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Warlock" }),

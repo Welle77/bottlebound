@@ -34,9 +34,9 @@ import { patchShellState, state } from "./shell-state.svelte";
 </script>
 
 {#if preview}
-  <section
+  <dialog
+    open
     class="undo-modal"
-    role="alertdialog"
     aria-modal="true"
     aria-labelledby="confirmation-heading"
     aria-describedby="confirmation-detail"
@@ -49,14 +49,6 @@ import { patchShellState, state } from "./shell-state.svelte";
     </p>
     <div class="button-row">
       <button
-        id="confirm-action"
-        class="danger-action"
-        type="button"
-        onclick={() => void confirmAction()}
-      >
-        Confirm Undo
-      </button>
-      <button
         id="cancel-action"
         class="secondary-action"
         type="button"
@@ -64,6 +56,14 @@ import { patchShellState, state } from "./shell-state.svelte";
       >
         Cancel
       </button>
+      <button
+        id="confirm-action"
+        class="danger-action"
+        type="button"
+        onclick={() => void confirmAction()}
+      >
+        Confirm Undo
+      </button>
     </div>
-  </section>
+  </dialog>
 {/if}
