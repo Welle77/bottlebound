@@ -226,15 +226,19 @@ describe("Active Match commands", () => {
       },
       "2026-08-22T14:03:00.000Z",
     );
+    expect("rulesSourceAnchor" in attack.event).toBe(false);
     const historicalVersion = "BB-prior-release";
     const history = [setup.event, generated.event, started.event].map(
-      (event) => ({ ...event, rulesVersion: historicalVersion }),
+      (event) => ({ ...event, configurationVersion: historicalVersion }),
     );
     const resolvedEvent = {
       ...attack.event,
-      rulesVersion: historicalVersion,
+      configurationVersion: historicalVersion,
     } as MatchEvent;
-    const expectedState = { ...attack.state, rulesVersion: historicalVersion };
+    const expectedState = {
+      ...attack.state,
+      configurationVersion: historicalVersion,
+    };
 
     expect(restoreStateFromEvents([...history, resolvedEvent])).toEqual(
       expectedState,

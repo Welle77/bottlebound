@@ -7,15 +7,28 @@ import {
   restoreStateFromEvents,
   startMatch,
 } from "../../src/domain/match";
-import { RULESET, RULES_VERSION } from "../../src/domain/ruleset";
+import {
+  MATCH_CONFIGURATION,
+  MATCH_CONFIGURATION_VERSION,
+} from "../../src/domain/match-configuration";
 import { queuedRandom } from "./match-test-support";
 
 describe("Setup Match commands", () => {
   it("creates the authoritative fixed roster at full HP without initiative", () => {
     const result = createSetup("match-1", "2026-08-22T14:00:00.000Z");
 
-    expect(RULES_VERSION).toHaveLength(12);
-    expect(RULESET.characters).toEqual([
+    expect(MATCH_CONFIGURATION_VERSION).toHaveLength(12);
+    expect(
+      MATCH_CONFIGURATION.characters.map(
+        ({ id, name, team, baseHp, initiativeModifier }) => ({
+          id,
+          name,
+          team,
+          baseHp,
+          initiativeModifier,
+        }),
+      ),
+    ).toEqual([
       {
         id: "drow-rogue",
         name: "Rogue",
@@ -113,7 +126,7 @@ describe("Setup Match commands", () => {
     expect(result.event).toMatchObject({
       type: "SetupCreated",
       sequence: 1,
-      rulesVersion: RULES_VERSION,
+      configurationVersion: MATCH_CONFIGURATION_VERSION,
     });
   });
 

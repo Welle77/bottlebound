@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { RULESET } from "../domain/ruleset";
   import { resolveRulesSurface } from "../rules-reference/rules-reference";
   import {
     normalizeRulesQuery,
@@ -7,11 +6,7 @@
   } from "../rules-reference/rules-search";
   import { highlightedExcerpt, searchResultKind } from "./format";
   import { closeRules } from "./rules-dialog";
-  import {
-    pendingAnchorReveal,
-    rulesUi,
-    state,
-  } from "./shell-state.svelte";
+  import { rulesUi } from "./shell-state.svelte";
 
   // Converted Rules reference modal (T09): open/search/close and focus
   // containment react to the runes-backed rules UI state instead of being
@@ -19,15 +14,11 @@
   // as the last child of the app root, exactly where the legacy renderer
   // appended the swapped modal, so no wrapper nodes appear in the DOM.
   const open = $derived(rulesUi.current.open);
-  const surface = $derived(
-    resolveRulesSurface(state.current.match?.rulesVersion ?? RULESET.version),
-  );
+  const surface = $derived(resolveRulesSurface());
   const query = $derived(rulesUi.current.query);
   const hasQuery = $derived(normalizeRulesQuery(query).length > 0);
   const results = $derived(
-    surface.status === "available" && hasQuery
-      ? searchRules(surface.reference.records, query)
-      : [],
+    hasQuery ? searchRules(surface.reference.records, query) : [],
   );
 
   // Captured through a mount action below so the keydown focus trap can
@@ -55,15 +46,6 @@
       document
         .getElementById(rulesUi.current.selectedAnchor)
         ?.setAttribute("data-rules-selected", "");
-    }
-    const pendingAnchor = pendingAnchorReveal.current;
-    if (pendingAnchor !== null) {
-      document
-        .getElementById(pendingAnchor)
-        ?.scrollIntoView({ block: "start" });
-      rulesUi.set({ ...rulesUi.current, scrollTop: node.scrollTop });
-      pendingAnchorReveal.set(null);
-      return;
     }
     node.scrollTop = rulesUi.current.scrollTop;
   }
@@ -153,40 +135,7 @@
 <svelte:window onkeydown={handleKeydown} />
 
 {#if open}
-  {#if surface.status === "unavailable"}
-    <!-- Legacy parity: the dialog role stays on a section element exactly
-         as the deleted legacy template rendered it. -->
-    <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
-    <div class="rules-backdrop">
-      <section
-        class="rules-dialog rules-error"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="rules-heading"
-        use:captureDialog
-      >
-        <header class="rules-dialog-header">
-          <div>
-            <p class="eyebrow">Rules unavailable</p>
-            <h2 id="rules-heading">BOTTLEBOUND Rules</h2>
-            <p>Ruleset {surface.version}</p>
-          </div>
-          <button
-            id="close-rules"
-            class="secondary-action"
-            type="button"
-            aria-label="Close Rules"
-            use:focusDialog
-            onclick={closeRules}
-          >
-            Close
-          </button>
-        </header>
-        <p role="alert">{surface.message}</p>
-      </section>
-    </div>
-  {:else}
-    <div class="rules-backdrop">
+  <div class="rules-backdrop">
       <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
       <section
         class="rules-dialog"
@@ -270,14 +219,10 @@
           >
             <h3 id="rules-contents-heading">Contents</h3>
             <ul class="rules-direct-links">
-              <li><a href="#section-2-teams-roles-hp-basic-attacks" data-rules-source>Roster</a></li>
-              <li><a href="#section-15-character-ability-cards" data-rules-source>Abilities</a></li>
-              <li><a href="#section-5-core-terms" data-rules-source>Universal rules</a></li>
-              <li><a href="#section-16-referee-quick-reference" data-rules-source>Quick reference</a></li>
             </ul>
             <ol>
-              {#each surface.reference.sections as section (section.anchor)}
-                <li><a href="#{section.anchor}">{section.title}</a></li>
+              {#each surface.reference.navigation as heading (heading.anchor)}
+                <li><a href="#{heading.anchor}">{heading.title}</a></li>
               {/each}
             </ol>
           </nav>
@@ -288,6 +233,5 @@
           ></article>
         </div>
       </section>
-    </div>
-  {/if}
+  </div>
 {/if}

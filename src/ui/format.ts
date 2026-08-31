@@ -48,10 +48,7 @@ export function highlightedExcerpt(
 export function searchResultKind(kind: string): string {
   return (
     {
-      ability: "Ability card",
-      character: "Character",
-      section: "Rules section",
-      "quick-reference": "Quick reference",
+      heading: "Guide heading",
     }[kind] ?? kind
   );
 }

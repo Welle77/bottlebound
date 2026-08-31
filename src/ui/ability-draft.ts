@@ -6,10 +6,10 @@ import {
 } from "../domain/match";
 import { resolveAttackDamageAgainstCharacter } from "../domain/match-ability-effects";
 import {
-  RULESET,
+  MATCH_CONFIGURATION,
+  type MatchConfigurationAbility,
   type PhysicalAttackCheck,
-  type StructuredAbility,
-} from "../domain/ruleset";
+} from "../domain/match-configuration";
 import type { ActionDraft } from "./shell-state.svelte";
 
 type ActiveView = Extract<MatchState, { readonly phase: "active" }>;
@@ -21,7 +21,9 @@ export function activeCharacterIdOf(
 }
 
 export function rulesCharacterOf(characterId: CharacterId) {
-  const character = RULESET.characters.find(({ id }) => id === characterId);
+  const character = MATCH_CONFIGURATION.characters.find(
+    ({ id }) => id === characterId,
+  );
   if (!character) throw new Error("The Match references an unknown character.");
   return character;
 }
@@ -42,12 +44,12 @@ export function currentMaxHpOf(
   return entry?.currentMaxHp ?? rulesCharacterOf(characterId).baseHp;
 }
 
-/** The active character's unspent, non-Reaction abilities from the Ruleset. */
+/** The active character's unspent, non-Reaction abilities from configuration. */
 export function unspentAbilities(
   match: ActiveView,
-): readonly StructuredAbility[] {
+): readonly MatchConfigurationAbility[] {
   const activeCharacterId = activeCharacterIdOf(match);
-  return RULESET.abilities.filter(
+  return MATCH_CONFIGURATION.abilities.filter(
     (ability) =>
       ability.ownerCharacterId === activeCharacterId &&
       ability.actionType !== "reaction" &&
@@ -55,8 +57,10 @@ export function unspentAbilities(
   );
 }
 
-function abilityOf(draft: ActionDraft): StructuredAbility {
-  const ability = RULESET.abilities.find(({ id }) => id === draft.abilityId);
+function abilityOf(draft: ActionDraft): MatchConfigurationAbility {
+  const ability = MATCH_CONFIGURATION.abilities.find(
+    ({ id }) => id === draft.abilityId,
+  );
   if (!ability)
     throw new Error("The Action Draft references an unknown ability.");
   return ability;
@@ -101,21 +105,30 @@ export function buildAbilityInput(draft: ActionDraft): AbilityInput {
           )
         : undefined,
     majorActionOverride: draft.majorActionOverride
-      ? "Referee confirmed a second Major Action this turn."
+      ? MATCH_CONFIGURATION.refereeInstructions.secondMajorAction
       : null,
     abilityOverride: draft.abilityOverride
-      ? "The referee recorded an Override for this state-invalid ability choice."
+      ? MATCH_CONFIGURATION.refereeInstructions.stateInvalidAbility
       : null,
   };
 }
 
 export const CHECK_LABELS: readonly (readonly [PhysicalAttackCheck, string])[] =
   [
-    ["range", "Range is legal"],
-    ["line-of-sight", "Line of Sight is legal"],
-    ["legal-bottle-contact", "Every selected bottle was physically hit"],
-    ["terrain-contact", "Terrain contact was resolved"],
-  ];
+    ["range", MATCH_CONFIGURATION.labels.physicalChecks.range],
+    [
+      "line-of-sight",
+      MATCH_CONFIGURATION.labels.physicalChecks["line-of-sight"],
+    ],
+    [
+      "legal-bottle-contact",
+      MATCH_CONFIGURATION.labels.physicalChecks["legal-bottle-contact"],
+    ],
+    [
+      "terrain-contact",
+      MATCH_CONFIGURATION.labels.physicalChecks["terrain-contact"],
+    ],
+  ] as const;
 
 /* ------------------------------------------------------------------ */
 /* Shared draft-view helpers consumed by the converted T07 components   */
@@ -130,7 +143,7 @@ export type { TargetCandidate };
 
 function reviveBlockedOnEliminatedTeam(
   match: ActiveView,
-  ability: StructuredAbility,
+  ability: MatchConfigurationAbility,
   targetCharacterId: CharacterId,
 ): boolean {
   if (ability.name !== "Revivify" && ability.name !== "Lay on Hands")
@@ -144,11 +157,11 @@ function reviveBlockedOnEliminatedTeam(
 
 export function targetCandidates(
   match: ActiveView,
-  ability: StructuredAbility,
+  ability: MatchConfigurationAbility,
 ): readonly TargetCandidate[] {
   const hpById = hpByIdMap(match);
   const ownerTeam = rulesCharacterOf(ability.ownerCharacterId).team;
-  return RULESET.characters.map((character) => {
+  return MATCH_CONFIGURATION.characters.map((character) => {
     const hp = hpById.get(character.id) ?? 0;
     const relation = ability.targetPolicy.relation;
     const lifeState = ability.targetPolicy.lifeState;
@@ -195,7 +208,7 @@ export type DraftWarning = {
 export function draftWarnings(
   match: ActiveView,
   draft: ActionDraft,
-  ability: StructuredAbility,
+  ability: MatchConfigurationAbility,
 ): readonly DraftWarning[] {
   const hpById = hpByIdMap(match);
   const ownerTeam = rulesCharacterOf(ability.ownerCharacterId).team;
@@ -331,8 +344,8 @@ export function attackPreviewRow(
     ...new Set(
       resolved.expired.map(
         ({ abilityId }) =>
-          RULESET.abilities.find(({ id }) => id === abilityId)?.name ??
-          abilityId,
+          MATCH_CONFIGURATION.abilities.find(({ id }) => id === abilityId)
+            ?.name ?? abilityId,
       ),
     ),
   ];
@@ -381,7 +394,7 @@ export type EffectPreviewRow = {
  */
 export function effectPreviewRow(
   match: ActiveView,
-  ability: StructuredAbility,
+  ability: MatchConfigurationAbility,
   characterId: CharacterId,
 ): EffectPreviewRow {
   const character = rulesCharacterOf(characterId);

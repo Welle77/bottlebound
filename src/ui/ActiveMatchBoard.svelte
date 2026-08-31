@@ -8,7 +8,7 @@
     type InitiativeEntry,
     type Team,
   } from "../domain/match";
-  import { RULESET } from "../domain/ruleset";
+  import { MATCH_CONFIGURATION } from "../domain/match-configuration";
   import {
     advanceTurn,
     continueMatch,
@@ -34,7 +34,7 @@
   type BoardRow = {
     readonly key: CharacterId;
     readonly slot: number;
-    readonly character: RulesetCharacter;
+    readonly character: (typeof MATCH_CONFIGURATION.characters)[number];
     readonly team: Team;
     readonly hp: number;
     readonly baseHp: number;
@@ -42,7 +42,6 @@
     readonly turnKey: string;
   }
 
-  type RulesetCharacter = (typeof RULESET.characters)[number];
   type PromptKind =
     | "none"
     | "normal"
@@ -60,7 +59,7 @@
         const candidateSlot =
           scan.nextSlot === match.initiative.length ? 1 : scan.nextSlot + 1;
         const candidate = match.initiative[candidateSlot - 1];
-        const candidateRules = RULESET.characters.find(
+        const candidateRules = MATCH_CONFIGURATION.characters.find(
           ({ id }) => id === candidate?.characterId,
         );
         const candidateState = match.characters.find(
@@ -89,8 +88,12 @@
     return entry;
   }
 
-  function requireCharacter(characterId: CharacterId): RulesetCharacter {
-    const character = RULESET.characters.find(({ id }) => id === characterId);
+  function requireCharacter(
+    characterId: CharacterId,
+  ): (typeof MATCH_CONFIGURATION.characters)[number] {
+    const character = MATCH_CONFIGURATION.characters.find(
+      ({ id }) => id === characterId,
+    );
     if (!character) {
       throw new Error("The Active Match references an unknown character.");
     }
@@ -169,7 +172,8 @@
     const saving = state.current.saving;
     const canUndo =
       !saving && getUndoPreview(match, state.current.events) !== null;
-    const combatAvailable = match.rulesVersion === RULESET.version;
+    const combatAvailable =
+      match.configurationVersion === MATCH_CONFIGURATION.version;
     const activeDowned = hpByCharacter.get(activeEntry.characterId) === 0;
     const promptKind = getPromptKind(match);
     const activeHp = requireHp(hpByCharacter, activeEntry.characterId);
@@ -189,7 +193,7 @@
       combatAvailable,
       // One composed run of text so matchers see exactly the legacy
       // single-spaced sentence across the version interpolation.
-      combatStatusText: `Basic Attack is unavailable because combat data for Ruleset ${match.rulesVersion} is not bundled. Finish Turn and Undo remain available.`,
+      combatStatusText: `Basic Attack is unavailable because combat data for Match Configuration ${match.configurationVersion} is not bundled. Finish Turn and Undo remain available.`,
       promptKind,
       outcomeText:
         match.eliminatedTeams.length === 2 && match.outcome !== null
@@ -237,10 +241,10 @@
     void recordSimultaneousRuling(outcome);
   }
 
-  function openContextRules(anchor: string): (event: MouseEvent) => void {
+  function openContextRules(query: string): (event: MouseEvent) => void {
     return (event) => {
       if (!(event.currentTarget instanceof HTMLButtonElement)) return;
-      openRules(event.currentTarget, anchor);
+      openRules(event.currentTarget, query);
     };
   }
 </script>
@@ -258,8 +262,8 @@
             id="rules-round"
             class="rules-context-link"
             type="button"
-            data-open-rules-anchor="section-5-core-terms"
-            onclick={openContextRules("section-5-core-terms")}
+            data-open-rules-query={MATCH_CONFIGURATION.labels.turn}
+            onclick={openContextRules(MATCH_CONFIGURATION.labels.turn)}
           >
             Round rules
           </button>
@@ -267,8 +271,8 @@
             id="rules-turn"
             class="rules-context-link"
             type="button"
-            data-open-rules-anchor="section-7-turn-structure-movement"
-            onclick={openContextRules("section-7-turn-structure-movement")}
+            data-open-rules-query={MATCH_CONFIGURATION.labels.turn}
+            onclick={openContextRules(MATCH_CONFIGURATION.labels.turn)}
           >
             Turn rules
           </button>

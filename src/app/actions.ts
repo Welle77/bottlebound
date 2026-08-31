@@ -23,7 +23,7 @@ import {
   type RandomSource,
   type Team,
 } from "../domain/match";
-import { RULESET } from "../domain/ruleset";
+import { MATCH_CONFIGURATION } from "../domain/match-configuration";
 import { probeCanonicalStorage } from "../storage/canonical-storage-probe";
 import { appRoot, matchStore } from "./runtime";
 import {
@@ -58,7 +58,7 @@ export async function commitResult(result: CommandResult): Promise<boolean> {
           decisionBasis: ended.decisionBasis,
           finalCounts: ended.finalCounts,
           finalHpTotals: ended.finalHpTotals,
-          rulesVersion: ended.rulesVersion,
+          configurationVersion: ended.configurationVersion,
           endedAt: ended.endedAt,
           ...(ended.coinFlipResult
             ? { coinFlipResult: ended.coinFlipResult }
@@ -89,7 +89,10 @@ export async function commitResult(result: CommandResult): Promise<boolean> {
 }
 export function openBasicAttack(): void {
   const match = state.current.match;
-  if (match?.phase !== "active" || match.rulesVersion !== RULESET.version)
+  if (
+    match?.phase !== "active" ||
+    match.configurationVersion !== MATCH_CONFIGURATION.version
+  )
     return;
   const sourceCharacterId = match.initiative[match.activeSlot - 1]?.characterId;
   if (!sourceCharacterId) return;
@@ -98,7 +101,7 @@ export function openBasicAttack(): void {
     actionDraft: {
       kind: "basic",
       sourceCharacterId,
-      rulesVersion: match.rulesVersion,
+      configurationVersion: match.configurationVersion,
       abilityId: null,
       targets: [],
       step: "contacts",
@@ -118,7 +121,7 @@ export function openAbilityPicker(): void {
   const match = state.current.match;
   if (
     match?.phase !== "active" ||
-    match.rulesVersion !== RULESET.version ||
+    match.configurationVersion !== MATCH_CONFIGURATION.version ||
     state.current.actionDraft
   )
     return;
@@ -137,10 +140,15 @@ export function closeAbilityPicker(): void {
 
 export function openAbilityDraft(abilityId: AbilityId): void {
   const match = state.current.match;
-  if (match?.phase !== "active" || match.rulesVersion !== RULESET.version)
+  if (
+    match?.phase !== "active" ||
+    match.configurationVersion !== MATCH_CONFIGURATION.version
+  )
     return;
   const activeCharacterId = match.initiative[match.activeSlot - 1]?.characterId;
-  const ability = RULESET.abilities.find(({ id }) => id === abilityId);
+  const ability = MATCH_CONFIGURATION.abilities.find(
+    ({ id }) => id === abilityId,
+  );
   if (!ability || !activeCharacterId) return;
   // Only the active character's unspent, non-Reaction abilities can open a draft.
   if (
@@ -155,7 +163,7 @@ export function openAbilityDraft(abilityId: AbilityId): void {
     actionDraft: {
       kind: "ability",
       sourceCharacterId: activeCharacterId,
-      rulesVersion: match.rulesVersion,
+      configurationVersion: match.configurationVersion,
       abilityId: ability.id,
       targets: [],
       step:
@@ -202,7 +210,7 @@ export async function confirmBasicAttack(): Promise<void> {
         },
         reactions: draft.reactions,
         majorActionOverride: draft.majorActionOverride
-          ? "Referee confirmed a second Basic Attack this turn."
+          ? MATCH_CONFIGURATION.refereeInstructions.secondMajorAction
           : null,
       },
       new Date().toISOString(),

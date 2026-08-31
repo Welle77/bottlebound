@@ -99,17 +99,16 @@ describe("resolveAbility override-recording branches", () => {
     if (!appliedEffect) {
       throw new Error("Hunter's Mark must apply one active effect.");
     }
-    const rulesVersion = "BB-retired";
+    const configurationVersion = "BB-retired";
     const attackId = "duergar-ranger-retired-mark";
     const historicalEvent = {
       ...event,
-      rulesVersion,
+      configurationVersion,
       attackId,
       abilityId: null,
       attackType: "retired-ability-attack",
       rangePaces: 9,
       damage: 2,
-      rulesSourceAnchor: "retired-ability-card",
       attackLegs: event.attackLegs.map((leg) => ({
         ...leg,
         attackId,
@@ -121,14 +120,14 @@ describe("resolveAbility override-recording branches", () => {
     const historicalEvents = [
       ...run.events.map((recorded): MatchEvent => ({
         ...recorded,
-        rulesVersion,
+        configurationVersion,
       })),
       historicalEvent,
     ];
 
     expect(restoreStateFromEvents(historicalEvents)).toEqual({
       ...resolved.state,
-      rulesVersion,
+      configurationVersion,
       spentAbilityIds: [attackId],
       activeEffects: [{ ...appliedEffect, abilityId: attackId }],
     });

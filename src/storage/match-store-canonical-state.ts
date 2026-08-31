@@ -8,7 +8,7 @@ import {
   type InitiativeEntry,
   type MatchState,
 } from "../domain/match";
-import { RULESET } from "../domain/ruleset";
+import { MATCH_CONFIGURATION } from "../domain/match-configuration";
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -16,12 +16,12 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function assertCanonicalState(
   value: unknown,
-  expectedRulesVersion?: string,
+  expectedConfigurationVersion?: string,
 ): asserts value is MatchState {
-  assertMatchStateStructure(value);
   if (!isRecord(value))
     throw new Error("The canonical snapshot is structurally invalid.");
-  assertCanonicalRulesVersion(value, expectedRulesVersion);
+  assertCanonicalConfigurationVersion(value, expectedConfigurationVersion);
+  assertMatchStateStructure(value);
   assertCanonicalSnapshotHeader(value);
   assertCanonicalRoster(value);
   assertCanonicalInitiative(value);
@@ -29,17 +29,20 @@ export function assertCanonicalState(
   assertCanonicalEndedState(value);
 }
 
-function assertCanonicalRulesVersion(
+function assertCanonicalConfigurationVersion(
   value: Record<string, unknown>,
-  expectedRulesVersion: string | undefined,
+  expectedConfigurationVersion: string | undefined,
 ): void {
   if (
-    typeof value.rulesVersion !== "string" ||
-    value.rulesVersion.length === 0 ||
-    (expectedRulesVersion !== undefined &&
-      value.rulesVersion !== expectedRulesVersion)
+    typeof value.configurationVersion !== "string" ||
+    value.configurationVersion.length === 0 ||
+    value.configurationVersion !== MATCH_CONFIGURATION.version ||
+    (expectedConfigurationVersion !== undefined &&
+      value.configurationVersion !== expectedConfigurationVersion)
   ) {
-    throw new Error("The canonical snapshot rules version is incompatible.");
+    throw new Error(
+      "The canonical snapshot configuration version is incompatible.",
+    );
   }
 }
 
@@ -62,11 +65,14 @@ function assertCanonicalSnapshotHeader(value: Record<string, unknown>): void {
 function assertCanonicalRoster(value: MatchState): void {
   if (
     !Array.isArray(value.characters) ||
-    value.characters.length !== RULESET.characters.length
+    value.characters.length !== MATCH_CONFIGURATION.characters.length
   ) {
     throw new Error("The canonical snapshot roster is invalid.");
   }
-  for (const [index, rulesCharacter] of RULESET.characters.entries()) {
+  for (const [
+    index,
+    rulesCharacter,
+  ] of MATCH_CONFIGURATION.characters.entries()) {
     assertCanonicalRosterEntry(
       value.characters[index],
       rulesCharacter.id,
@@ -100,7 +106,7 @@ function assertCanonicalInitiative(value: MatchState): void {
   }
   if (
     !Array.isArray(value.initiative) ||
-    value.initiative.length !== RULESET.characters.length
+    value.initiative.length !== MATCH_CONFIGURATION.characters.length
   ) {
     throw new Error("The canonical initiative result is structurally invalid.");
   }
@@ -129,7 +135,7 @@ function assertCanonicalInitiativeEntry(
     throw new Error("The canonical initiative result is structurally invalid.");
   }
   const characterId = characterIdValue;
-  const rulesCharacter = RULESET.characters.find(
+  const rulesCharacter = MATCH_CONFIGURATION.characters.find(
     ({ id }) => id === characterId,
   );
   if (
@@ -158,7 +164,7 @@ function assertCanonicalTurn(value: MatchState): void {
       value.round < 1 ||
       !Number.isSafeInteger(value.activeSlot) ||
       value.activeSlot < 1 ||
-      value.activeSlot > RULESET.characters.length)
+      value.activeSlot > MATCH_CONFIGURATION.characters.length)
   ) {
     throw new Error("The Active Match turn is structurally invalid.");
   }

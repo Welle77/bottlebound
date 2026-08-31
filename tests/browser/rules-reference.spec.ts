@@ -27,9 +27,9 @@ async function persistedMatchData(page: import("@playwright/test").Page) {
   });
 }
 
-async function rewritePersistedRulesVersion(
+async function rewritePersistedConfigurationVersion(
   page: import("@playwright/test").Page,
-  rulesVersion: string,
+  configurationVersion: string,
 ) {
   await page.evaluate(async (version) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -51,7 +51,7 @@ async function rewritePersistedRulesVersion(
         },
       );
       for (const value of values) {
-        const rewritten = { ...value, rulesVersion: version };
+        const rewritten = { ...value, configurationVersion: version };
         if (storeName === "metadata") {
           store.put(rewritten, "current-match");
         } else {
@@ -65,7 +65,7 @@ async function rewritePersistedRulesVersion(
       transaction.addEventListener("abort", () => reject(transaction.error));
     });
     database.close();
-  }, rulesVersion);
+  }, configurationVersion);
 }
 
 test("the complete bundled Ruleset opens globally in the responsive modal", async ({
@@ -87,13 +87,13 @@ test("the complete bundled Ruleset opens globally in the responsive modal", asyn
     dialog.getByRole("heading", { name: "16. Referee Quick Reference" }),
   ).toBeVisible();
 
-  for (const [linkName, headingName] of [
-    ["Roster", "2. Teams, Roles, HP & Basic Attacks"],
-    ["Abilities", "15. Character Ability Cards"],
-    ["Universal rules", "5. Core Terms"],
-    ["Quick reference", "16. Referee Quick Reference"],
+  for (const headingName of [
+    "2. Teams, Roles, HP & Basic Attacks",
+    "15. Character Ability Cards",
+    "5. Core Terms",
+    "16. Referee Quick Reference",
   ] as const) {
-    await dialog.getByRole("link", { name: linkName, exact: true }).click();
+    await dialog.getByRole("link", { name: headingName, exact: true }).click();
     await expect(
       dialog.getByRole("heading", { name: headingName, exact: true }),
     ).toBeInViewport();
@@ -166,7 +166,7 @@ test("the complete bundled Ruleset remains readable after an offline cold launch
   ).toBeVisible();
 });
 
-test("search explains matches and opens the complete reference at stable anchors", async ({
+test("search explains matches and opens the complete reference at generated anchors", async ({
   page,
 }) => {
   await page.goto("/");
@@ -188,7 +188,7 @@ test("search explains matches and opens the complete reference at stable anchors
   const firstResult = results.getByRole("link").first();
   await expect(firstResult).toContainText("Backstab");
   await expect(firstResult.locator("mark")).toHaveCount(2);
-  await expect(results.getByRole("link")).toHaveCount(3);
+  await expect(results.getByRole("link")).toHaveCount(2);
 
   await firstResult.click();
   await expect(
@@ -215,22 +215,22 @@ test("searches production rules prose and ranks the Backstab card before broader
   await search.fill("Backstab");
   const results = dialog.locator("[data-rules-results]").getByRole("link");
   await expect(results.first()).toContainText("Backstab");
-  await expect(results.first()).toContainText("Ability card");
-  await expect(results).toHaveCount(3);
+  await expect(results.first()).toContainText("Guide heading");
+  await expect(results).toHaveCount(2);
 
   await search.fill("back backstab");
   await expect(results.first().locator("mark")).toHaveCount(1);
   await expect(results.first().locator("mark")).toHaveText("Backstab");
 });
 
-test("restores an older Match unchanged and opens its exact unavailable Rules surface", async ({
+test("restores an older Match unchanged while Rules Reference stays independent", async ({
   page,
 }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Create Match" }).click();
   await page.getByRole("button", { name: "Generate initiative" }).click();
   const before = await persistedMatchData(page);
-  await rewritePersistedRulesVersion(page, "BB-prior-release");
+  await rewritePersistedConfigurationVersion(page, "BB-prior-release");
 
   await page.reload();
   await expect(page.getByText("Setup · Sequence 2")).toBeVisible();
@@ -239,7 +239,7 @@ test("restores an older Match unchanged and opens its exact unavailable Rules su
     before.map((values) =>
       (values as Record<string, unknown>[]).map((value) => ({
         ...value,
-        rulesVersion: "BB-prior-release",
+        configurationVersion: "BB-prior-release",
       })),
     ),
   );
@@ -247,10 +247,10 @@ test("restores an older Match unchanged and opens its exact unavailable Rules su
   await page.getByRole("button", { name: "Rules", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "BOTTLEBOUND Rules" });
   await expect(
-    dialog.getByText("Ruleset BB-prior-release", { exact: true }),
+    dialog.getByText("Ruleset BB20260822A1", { exact: true }),
   ).toBeVisible();
   await expect(
-    dialog.getByText(/matching rules content is not bundled/),
+    dialog.getByRole("heading", { name: "BOTTLEBOUND Rules" }),
   ).toBeVisible();
   expect(await persistedMatchData(page)).toEqual(restored);
 });
@@ -263,7 +263,7 @@ test("gates Basic Attack by exact combat version while turn correction remains s
   await page.getByRole("button", { name: "Generate initiative" }).click();
   await page.getByRole("button", { name: "Start Match" }).click();
   await page.getByRole("button", { name: "Finish Turn" }).click();
-  await rewritePersistedRulesVersion(page, "BB-prior-release");
+  await rewritePersistedConfigurationVersion(page, "BB-prior-release");
 
   await page.reload();
 
@@ -271,7 +271,9 @@ test("gates Basic Attack by exact combat version while turn correction remains s
     page.getByRole("button", { name: "Basic Attack" }),
   ).toBeDisabled();
   await expect(
-    page.getByText(/combat data for Ruleset BB-prior-release is not bundled/),
+    page.getByText(
+      /combat data for Match Configuration BB-prior-release is not bundled/,
+    ),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Finish Turn" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
@@ -295,8 +297,8 @@ test("Rules retains live context, focus, search, and reading position", async ({
   await initiativeRules.click();
   const dialog = page.getByRole("dialog", { name: "BOTTLEBOUND Rules" });
   await expect(
-    dialog.getByRole("heading", { name: "6. Initiative & Game Clock" }),
-  ).toBeInViewport();
+    dialog.getByRole("searchbox", { name: "Search rules" }),
+  ).toHaveValue("Initiative");
   await expect(dialog.getByText("Ruleset BB20260822A1")).toBeVisible();
 
   const search = dialog.getByRole("searchbox", { name: "Search rules" });
@@ -318,7 +320,7 @@ test("Rules retains live context, focus, search, and reading position", async ({
   await expect(initiativeRules).toBeFocused();
   await page.getByRole("button", { name: "Rules", exact: true }).click();
   await expect(search).toHaveValue("backstab");
-  await expect(dialog.locator("#ability-rogue-backstab")).toHaveAttribute(
+  await expect(dialog.locator("#rules-heading-backstab")).toHaveAttribute(
     "data-rules-selected",
   );
   await expect
@@ -358,8 +360,8 @@ test("contextual rules preserve confirmations and committed Match progress", asy
   await page.getByRole("button", { name: "Exact tie-break rules" }).click();
   let dialog = page.getByRole("dialog", { name: "BOTTLEBOUND Rules" });
   await expect(
-    dialog.getByRole("heading", { name: "6. Initiative & Game Clock" }),
-  ).toBeInViewport();
+    dialog.getByRole("searchbox", { name: "Search rules" }),
+  ).toHaveValue("Initiative");
   await page.keyboard.press("Escape");
   expect(await persistedMatchData(page)).toEqual(committedBeforeRules);
 
@@ -390,8 +392,8 @@ test("contextual rules preserve confirmations and committed Match progress", asy
   await page.getByRole("button", { name: "Undo rules" }).click();
   await expect(dialog).toBeVisible();
   await expect(
-    dialog.getByRole("heading", { name: "6. Initiative & Game Clock" }),
-  ).toBeInViewport();
+    dialog.getByRole("searchbox", { name: "Search rules" }),
+  ).toHaveValue("Initiative");
   await page.keyboard.press("Escape");
   await expect(
     page.getByRole("button", { name: "Confirm Undo" }),
@@ -401,13 +403,11 @@ test("contextual rules preserve confirmations and committed Match progress", asy
   await page.getByRole("button", { name: "Start Match" }).click();
   await page.getByRole("button", { name: "Turn rules" }).click();
   await expect(
-    dialog.getByRole("heading", {
-      name: "7. Turn Structure & Movement",
-    }),
-  ).toBeInViewport();
+    dialog.getByRole("searchbox", { name: "Search rules" }),
+  ).toHaveValue("Turn");
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Round rules" }).click();
   await expect(
-    dialog.getByRole("heading", { name: "5. Core Terms" }),
-  ).toBeInViewport();
+    dialog.getByRole("searchbox", { name: "Search rules" }),
+  ).toHaveValue("Turn");
 });

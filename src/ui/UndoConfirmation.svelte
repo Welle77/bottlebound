@@ -30,18 +30,18 @@
   const targetLabel = $derived(
     preview ? TARGET_LABELS[preview.target.type] : "",
   );
-  const sourceAnchor = $derived.by(() => {
+  const rulesQuery = $derived.by(() => {
     if (!preview) return "";
     return preview.target.type === "TurnFinished" ||
       preview.target.type === "MatchStarted" ||
       preview.target.type === "ActionResolved"
-      ? "section-7-turn-structure-movement"
-      : "section-6-initiative-game-clock";
+      ? "Turn"
+      : "Initiative";
   });
 
   function handleOpenRules(event: MouseEvent): void {
     if (!(event.currentTarget instanceof HTMLButtonElement)) return;
-    openRules(event.currentTarget, sourceAnchor);
+    openRules(event.currentTarget, rulesQuery);
   }
 
   function handleCancel(): void {
@@ -73,7 +73,7 @@
         id="rules-undo"
         class="rules-context-link"
         type="button"
-        data-open-rules-anchor={sourceAnchor}
+        data-open-rules-query={rulesQuery}
         onclick={handleOpenRules}
       >
         Undo rules

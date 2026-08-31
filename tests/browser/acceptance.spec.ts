@@ -78,7 +78,7 @@ test("invalid saved data stops recovery without creating replacement data", asyn
         request.addEventListener("error", () => reject(request.error));
       },
     );
-    store.put({ ...snapshots[0], rulesVersion: "incompatible" });
+    store.put({ ...snapshots[0], configurationVersion: "incompatible" });
     await new Promise<void>((resolve, reject) => {
       transaction.addEventListener("complete", () => resolve());
       transaction.addEventListener("abort", () => reject(transaction.error));

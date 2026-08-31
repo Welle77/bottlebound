@@ -64,8 +64,16 @@ authoritative for the rules reference.
 _Avoid_: Nickname, alias, player name
 
 **Ruleset**:
-One immutable version of the complete authoritative BOTTLEBOUND rules, including universal rules, roster data, ability cards, and quick reference.
-_Avoid_: Rules data, rules document version
+One human-authored, authoritative guide to BOTTLEBOUND behavior, including universal rules, roster data, ability cards, and quick reference. The Ruleset guides the Referee Console but does not supply executable application data.
+_Avoid_: Rules data, runtime configuration
+
+**Rules Reference**:
+The searchable presentation of one Ruleset for a referee. It is informational and does not control Match behavior.
+_Avoid_: Runtime rules, Match Configuration
+
+**Match Configuration**:
+The application-owned executable values that the Referee Console uses for Match behavior. It lives inside the application and does not depend on Ruleset document structure.
+_Avoid_: Ruleset, rules reference
 
 **Match Summary**:
 A compact local record of the latest Ended Match outcome, decision basis, final team state, Ruleset identity, and end time.

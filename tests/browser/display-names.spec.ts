@@ -21,7 +21,7 @@ test("the referee names characters in Setup and names follow every display", asy
     hasText: "Silk",
   });
   await expect(rogueRosterRow).toHaveCount(1);
-  await expect(rogueRosterRow.locator(".display-name-ruleset")).toHaveText(
+  await expect(rogueRosterRow.locator(".display-name-character")).toHaveText(
     "Rogue",
   );
   await expect(
@@ -41,9 +41,9 @@ test("the referee names characters in Setup and names follow every display", asy
     hasText: "Silk",
   });
   await expect(rogueInitiativeRow).toHaveCount(1);
-  await expect(rogueInitiativeRow.locator(".display-name-ruleset")).toHaveText(
-    "Rogue",
-  );
+  await expect(
+    rogueInitiativeRow.locator(".display-name-character"),
+  ).toHaveText("Rogue");
 
   await page.getByRole("button", { name: "Start Match" }).click();
   await expect(
@@ -53,7 +53,7 @@ test("the referee names characters in Setup and names follow every display", asy
     hasText: "Silk",
   });
   await expect(rogueOrderRow).toHaveCount(1);
-  await expect(rogueOrderRow.locator(".display-name-ruleset")).toHaveText(
+  await expect(rogueOrderRow.locator(".display-name-character")).toHaveText(
     "Rogue",
   );
   await expect(page.locator("[data-display-name-for]")).toHaveCount(0);

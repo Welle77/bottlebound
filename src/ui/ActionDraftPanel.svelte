@@ -5,7 +5,7 @@
 
   // Converted Action Draft dispatcher (T07): dispatches between Basic Attack
   // drafts and Ability drafts while an Action Draft holds the surface. The
-  // Ruleset-version and attack-profile guards live in each flow's derived
+  // Configuration-version and attack-profile guards live in each flow's derived
   // view, exactly where the deleted legacy panel functions threw them.
   const draftKind = $derived(state.current.actionDraft?.kind ?? null);
 </script>

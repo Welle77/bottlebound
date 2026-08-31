@@ -1,9 +1,9 @@
 import type { ActionEffect, CharacterId, MatchCharacter } from "./match-types";
-import type { StructuredAbility } from "./ruleset";
+import type { MatchConfigurationAbility } from "./match-configuration";
 import { isAbilityNamed } from "./match-ability-effects";
 
 export type UtilityAbilityContext = {
-  readonly ability: StructuredAbility;
+  readonly ability: MatchConfigurationAbility;
   readonly affectedCharacterIds: readonly CharacterId[];
   /** Pre-action snapshot backing the Lay on Hands revive-or-heal choice. */
   readonly priorCharacters: readonly MatchCharacter[];

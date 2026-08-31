@@ -4,7 +4,7 @@
     type CharacterId,
     type MatchState,
   } from "../domain/match";
-  import { RULESET } from "../domain/ruleset";
+  import { MATCH_CONFIGURATION } from "../domain/match-configuration";
   import { confirmBasicAttack } from "../app/actions";
   import { attackPreviewRow } from "./ability-draft";
   import { openRules } from "./rules-dialog";
@@ -49,7 +49,7 @@
   const rulesCharacterById = (
     characterId: CharacterId,
   ): NamedCharacter | null => {
-    const character = RULESET.characters.find(
+    const character = MATCH_CONFIGURATION.characters.find(
       ({ id }) => id === characterId,
     );
     return character ?? null;
@@ -61,19 +61,24 @@
     if (!draft || draft.kind !== "basic" || match?.phase !== "active") {
       return null;
     }
-    const attack = RULESET.basicAttacks.find(
+    const attack = MATCH_CONFIGURATION.basicAttacks.find(
       ({ characterId }) => characterId === draft.sourceCharacterId,
     );
-    if (!attack || draft.rulesVersion !== match.rulesVersion) {
+    if (!attack || draft.configurationVersion !== match.configurationVersion) {
       throw new Error(
-        "The Action Draft does not match the Active Match Ruleset.",
+        "The Action Draft does not match the active Match Configuration.",
       );
     }
     const sourceCharacter = rulesCharacterById(draft.sourceCharacterId);
     if (!sourceCharacter) {
       throw new Error("The Active Match references an unknown character.");
     }
-    return { draft, match, attack, sourceCharacter };
+    return {
+      draft,
+      match,
+      attack,
+      sourceCharacter,
+    };
   });
 
   type BasicAttackDraftBase = NonNullable<typeof base>;
@@ -117,7 +122,7 @@
     const choices = getProtectiveReactionChoices(match, affectedCharacterIds);
     const reactionReviews: readonly ReactionReview[] = draft.reactions.flatMap(
       (selection) => {
-        const reaction = RULESET.reactions.find(
+      const reaction = MATCH_CONFIGURATION.reactions.find(
           ({ id }) => id === selection.reactionId,
         );
         const owner = reaction
@@ -223,7 +228,7 @@
 
   function handleOpenRules(event: MouseEvent): void {
     if (!(event.currentTarget instanceof HTMLButtonElement)) return;
-    openRules(event.currentTarget, base?.attack.sourceAnchor ?? null);
+    openRules(event.currentTarget, MATCH_CONFIGURATION.labels.basicAttack);
   }
 </script>
 
@@ -239,10 +244,10 @@
       id="rules-basic-attack"
       class="rules-context-link"
       type="button"
-      data-open-rules-anchor={b.attack.sourceAnchor}
+      data-open-rules-query={MATCH_CONFIGURATION.labels.basicAttack}
       onclick={handleOpenRules}
     >
-      Basic Attack rules
+      {MATCH_CONFIGURATION.labels.basicAttack} rules
     </button>
   </div>
 {/snippet}

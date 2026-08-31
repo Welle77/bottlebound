@@ -18,7 +18,7 @@ import {
   type MatchEvent,
   type MatchState,
 } from "../../src/domain/match";
-import { RULESET } from "../../src/domain/ruleset";
+import { MATCH_CONFIGURATION } from "../../src/domain/match-configuration";
 import { assertCanonicalEvent } from "../../src/storage/match-store-canonical-event";
 import { initiativeCharacterId } from "../domain/match-test-support";
 import {
@@ -368,7 +368,7 @@ describe("Manual End Game Decision Basis contract", () => {
     const started = startMatch(generated.state, "2026-08-23T15:02:00.000Z");
     // Create elimination via 5 consecutive Basic Attacks against all Duergar (proven valid in store tests)
     const source = initiativeCharacterId(started.state, 0);
-    const duergarIds = RULESET.characters
+    const duergarIds = MATCH_CONFIGURATION.characters
       .filter((c) => c.team === "Duergar")
       .map((c) => c.id);
     let current = started.state;
@@ -455,13 +455,13 @@ describe("Match Summary lifecycle contract", () => {
       decisionBasis: ended.state.decisionBasis,
       finalCounts: ended.state.finalCounts,
       finalHpTotals: ended.state.finalHpTotals,
-      rulesVersion: ended.state.rulesVersion,
+      configurationVersion: ended.state.configurationVersion,
       endedAt: ended.state.endedAt,
       ...(ended.state.coinFlipResult
         ? { coinFlipResult: ended.state.coinFlipResult }
         : {}),
     });
-    expect(summary1?.rulesVersion).toBe(RULESET.version);
+    expect(summary1?.configurationVersion).toBe(MATCH_CONFIGURATION.version);
     expect(summary1?.endedAt).toBe("2026-08-23T16:03:00.000Z");
 
     const reopened = reopenMatch(ended.state, "2026-08-23T16:04:00.000Z");

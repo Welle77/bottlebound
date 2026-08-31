@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { AbilityId, MatchState, ReactionId } from "../domain/match";
-  import { RULESET } from "../domain/ruleset";
+  import { MATCH_CONFIGURATION } from "../domain/match-configuration";
   import { modifierLabel } from "./format";
   import CharacterName from "./CharacterName.svelte";
 
@@ -23,7 +23,7 @@
   );
   const rows = $derived.by(() =>
     match.characters.map((entry) => {
-      const character = RULESET.characters.find(
+      const character = MATCH_CONFIGURATION.characters.find(
         ({ id }) => id === entry.characterId,
       );
       if (!character)
@@ -53,8 +53,8 @@
     return ids
       .map((id) =>
         kind === "abilities"
-          ? (RULESET.abilities.find((ability) => ability.id === id)?.name ?? id)
-          : (RULESET.reactions.find((reaction) => reaction.id === id)?.name ??
+          ? (MATCH_CONFIGURATION.abilities.find((ability) => ability.id === id)?.name ?? id)
+          : (MATCH_CONFIGURATION.reactions.find((reaction) => reaction.id === id)?.name ??
             id),
       )
       .join(", ");
@@ -85,7 +85,7 @@
     </p>
   {/if}
   <p>{eliminationLine}</p>
-  <p>Match {match.matchId} · Rules {match.rulesVersion}</p>
+  <p>Match {match.matchId} · Configuration {match.configurationVersion}</p>
   <div class="table-wrap">
     <table class="initiative-table">
       <caption>Complete character state</caption>

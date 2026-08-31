@@ -1,4 +1,8 @@
-import { RULESET, type StructuredAbility } from "./ruleset";
+import {
+  MATCH_CONFIGURATION,
+  MATCH_CONFIGURATION_VERSION,
+  type MatchConfigurationAbility,
+} from "./match-configuration";
 import {
   AUTOMATED_REACTION_NAMES,
   protectiveReactionWarnings,
@@ -47,7 +51,7 @@ export type AbilityInput = {
  * carry their printed card range; anything else is an automation contract
  * error.
  */
-function attackRangePaces(ability: StructuredAbility): 2 | 6 | 8 {
+function attackRangePaces(ability: MatchConfigurationAbility): 2 | 6 | 8 {
   const parsed = /^(\d+) paces$/.exec(ability.range);
   const value = parsed ? Number(parsed[1]) : NaN;
   if (value === 2 || value === 6 || value === 8) return value;
@@ -73,7 +77,7 @@ type AbilityOutcome = {
 
 type AbilityOutcomeContext = {
   readonly state: ActiveMatchState;
-  readonly ability: StructuredAbility;
+  readonly ability: MatchConfigurationAbility;
   readonly affectedCharacterIds: readonly CharacterId[];
   readonly reactions: readonly ProtectiveReactionResolution[];
   readonly sequence: number;
@@ -90,7 +94,7 @@ function normalizedOverride(value: string | null | undefined): string | null {
 
 function validateAbilityUse(context: {
   readonly state: ActiveMatchState;
-  readonly ability: StructuredAbility;
+  readonly ability: MatchConfigurationAbility;
   readonly abilityOverride: string | null;
   readonly majorActionOverride: string | null;
 }): void {
@@ -139,8 +143,8 @@ function validateAbilityUse(context: {
 }
 
 function reactionOperations(
-  reaction: (typeof RULESET.reactions)[number],
-  ability: StructuredAbility,
+  reaction: (typeof MATCH_CONFIGURATION.reactions)[number],
+  ability: MatchConfigurationAbility,
   protectedCharacterId: CharacterId,
 ): readonly ProtectiveReactionOperation[] {
   return reaction.operations.flatMap(
@@ -171,7 +175,7 @@ function reactionOperations(
 
 function resolveProtectiveReactions(context: {
   readonly state: ActiveMatchState;
-  readonly ability: StructuredAbility;
+  readonly ability: MatchConfigurationAbility;
   readonly affectedCharacterIds: readonly CharacterId[];
   readonly selections: readonly ProtectiveReactionInput[];
 }): readonly ProtectiveReactionResolution[] {
@@ -181,7 +185,7 @@ function resolveProtectiveReactions(context: {
     readonly results: readonly ProtectiveReactionResolution[];
   }>(
     (accumulated, selection) => {
-      const reaction = RULESET.reactions.find(
+      const reaction = MATCH_CONFIGURATION.reactions.find(
         ({ id }) => id === selection.reactionId,
       );
       if (!reaction || !AUTOMATED_REACTION_NAMES.has(reaction.name)) {
@@ -294,7 +298,7 @@ function attackAbilityOutcome(context: AbilityOutcomeContext): AbilityOutcome {
 
 function utilityAbilityOutcome(
   state: ActiveMatchState,
-  ability: StructuredAbility,
+  ability: MatchConfigurationAbility,
   affectedCharacterIds: readonly CharacterId[],
 ): AbilityOutcome {
   const utility = applyUtilityAbility({
@@ -385,7 +389,7 @@ function resultingEliminations(
   characters: readonly MatchCharacter[],
 ): readonly Team[] {
   const newlyEliminated = (["Drow", "Duergar"] as const).filter((team) =>
-    RULESET.characters
+    MATCH_CONFIGURATION.characters
       .filter((character) => character.team === team)
       .every(
         (character) =>
@@ -402,7 +406,7 @@ function matchOutcome(eliminatedTeams: readonly Team[]): MatchOutcome {
 }
 
 function initialAbilityAttackLeg(
-  ability: StructuredAbility,
+  ability: MatchConfigurationAbility,
   affectedCharacterIds: readonly CharacterId[],
   rangePaces: 2 | 6 | 8,
 ): AttackLeg {
@@ -419,7 +423,7 @@ function initialAbilityAttackLeg(
 }
 
 function buildAbilityAttackLegs(context: {
-  readonly ability: StructuredAbility;
+  readonly ability: MatchConfigurationAbility;
   readonly attackLegsInput: AbilityInput["attackLegs"];
   readonly affectedCharacterIds: readonly CharacterId[];
   readonly reactions: readonly ProtectiveReactionResolution[];
@@ -468,8 +472,8 @@ export function resolveAbility(
   if ((state as MatchState).phase === "ended") {
     throw new Error("The Ended Match is read-only.");
   }
-  if (state.rulesVersion !== RULESET.version) {
-    throw new Error("Ability needs the exact bundled Ruleset.");
+  if (state.configurationVersion !== MATCH_CONFIGURATION_VERSION) {
+    throw new Error("Ability needs the exact bundled Match Configuration.");
   }
   const ability = getAbilityOrThrow(input.abilityId);
   const abilityOverride = normalizedOverride(input.abilityOverride);
@@ -542,7 +546,7 @@ export function resolveAbility(
     type: "ActionResolved",
     matchId: state.matchId,
     sequence,
-    rulesVersion: state.rulesVersion,
+    configurationVersion: state.configurationVersion,
     occurredAt,
     actionType: "Ability",
     sourceCharacterId: ability.ownerCharacterId,
@@ -550,7 +554,6 @@ export function resolveAbility(
     attackType: "ability",
     rangePaces: cardRangePaces,
     damage: 1,
-    rulesSourceAnchor: ability.sourceAnchor,
     attackLegs,
     physicalConfirmations: {
       range: true,

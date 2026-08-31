@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { SetupMatchState } from "../domain/match";
-  import { RULESET } from "../domain/ruleset";
+  import { MATCH_CONFIGURATION } from "../domain/match-configuration";
   import { saveDisplayNames } from "../app/actions";
   import CharacterName from "./CharacterName.svelte";
   import { state } from "./shell-state.svelte";
@@ -17,10 +17,10 @@
   <summary>Character Display Names</summary>
   <p>
     Optionally name each character to match the miniatures on the table. An
-    empty field keeps the Ruleset name. Saving records one reversible event.
+    empty field keeps the configured name. Saving records one reversible event.
   </p>
   <div class="display-name-list">
-    {#each RULESET.characters as character (character.id)}
+    {#each MATCH_CONFIGURATION.characters as character (character.id)}
       <label class="display-name-control">
         <span>
           <CharacterName {character} displayNames={match.displayNames} />

@@ -1,6 +1,5 @@
-import { RULESET } from "../domain/ruleset";
-import { retainRulesVersion } from "../rules-reference/rules-ui-state";
-import { pendingAnchorReveal, rulesUi, state } from "./shell-state.svelte";
+import { openRulesWithQuery } from "../rules-reference/rules-ui-state";
+import { rulesUi } from "./shell-state.svelte";
 
 /**
  * Applies main's inert flag synchronously with the dialog transition.
@@ -16,27 +15,15 @@ function applyDialogInert(open: boolean): void {
 
 /**
  * Opens the Rules modal through the reactive rules UI state; the
- * RulesModal component renders it. An optional anchor selects and reveals
- * that section once the modal mounts. Retaining pins the stored rules UI
- * state to the active Match's Ruleset version so a restored Match with
- * unbundled rules never inherits stale search or selection context from
- * another version.
+ * RulesModal component renders the one current bundled guide. An optional
+ * application-owned query starts the modal in search mode.
  */
-export function openRules(
-  opener: HTMLElement,
-  anchor: string | null = null,
-): void {
-  const version = state.current.match?.rulesVersion ?? RULESET.version;
-  const retained = retainRulesVersion(rulesUi.current, version);
-  rulesUi.set({ ...retained, open: true, openerId: opener.id });
-  if (anchor) {
-    rulesUi.set({
-      ...rulesUi.current,
-      selectedAnchor: anchor,
-      scrollTop: 0,
-    });
-    pendingAnchorReveal.set(anchor);
-  }
+export function openRules(opener: HTMLElement, query?: string): void {
+  rulesUi.set(
+    query === undefined
+      ? { ...rulesUi.current, open: true, openerId: opener.id }
+      : openRulesWithQuery({ ...rulesUi.current, openerId: opener.id }, query),
+  );
   applyDialogInert(true);
 }
 

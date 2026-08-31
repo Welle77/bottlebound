@@ -1,4 +1,4 @@
-import { RULESET } from "./ruleset";
+import { MATCH_CONFIGURATION } from "./match-configuration";
 import {
   MATCH_SCHEMA_VERSION,
   isAbilityId,
@@ -61,21 +61,14 @@ function assertStringArray(
   }
 }
 
-function isNonEmptyString(value: string): boolean {
-  return value.length > 0;
-}
-
 function hasValidActiveEffectIdentity(
   effect: Record<string, unknown>,
-  historicalRuleset: boolean,
 ): boolean {
   return (
     typeof effect.effectId === "string" &&
     effect.effectId.length > 0 &&
     typeof effect.abilityId === "string" &&
-    (historicalRuleset
-      ? isNonEmptyString(effect.abilityId)
-      : isAbilityId(effect.abilityId)) &&
+    isAbilityId(effect.abilityId) &&
     typeof effect.anchorCharacterId === "string" &&
     isCharacterId(effect.anchorCharacterId) &&
     typeof effect.affectedCharacterId === "string" &&
@@ -87,67 +80,45 @@ function hasValidActiveEffectIdentity(
 
 function hasValidEffectBranch(
   value: unknown,
-  historicalRuleset: boolean,
   isCurrentValue: (branch: string) => boolean,
 ): boolean {
-  return (
-    typeof value === "string" &&
-    (historicalRuleset ? isNonEmptyString(value) : isCurrentValue(value))
-  );
+  return typeof value === "string" && isCurrentValue(value);
 }
 
 function hasValidActiveEffectDuration(
   duration: Record<string, unknown>,
-  historicalRuleset: boolean,
 ): boolean {
   const boundaryTrigger = duration.boundaryTrigger;
   const boundaryTriggerIsValid =
     boundaryTrigger === undefined ||
-    hasValidEffectBranch(
-      boundaryTrigger,
-      historicalRuleset,
-      isEffectBoundaryTrigger,
-    );
+    hasValidEffectBranch(boundaryTrigger, isEffectBoundaryTrigger);
   return (
-    hasValidEffectBranch(
-      duration.kind,
-      historicalRuleset,
-      isEffectDurationKind,
-    ) &&
+    hasValidEffectBranch(duration.kind, isEffectDurationKind) &&
     boundaryTriggerIsValid &&
     (duration.anchor === "source" || duration.anchor === "affected") &&
     typeof duration.removeWhenAffectedDowned === "boolean"
   );
 }
 
-function hasValidActiveEffectOperations(
-  operations: unknown,
-  historicalRuleset: boolean,
-): boolean {
+function hasValidActiveEffectOperations(operations: unknown): boolean {
   return (
     Array.isArray(operations) &&
     operations.every(
       (operation) =>
-        typeof operation === "string" &&
-        (historicalRuleset
-          ? isNonEmptyString(operation)
-          : isEffectOperation(operation)),
+        typeof operation === "string" && isEffectOperation(operation),
     )
   );
 }
 
-export function assertActiveEffectStructure(
-  effect: unknown,
-  historicalRuleset: boolean,
-): void {
+export function assertActiveEffectStructure(effect: unknown): void {
   if (!isRecord(effect) || !isRecord(effect.duration)) {
     throw new Error("The canonical active effects are structurally invalid.");
   }
   if (
-    !hasValidActiveEffectIdentity(effect, historicalRuleset) ||
-    !hasValidEffectBranch(effect.kind, historicalRuleset, isActiveEffectKind) ||
-    !hasValidActiveEffectDuration(effect.duration, historicalRuleset) ||
-    !hasValidActiveEffectOperations(effect.operations, historicalRuleset)
+    !hasValidActiveEffectIdentity(effect) ||
+    !hasValidEffectBranch(effect.kind, isActiveEffectKind) ||
+    !hasValidActiveEffectDuration(effect.duration) ||
+    !hasValidActiveEffectOperations(effect.operations)
   ) {
     throw new Error("The canonical active effects are structurally invalid.");
   }
@@ -163,7 +134,7 @@ export function assertMatchStateStructure(
   assertMatchStateInitiative(value);
   assertMatchStateTurn(value);
   assertEndedMatchState(value);
-  assertMatchStatePersistence(value, value.rulesVersion !== RULESET.version);
+  assertMatchStatePersistence(value);
 }
 
 function assertMatchStateHeader(
@@ -173,8 +144,8 @@ function assertMatchStateHeader(
   if (
     !isRecord(value) ||
     value.schemaVersion !== schemaVersion ||
-    typeof value.rulesVersion !== "string" ||
-    value.rulesVersion.length === 0 ||
+    typeof value.configurationVersion !== "string" ||
+    value.configurationVersion.length === 0 ||
     typeof value.matchId !== "string" ||
     value.matchId.length === 0 ||
     (value.phase !== "setup" &&
@@ -190,12 +161,12 @@ function assertMatchStateHeader(
 function assertMatchStateRoster(value: MatchState): void {
   if (
     !Array.isArray(value.characters) ||
-    value.characters.length !== RULESET.characters.length
+    value.characters.length !== MATCH_CONFIGURATION.characters.length
   ) {
     throw new Error("The canonical Match State roster is invalid.");
   }
   value.characters.forEach((entry, index) => {
-    const rulesCharacter = RULESET.characters[index];
+    const rulesCharacter = MATCH_CONFIGURATION.characters[index];
     if (
       !rulesCharacter ||
       !isRecord(entry) ||
@@ -228,7 +199,7 @@ function assertMatchStateInitiative(value: MatchState): void {
     }
   } else if (
     !Array.isArray(value.initiative) ||
-    value.initiative.length !== RULESET.characters.length
+    value.initiative.length !== MATCH_CONFIGURATION.characters.length
   ) {
     throw new Error("The canonical initiative result is structurally invalid.");
   }
@@ -244,7 +215,7 @@ function assertMatchStateTurn(value: MatchState): void {
       (round as number) < 1 ||
       !Number.isSafeInteger(activeSlot) ||
       (activeSlot as number) < 1 ||
-      (activeSlot as number) > RULESET.characters.length)
+      (activeSlot as number) > MATCH_CONFIGURATION.characters.length)
   ) {
     throw new Error("The Active Match turn is structurally invalid.");
   }
@@ -299,21 +270,14 @@ function assertEndedMatchDecision(value: EndedMatchState): void {
   }
 }
 
-function assertMatchStatePersistence(
-  value: MatchState,
-  historicalRuleset: boolean,
-): void {
+function assertMatchStatePersistence(value: MatchState): void {
   const state = value as unknown as Record<string, unknown>;
-  assertStringArray(
-    state.spentAbilityIds,
-    "spent Abilities",
-    historicalRuleset ? isNonEmptyString : isAbilityId,
-  );
+  assertStringArray(state.spentAbilityIds, "spent Abilities", isAbilityId);
   if (!Array.isArray(state.activeEffects)) {
     throw new Error("The canonical active effects are structurally invalid.");
   }
   state.activeEffects.forEach((effect) => {
-    assertActiveEffectStructure(effect, historicalRuleset);
+    assertActiveEffectStructure(effect);
   });
   const names = state.displayNames;
   if (
@@ -324,16 +288,12 @@ function assertMatchStatePersistence(
         typeof names[characterId] === "string" &&
         names[characterId].length > 0 &&
         names[characterId].trim() === names[characterId] &&
-        RULESET.characters.some(({ id }) => id === characterId),
+        MATCH_CONFIGURATION.characters.some(({ id }) => id === characterId),
     )
   ) {
     throw new Error("The canonical Match display names are invalid.");
   }
-  assertStringArray(
-    state.spentReactionIds,
-    "spent Reactions",
-    historicalRuleset ? isNonEmptyString : isReactionId,
-  );
+  assertStringArray(state.spentReactionIds, "spent Reactions", isReactionId);
   assertStringArray(state.eliminatedTeams, "Team Elimination state", isTeam);
   assertStringArray(
     state.acknowledgedEliminations,
@@ -389,13 +349,13 @@ function assertMatchSummaryHeader(
   }
   const outcome: unknown = value.outcome;
   const decisionBasis: unknown = value.decisionBasis;
-  const rulesVersion: unknown = value.rulesVersion;
+  const configurationVersion: unknown = value.configurationVersion;
   const endedAt: unknown = value.endedAt;
   if (
     !isValidOutcome(outcome) ||
     !isValidDecisionBasis(decisionBasis) ||
-    typeof rulesVersion !== "string" ||
-    rulesVersion.length === 0 ||
+    typeof configurationVersion !== "string" ||
+    configurationVersion.length === 0 ||
     typeof endedAt !== "string" ||
     endedAt.length === 0
   ) {
@@ -438,7 +398,7 @@ export function toMatchSummary(state: EndedMatchState): MatchSummary {
     decisionBasis: state.decisionBasis,
     finalCounts: state.finalCounts,
     finalHpTotals: state.finalHpTotals,
-    rulesVersion: state.rulesVersion,
+    configurationVersion: state.configurationVersion,
     endedAt: state.endedAt,
     ...(state.coinFlipResult ? { coinFlipResult: state.coinFlipResult } : {}),
   };

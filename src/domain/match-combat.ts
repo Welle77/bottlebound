@@ -1,4 +1,8 @@
-import { RULESET, type AbilityName } from "./ruleset";
+import {
+  MATCH_CONFIGURATION,
+  MATCH_CONFIGURATION_VERSION,
+  type AbilityName,
+} from "./match-configuration";
 import { resolveAttackDamageAgainstCharacter } from "./match-ability-effects";
 import { applyDownedCleanup } from "./match-turn";
 import type {
@@ -20,9 +24,9 @@ import type {
   Team,
 } from "./match-types";
 
-type BasicAttack = (typeof RULESET.basicAttacks)[number];
+type BasicAttack = (typeof MATCH_CONFIGURATION.basicAttacks)[number];
 type BasicAttackLegInput = NonNullable<BasicAttackInput["attackLegs"]>[number];
-type ProtectiveReaction = (typeof RULESET.reactions)[number];
+type ProtectiveReaction = (typeof MATCH_CONFIGURATION.reactions)[number];
 
 type ValidatedBasicAttack = {
   readonly attack: BasicAttack;
@@ -58,7 +62,9 @@ export function protectiveReactionWarnings(
   reactionId: ReactionId,
   protectedCharacterId: CharacterId,
 ): readonly string[] {
-  const reaction = RULESET.reactions.find(({ id }) => id === reactionId);
+  const reaction = MATCH_CONFIGURATION.reactions.find(
+    ({ id }) => id === reactionId,
+  );
   if (!reaction || !AUTOMATED_REACTION_NAMES.has(reaction.name)) {
     throw new Error("The Action Draft references an unsupported Reaction.");
   }
@@ -83,7 +89,7 @@ export function getProtectiveReactionChoices(
   state: ActiveMatchState,
   affectedCharacterIds: readonly CharacterId[],
 ): readonly ProtectiveReactionChoice[] {
-  return RULESET.reactions
+  return MATCH_CONFIGURATION.reactions
     .filter(({ name }) => AUTOMATED_REACTION_NAMES.has(name))
     .flatMap((reaction) =>
       affectedCharacterIds
@@ -110,7 +116,7 @@ export function getProtectiveReactionChoices(
         }),
     )
     .filter((choice) => {
-      const reaction = RULESET.reactions.find(
+      const reaction = MATCH_CONFIGURATION.reactions.find(
         ({ id }) => id === choice.reactionId,
       );
       return reaction?.name !== "Deflecting Palm" || choice.eligible;
@@ -160,8 +166,8 @@ function validateBasicAttack(
   if ((state as MatchState).phase === "ended") {
     throw new Error("The Ended Match is read-only.");
   }
-  if (state.rulesVersion !== RULESET.version) {
-    throw new Error("Basic Attack needs the exact bundled Ruleset.");
+  if (state.configurationVersion !== MATCH_CONFIGURATION_VERSION) {
+    throw new Error("Basic Attack needs the exact bundled Match Configuration.");
   }
   const activeCharacterId = state.initiative[state.activeSlot - 1]?.characterId;
   if (input.sourceCharacterId !== activeCharacterId) {
@@ -173,7 +179,7 @@ function validateBasicAttack(
   if (!activeCharacter || activeCharacter.hp === 0) {
     throw new Error("A Downed character cannot use Basic Attack.");
   }
-  const attack = RULESET.basicAttacks.find(
+  const attack = MATCH_CONFIGURATION.basicAttacks.find(
     ({ characterId }) => characterId === input.sourceCharacterId,
   );
   if (!attack) throw new Error("The active character has no Basic Attack.");
@@ -241,7 +247,7 @@ function resolveProtectiveReactions(context: {
     readonly results: readonly ProtectiveReactionResolution[];
   }>(
     (accumulated, selection) => {
-      const reaction = RULESET.reactions.find(
+      const reaction = MATCH_CONFIGURATION.reactions.find(
         ({ id }) => id === selection.reactionId,
       );
       if (!reaction || !AUTOMATED_REACTION_NAMES.has(reaction.name)) {
@@ -482,7 +488,7 @@ function resultingEliminations(
   characters: readonly MatchCharacter[],
 ): readonly Team[] {
   const newlyEliminated = (["Drow", "Duergar"] as const).filter((team) =>
-    RULESET.characters
+    MATCH_CONFIGURATION.characters
       .filter((character) => character.team === team)
       .every(
         (character) =>
@@ -555,7 +561,7 @@ export function resolveBasicAttack(
     type: "ActionResolved",
     matchId: state.matchId,
     sequence,
-    rulesVersion: state.rulesVersion,
+    configurationVersion: state.configurationVersion,
     occurredAt,
     actionType: "Basic Attack",
     sourceCharacterId: input.sourceCharacterId,
@@ -563,7 +569,6 @@ export function resolveBasicAttack(
     attackType: attack.attackType,
     rangePaces: attack.rangePaces,
     damage: attack.damage,
-    rulesSourceAnchor: attack.sourceAnchor,
     attackLegs: buildAttackLegs({
       inputLegs,
       sourceCharacterId: input.sourceCharacterId,

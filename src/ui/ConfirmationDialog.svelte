@@ -21,7 +21,7 @@
     readonly basisText: string;
     readonly countsText: string;
     readonly hpTotalsText: string;
-    readonly rulesVersion: string;
+    readonly configurationVersion: string;
   }
   type GenericView = {
     readonly kind: "generic";
@@ -68,7 +68,7 @@
 
   function previewView(
     preview: EndGamePreview,
-    rulesVersion: string,
+    configurationVersion: string,
   ): PreviewView {
     return {
       kind: "preview",
@@ -78,7 +78,7 @@
       basisText: `${decisionBasisLabel(preview.decisionBasis)}${preview.coinFlipResult ? ` · ${preview.coinFlipResult}` : ""}`,
       countsText: `Drow ${preview.finalCounts.Drow} · Duergar ${preview.finalCounts.Duergar}`,
       hpTotalsText: `Drow ${preview.finalHpTotals.Drow} · Duergar ${preview.finalHpTotals.Duergar}`,
-      rulesVersion,
+      configurationVersion,
     };
   }
 
@@ -88,12 +88,15 @@
     if (confirmation === "end" && state.current.match?.phase === "active") {
       const storedPreview = state.current.endGamePreview;
       if (storedPreview) {
-        return previewView(storedPreview, state.current.match.rulesVersion);
+        return previewView(
+          storedPreview,
+          state.current.match.configurationVersion,
+        );
       }
       try {
         return previewView(
           getEndGamePreview(state.current.match, cryptoRandomSource),
-          state.current.match.rulesVersion,
+          state.current.match.configurationVersion,
         );
       } catch {
         // Fall back to the generic end confirmation when no preview can be
@@ -134,7 +137,7 @@
         <div><dt>Decision Basis</dt><dd>{view.basisText}</dd></div>
         <div><dt>Active counts</dt><dd>{view.countsText}</dd></div>
         <div><dt>Active HP totals</dt><dd>{view.hpTotalsText}</dd></div>
-        <div><dt>Ruleset</dt><dd>{view.rulesVersion}</dd></div>
+        <div><dt>Match Configuration</dt><dd>{view.configurationVersion}</dd></div>
       </dl>
       <div class="button-row">
         <button

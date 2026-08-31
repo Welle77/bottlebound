@@ -205,24 +205,21 @@ export function searchRules(
   const normalizedQuery = terms.join(" ");
 
   const compareResults = (
-    left: { readonly result: RulesSearchResult; readonly exactTitle: boolean },
-    right: { readonly result: RulesSearchResult; readonly exactTitle: boolean },
+    left: { readonly result: RulesSearchResult; readonly titleMatch: boolean },
+    right: { readonly result: RulesSearchResult; readonly titleMatch: boolean },
   ): number => {
-    if (left.exactTitle !== right.exactTitle) return left.exactTitle ? -1 : 1;
-    const leftAbility = left.result.kind === "ability";
-    const rightAbility = right.result.kind === "ability";
-    if (leftAbility !== rightAbility) return leftAbility ? -1 : 1;
+    if (left.titleMatch !== right.titleMatch) return left.titleMatch ? -1 : 1;
     return left.result.sourceOrder - right.result.sourceOrder;
   };
   const insertRanked = (
     sorted: readonly {
       readonly result: RulesSearchResult;
-      readonly exactTitle: boolean;
+      readonly titleMatch: boolean;
     }[],
-    entry: { readonly result: RulesSearchResult; readonly exactTitle: boolean },
+    entry: { readonly result: RulesSearchResult; readonly titleMatch: boolean },
   ): readonly {
     readonly result: RulesSearchResult;
-    readonly exactTitle: boolean;
+    readonly titleMatch: boolean;
   }[] => {
     const index = sorted.findIndex(
       (existing) => compareResults(existing, entry) > 0,
@@ -236,14 +233,16 @@ export function searchRules(
       const normalizedText = normalizeWithSourceMap(record.text);
       const ranges = matchingRanges(normalizedText, terms);
       if (!ranges) return [];
-      const exactTitle =
-        normalizeWithSourceMap(record.title).value === normalizedQuery;
-      return [{ result: resultFor(record, ranges), exactTitle }];
+      const normalizedTitle = normalizeWithSourceMap(record.title).value;
+      const titleMatch =
+        normalizedTitle === normalizedQuery ||
+        terms.every((term) => normalizedTitle.includes(term));
+      return [{ result: resultFor(record, ranges), titleMatch }];
     })
     .reduce<
       readonly {
         readonly result: RulesSearchResult;
-        readonly exactTitle: boolean;
+        readonly titleMatch: boolean;
       }[]
     >(insertRanked, [])
     .map(({ result }) => result);

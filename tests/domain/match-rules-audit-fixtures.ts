@@ -11,7 +11,7 @@ import {
   type MatchEvent,
 } from "../../src/domain/match";
 import { queuedRandom } from "./match-test-support";
-import { RULESET } from "../../src/domain/ruleset";
+import { MATCH_CONFIGURATION } from "../../src/domain/match-configuration";
 
 /**
  * Rules coverage audit fixtures (ticket T04).
@@ -59,8 +59,8 @@ export function abilityId(
   ownerCharacterId: CharacterId,
   name: string,
 ): AbilityId {
-  const fold = (value: string): string => value.replaceAll(/['’]/g, "");
-  const ability = RULESET.abilities.find(
+  const fold = (value: string): string => value.replaceAll(/[’']/g, "");
+  const ability = MATCH_CONFIGURATION.abilities.find(
     (entry) =>
       entry.ownerCharacterId === ownerCharacterId &&
       fold(entry.name) === fold(name),

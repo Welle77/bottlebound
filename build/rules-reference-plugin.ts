@@ -6,7 +6,7 @@ import { buildRulesReference } from "./rules-reference.ts";
 
 const VIRTUAL_ID = "virtual:rules-reference";
 const RESOLVED_ID = `\0${VIRTUAL_ID}`;
-const RULES_VERSION = "BB20260822A1";
+const RULES_REFERENCE_VERSION = "BB20260822A1";
 
 const rulesSource = new URL("../bottlebound_rules_final.md", import.meta.url);
 
@@ -19,7 +19,7 @@ export function rulesReferencePlugin(): Plugin {
     load(id) {
       if (id !== RESOLVED_ID) return undefined;
       const source = readFileSync(rulesSource, "utf8");
-      const reference = buildRulesReference(source, RULES_VERSION);
+      const reference = buildRulesReference(source, RULES_REFERENCE_VERSION);
       return `const deepFreeze = (value) => {
   if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
     for (const nested of Object.values(value)) deepFreeze(nested);

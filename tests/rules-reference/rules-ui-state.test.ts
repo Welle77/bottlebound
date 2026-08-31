@@ -2,22 +2,41 @@ import { describe, expect, test } from "vitest";
 
 import {
   createRulesUiState,
-  retainRulesVersion,
+  openRulesWithQuery,
 } from "../../src/rules-reference/rules-ui-state";
 
 describe("Rules UI page-lifetime state", () => {
-  test("retains reading context for one Ruleset and resets it for a new version", () => {
+  test("keeps reading context in page-lifetime UI state", () => {
     const retained = {
-      ...createRulesUiState("BB20260822A1"),
+      ...createRulesUiState(),
       query: "backstab",
-      selectedAnchor: "ability-rogue-backstab",
+      selectedAnchor: "rules-heading-backstab",
       scrollTop: 420,
       openerId: "rules-initiative",
     };
 
-    expect(retainRulesVersion(retained, "BB20260822A1")).toBe(retained);
-    expect(retainRulesVersion(retained, "BB20260822B1")).toEqual(
-      createRulesUiState("BB20260822B1"),
-    );
+    expect(retained).toEqual({
+      open: false,
+      query: "backstab",
+      selectedAnchor: "rules-heading-backstab",
+      scrollTop: 420,
+      openerId: "rules-initiative",
+    });
+  });
+
+  test("opens contextual Rules controls in search mode with the application query", () => {
+    const retained = {
+      ...createRulesUiState(),
+      selectedAnchor: "rules-heading-initiative-game-clock",
+      scrollTop: 420,
+    };
+
+    expect(openRulesWithQuery(retained, "Initiative")).toEqual({
+      ...retained,
+      open: true,
+      query: "Initiative",
+      selectedAnchor: null,
+      scrollTop: 0,
+    });
   });
 });

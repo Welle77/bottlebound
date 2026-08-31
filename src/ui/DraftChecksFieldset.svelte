@@ -1,6 +1,9 @@
 <script lang="ts">
-  import { CHECK_LABELS } from "./ability-draft";
-  import type { PhysicalAttackCheck } from "../domain/ruleset";
+import { CHECK_LABELS } from "./ability-draft";
+import {
+  MATCH_CONFIGURATION,
+  type PhysicalAttackCheck,
+} from "../domain/match-configuration";
   import { patchShellState, state } from "./shell-state.svelte";
 
   // Manual physical confirmations shared by the Basic Attack draft and
@@ -31,7 +34,7 @@
 
 {#if requireManualChecks && draft}
   <fieldset>
-    <legend>Manual physical confirmations</legend>
+    <legend>{MATCH_CONFIGURATION.refereeInstructions.manualPhysicalConfirmations}</legend>
     <div class="check-list">
       {#each CHECK_LABELS as [key, label] (key)}
         <label class="check-control">

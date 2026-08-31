@@ -13,7 +13,7 @@
 
   function handleOpenRules(event: MouseEvent): void {
     if (!(event.currentTarget instanceof HTMLButtonElement)) return;
-    openRules(event.currentTarget, null);
+    openRules(event.currentTarget);
   }
 
   function handleRequirePhysicalConfirmationsChange(event: Event): void {

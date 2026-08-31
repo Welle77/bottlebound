@@ -3,20 +3,19 @@ import { describe, expect, it } from "vitest";
 
 import {
   createSetup,
-  finishTurn,
   generateInitiative,
   resolveBasicAttack,
   startMatch,
   undoLastEvent,
-  type MatchState,
 } from "../../src/domain/match";
 import { createIndexedDbMatchStore } from "../../src/storage/match-store";
 import {
   overwriteStoredEvent,
   randomQueue,
   readRawMatch,
+  rewriteCurrentSnapshotAsPriorConfigurationSchema,
   rewriteCurrentSnapshotAsRetiredSchema,
-  rewriteStoredRulesVersion,
+  rewriteStoredConfigurationVersion,
 } from "./match-store.test-helpers";
 
 describe("IndexedDbMatchStore", () => {
@@ -246,23 +245,21 @@ describe("IndexedDbMatchStore", () => {
     });
   });
 
-  it("restores an internally consistent Match with an unavailable saved rules version", async () => {
+  it("rejects a Match with an unavailable saved configuration version", async () => {
     const factory = new IDBFactory();
     const databaseName = "restore-prior-rules";
     const store = createIndexedDbMatchStore(factory, databaseName);
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     await store.commit(setup.event, setup.state);
-    await rewriteStoredRulesVersion(factory, databaseName, "BB-prior-release");
+    await rewriteStoredConfigurationVersion(
+      factory,
+      databaseName,
+      "BB-prior-release",
+    );
 
-    const restored = await store.restore();
-
-    expect(restored?.state.rulesVersion).toBe("BB-prior-release");
-    expect(restored?.events).toHaveLength(1);
-    expect(restored?.events[0]?.rulesVersion).toBe("BB-prior-release");
-    expect(restored?.state).toEqual({
-      ...setup.state,
-      rulesVersion: "BB-prior-release",
-    } satisfies MatchState);
+    await expect(store.restore()).rejects.toThrow(
+      "configuration version is incompatible",
+    );
   });
 
   it("restores an unavailable-version Match with combat history from recorded evidence", async () => {
@@ -297,53 +294,15 @@ describe("IndexedDbMatchStore", () => {
     );
     for (const result of [setup, generated, started, action])
       await store.commit(result.event, result.state);
-    await rewriteStoredRulesVersion(factory, databaseName, "BB-prior-release");
-
-    const restored = await store.restore();
-    if (!restored) throw new Error("The Match did not restore.");
-
-    expect(restored.state.rulesVersion).toBe("BB-prior-release");
-    expect(restored.events).toHaveLength(4);
-    expect(
-      restored.events.every(
-        ({ rulesVersion }) => rulesVersion === "BB-prior-release",
-      ),
-    ).toBe(true);
-    expect(restored.state).toEqual({
-      ...action.state,
-      rulesVersion: "BB-prior-release",
-    });
-
-    const undone = undoLastEvent(restored.state, restored.events, {
-      occurredAt: "2026-08-22T14:04:00.000Z",
-      confirmed: true,
-    });
-    await store.commit(undone.event, undone.state);
-    await expect(store.restore()).resolves.toEqual({
-      state: undone.state,
-      events: [...restored.events, undone.event],
-      summary: null,
-    });
-    expect(undone.state).toMatchObject({
-      phase: "active",
-      majorActionUsed: false,
-      spentReactionIds: [],
-      characters: started.state.characters.map(({ characterId, hp }) => ({
-        characterId,
-        hp,
-      })),
-    });
-
-    const turned = finishTurn(
-      undone.state as Extract<MatchState, { readonly phase: "active" }>,
-      "2026-08-22T14:05:00.000Z",
+    await rewriteStoredConfigurationVersion(
+      factory,
+      databaseName,
+      "BB-prior-release",
     );
-    await store.commit(turned.event, turned.state);
-    await expect(store.restore()).resolves.toEqual({
-      state: turned.state,
-      events: [...restored.events, undone.event, turned.event],
-      summary: null,
-    });
+
+    await expect(store.restore()).rejects.toThrow(
+      "configuration version is incompatible",
+    );
   });
 
   it("rejects retired-schema persisted data through the public restore API without altering records", async () => {
@@ -353,6 +312,22 @@ describe("IndexedDbMatchStore", () => {
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     await store.commit(setup.event, setup.state);
     await rewriteCurrentSnapshotAsRetiredSchema(factory, databaseName);
+    const before = await readRawMatch(factory, databaseName);
+
+    await expect(store.restore()).rejects.toThrow(/canonical/i);
+    await expect(readRawMatch(factory, databaseName)).resolves.toEqual(before);
+  });
+
+  it("rejects the immediately prior persistence schema through the incompatibility path", async () => {
+    const factory = new IDBFactory();
+    const databaseName = "prior-configuration-schema";
+    const store = createIndexedDbMatchStore(factory, databaseName);
+    const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
+    await store.commit(setup.event, setup.state);
+    await rewriteCurrentSnapshotAsPriorConfigurationSchema(
+      factory,
+      databaseName,
+    );
     const before = await readRawMatch(factory, databaseName);
 
     await expect(store.restore()).rejects.toThrow(/canonical/i);
@@ -397,9 +372,9 @@ describe("IndexedDbMatchStore", () => {
     await expect(
       store.commit(setup.event, {
         ...setup.state,
-        rulesVersion: "unsupported",
+        configurationVersion: "unsupported",
       }),
-    ).rejects.toThrow("Match Event");
+    ).rejects.toThrow("configuration version is incompatible");
     await expect(
       store.commit(setup.event, {
         ...setup.state,
