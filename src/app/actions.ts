@@ -4,6 +4,7 @@ import {
   CHARACTER_IDS,
   createSetup,
   cryptoRandomSource,
+  dash,
   endMatch,
   finishTurn,
   generateInitiative,
@@ -86,6 +87,13 @@ export async function commitResult(result: CommandResult): Promise<boolean> {
   } finally {
     patchShellState({ saving: false });
   }
+}
+export async function recordDash(): Promise<void> {
+  const match = state.current.match;
+  if (match?.phase !== "active") return;
+  const sourceCharacterId = match.initiative[match.activeSlot - 1]?.characterId;
+  if (!sourceCharacterId) return;
+  await commitResult(dash(match, sourceCharacterId, new Date().toISOString()));
 }
 export function openBasicAttack(): void {
   const match = state.current.match;

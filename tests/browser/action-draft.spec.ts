@@ -208,6 +208,11 @@ test("a second Basic Attack needs and records the referee override", async ({
       await page.getByLabel(/Record referee override/).check();
     }
     await confirm.click();
+    if (attack === 1) {
+      await expect(
+        page.getByRole("button", { name: "Basic Attack" }),
+      ).toBeEnabled();
+    }
   }
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Ranger" }),

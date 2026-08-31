@@ -78,3 +78,8 @@ _Avoid_: Ruleset, rules reference
 **Match Summary**:
 A compact local record of the latest Ended Match outcome, decision basis, final team state, Ruleset identity, and end time.
 _Avoid_: Match history, result log
+
+**Dash**:
+The recorded full-movement choice in which the active character spends both
+normal movement paces and takes no further normal action that turn.
+_Avoid_: Run action, double move

@@ -45,7 +45,10 @@ function assertEventBase(
   ) {
     throw new Error("The canonical Match Event is structurally invalid.");
   }
-  if (value.configurationVersion !== MATCH_CONFIGURATION.version) {
+  if (
+    expectedConfigurationVersion === undefined &&
+    value.configurationVersion !== MATCH_CONFIGURATION.version
+  ) {
     throw new Error(
       "The canonical Match Event configuration version is incompatible.",
     );
@@ -160,6 +163,17 @@ function assertTurnFinishedEvent(value: Record<string, unknown>): void {
   assertTurnFields(value);
   assertTurnSkippedSlots(value, expectedVisitedTurnSlots(value));
   assertExpiredEffectCollection(value.expiredEffects);
+}
+
+function assertDashedEvent(value: Record<string, unknown>): void {
+  if (
+    typeof value.sourceCharacterId !== "string" ||
+    !isCharacterId(value.sourceCharacterId) ||
+    value.movementPaces !== 2 ||
+    value.remainingMovementPaces !== 0
+  ) {
+    throw new Error("The canonical Dash Event is invalid.");
+  }
 }
 
 function assertActionResolutionCollections(
@@ -559,6 +573,7 @@ function assertUndoAppliedEvent(value: Record<string, unknown>): void {
       targetType === "DisplayNamesAssigned" ||
       targetType === "MatchStarted" ||
       targetType === "TurnFinished" ||
+      targetType === "Dashed" ||
       targetType === "ActionResolved" ||
       targetType === "EliminationContinued" ||
       targetType === "SimultaneousEliminationRuled" ||
@@ -599,7 +614,10 @@ function expectedInitiativeTies(results: readonly unknown[]): readonly {
         .map((entry) => (entry as InitiativeEntry).characterId),
     }));
 }
-function assertInitiativeEvent(value: Record<string, unknown>): void {
+function assertInitiativeEvent(
+  value: Record<string, unknown>,
+  expectedConfigurationVersion?: string,
+): void {
   if (
     (value.type !== "InitiativeGenerated" &&
       value.type !== "InitiativeRerolled") ||
@@ -609,26 +627,31 @@ function assertInitiativeEvent(value: Record<string, unknown>): void {
     throw new Error("The canonical Match Event is structurally invalid.");
   }
   const results = value.results as readonly unknown[];
-  assertCanonicalState({
-    schemaVersion: MATCH_SCHEMA_VERSION,
-    configurationVersion: value.configurationVersion,
-    matchId: value.matchId,
-    phase: "setup",
-    sequence: value.sequence,
-    characters: MATCH_CONFIGURATION.characters.map(({ id, baseHp }) => ({
-      characterId: id,
-      hp: baseHp,
-    })),
-    initiative: results,
-    displayNames: {},
-    spentReactionIds: [],
-    spentAbilityIds: [],
-    majorActionUsed: false,
-    eliminatedTeams: [],
-    acknowledgedEliminations: [],
-    outcome: null,
-    activeEffects: [],
-  });
+  assertCanonicalState(
+    {
+      schemaVersion: MATCH_SCHEMA_VERSION,
+      configurationVersion: value.configurationVersion,
+      matchId: value.matchId,
+      phase: "setup",
+      sequence: value.sequence,
+      characters: MATCH_CONFIGURATION.characters.map(({ id, baseHp }) => ({
+        characterId: id,
+        hp: baseHp,
+      })),
+      initiative: results,
+      displayNames: {},
+      spentReactionIds: [],
+      spentAbilityIds: [],
+      movementPaces: 2,
+      remainingMovementPaces: 2,
+      majorActionUsed: false,
+      eliminatedTeams: [],
+      acknowledgedEliminations: [],
+      outcome: null,
+      activeEffects: [],
+    },
+    expectedConfigurationVersion,
+  );
   const expectedTies = expectedInitiativeTies(results);
   if (value.tieOrder.length !== expectedTies.length) {
     throw new Error("The canonical tied-group order is structurally invalid.");
@@ -670,6 +693,10 @@ export function assertCanonicalEvent(
     assertTurnFinishedEvent(value);
     return;
   }
+  if (value.type === "Dashed") {
+    assertDashedEvent(value);
+    return;
+  }
   if (value.type === "ActionResolved") {
     assertActionResolvedEvent(value);
     return;
@@ -694,5 +721,5 @@ export function assertCanonicalEvent(
     assertUndoAppliedEvent(value);
     return;
   }
-  assertInitiativeEvent(value);
+  assertInitiativeEvent(value, expectedConfigurationVersion);
 }

@@ -16,6 +16,7 @@
     InitiativeRerolled: "Reroll Initiative",
     MatchStarted: "Start Match",
     TurnFinished: "Finish Turn",
+    Dashed: "Dash",
     ActionResolved: "Action Resolution",
     EliminationContinued: "Continue",
     SimultaneousEliminationRuled: "Simultaneous Elimination Ruling",

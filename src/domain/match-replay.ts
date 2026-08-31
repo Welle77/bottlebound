@@ -10,6 +10,7 @@ import {
 import { createSetupForConfigurationVersion } from "./match-setup";
 import {
   acknowledgeElimination,
+  dash,
   finishTurn,
   ruleSimultaneousElimination,
 } from "./match-turn";
@@ -196,6 +197,7 @@ function isReversibleEvent(event: MatchEvent): event is ReversibleMatchEvent {
     event.type === "InitiativeRerolled" ||
     event.type === "MatchStarted" ||
     event.type === "TurnFinished" ||
+    event.type === "Dashed" ||
     event.type === "ActionResolved" ||
     event.type === "EliminationContinued" ||
     event.type === "SimultaneousEliminationRuled" ||
@@ -320,6 +322,21 @@ function applyTurnFinished(
   const expected = finishTurn(active, event.occurredAt);
   if (!canonicalMatchRecordsEqual(expected.event, event)) {
     throw new Error("The Finish Turn Event does not follow Match State.");
+  }
+  return expected.state;
+}
+
+function applyDash(
+  current: MatchState,
+  event: Extract<MatchEvent, { readonly type: "Dashed" }>,
+): MatchState {
+  const active = requireActiveState(
+    current,
+    "The Dash Event cannot apply to this Match State.",
+  );
+  const expected = dash(active, event.sourceCharacterId, event.occurredAt);
+  if (!canonicalMatchRecordsEqual(expected.event, event)) {
+    throw new Error("The Dash Event does not follow Match State.");
   }
   return expected.state;
 }
@@ -544,6 +561,8 @@ function applyReplayEvent(
       return applyMatchStarted(current, event);
     case "TurnFinished":
       return applyTurnFinished(current, event);
+    case "Dashed":
+      return applyDash(current, event);
     case "ActionResolved":
       return applyActionResolved(current, event);
     case "EliminationContinued":

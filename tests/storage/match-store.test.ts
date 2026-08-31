@@ -245,7 +245,7 @@ describe("IndexedDbMatchStore", () => {
     });
   });
 
-  it("rejects a Match with an unavailable saved configuration version", async () => {
+  it("restores a Match with a historical saved configuration version", async () => {
     const factory = new IDBFactory();
     const databaseName = "restore-prior-rules";
     const store = createIndexedDbMatchStore(factory, databaseName);
@@ -257,12 +257,14 @@ describe("IndexedDbMatchStore", () => {
       "BB-prior-release",
     );
 
-    await expect(store.restore()).rejects.toThrow(
-      "configuration version is incompatible",
-    );
+    await expect(store.restore()).resolves.toEqual({
+      state: { ...setup.state, configurationVersion: "BB-prior-release" },
+      events: [{ ...setup.event, configurationVersion: "BB-prior-release" }],
+      summary: null,
+    });
   });
 
-  it("restores an unavailable-version Match with combat history from recorded evidence", async () => {
+  it("restores a historical-version Match with combat history from recorded evidence", async () => {
     const factory = new IDBFactory();
     const databaseName = "restore-prior-rules-combat";
     const store = createIndexedDbMatchStore(factory, databaseName);
@@ -300,9 +302,13 @@ describe("IndexedDbMatchStore", () => {
       "BB-prior-release",
     );
 
-    await expect(store.restore()).rejects.toThrow(
-      "configuration version is incompatible",
-    );
+    await expect(store.restore()).resolves.toEqual({
+      state: { ...action.state, configurationVersion: "BB-prior-release" },
+      events: [setup.event, generated.event, started.event, action.event].map(
+        (event) => ({ ...event, configurationVersion: "BB-prior-release" }),
+      ),
+      summary: null,
+    });
   });
 
   it("rejects retired-schema persisted data through the public restore API without altering records", async () => {
@@ -373,6 +379,7 @@ describe("IndexedDbMatchStore", () => {
       store.commit(setup.event, {
         ...setup.state,
         configurationVersion: "unsupported",
+        characters: setup.state.characters.slice(1),
       }),
     ).rejects.toThrow("configuration version is incompatible");
     await expect(

@@ -55,6 +55,7 @@ export {
 
 export {
   acknowledgeElimination,
+  dash,
   finishTurn,
   ruleSimultaneousElimination,
 } from "./match-turn";
@@ -99,6 +100,7 @@ export type {
   CoinFlipTieBreakStep,
   CommandResult,
   DecisionBasis,
+  DashedEvent,
   DigitalCoinFlipResult,
   DisplayNames,
   DisplayNamesAssignedEvent,
