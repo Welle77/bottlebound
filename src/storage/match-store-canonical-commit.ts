@@ -8,6 +8,7 @@ import {
   type MatchEvent,
   type MatchStartedEvent,
   type MatchState,
+  type DashedEvent,
   type TurnFinishedEvent,
 } from "../domain/match";
 import { assertCanonicalEvent } from "./match-store-canonical-event";
@@ -223,14 +224,31 @@ function assertLiveCommittedCommit(
   }
 }
 
-export function assertCommit(event: MatchEvent, state: MatchState): void {
-  assertCanonicalState(state);
-  assertCanonicalEvent(event, state.configurationVersion);
+function assertDashCommit(event: DashedEvent, state: MatchState): void {
   if (
-    event.matchId !== state.matchId ||
-    event.sequence !== state.sequence ||
-    event.configurationVersion !== state.configurationVersion
+    state.phase !== "active" ||
+    state.initiative[state.activeSlot - 1]?.characterId !==
+      event.sourceCharacterId ||
+    state.remainingMovementPaces !== event.remainingMovementPaces ||
+    !state.majorActionUsed
   ) {
+    throw new Error("The Dash Event and snapshot do not match.");
+  }
+}
+
+export function assertCommit(
+  event: MatchEvent,
+  state: MatchState,
+  expectedConfigurationVersion?: string,
+): void {
+  if (event.configurationVersion !== state.configurationVersion) {
+    throw new Error(
+      "The Match Event configuration version is incompatible with the canonical snapshot.",
+    );
+  }
+  assertCanonicalState(state, expectedConfigurationVersion);
+  assertCanonicalEvent(event, expectedConfigurationVersion);
+  if (event.matchId !== state.matchId || event.sequence !== state.sequence) {
     throw new Error(
       "The Match Event and snapshot do not describe one sequence.",
     );
@@ -255,6 +273,10 @@ export function assertCommit(event: MatchEvent, state: MatchState): void {
   }
   if (event.type === "ActionResolved") {
     assertActionResolvedCommit(event, state);
+    return;
+  }
+  if (event.type === "Dashed") {
+    assertDashCommit(event, state);
     return;
   }
   if (event.type === "EliminationContinued") {
@@ -286,7 +308,14 @@ export function assertRestoredMatch(
 ): asserts state is MatchState {
   if (!isRecord(metadata))
     throw new Error("Saved canonical metadata is invalid.");
-  assertCanonicalState(state);
+  const configurationVersion = metadata.configurationVersion;
+  if (
+    typeof configurationVersion !== "string" ||
+    configurationVersion.length === 0
+  ) {
+    throw new Error("Saved canonical metadata is invalid.");
+  }
+  assertCanonicalState(state, configurationVersion);
   if (
     metadata.matchId !== state.matchId ||
     metadata.sequence !== state.sequence ||
@@ -313,7 +342,7 @@ export function assertRestoredMatch(
   if (lastEvent === undefined)
     throw new Error("Saved canonical data has no Match Event.");
   assertCanonicalEvent(lastEvent, state.configurationVersion);
-  assertCommit(lastEvent, state);
+  assertCommit(lastEvent, state, configurationVersion);
   if (
     !canonicalMatchRecordsEqual(
       restoreStateFromEvents(events as readonly MatchEvent[]),

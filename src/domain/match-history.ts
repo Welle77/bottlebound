@@ -61,14 +61,19 @@ function assertStringArray(
   }
 }
 
+function isHistoricalAbilityId(value: string): boolean {
+  return value.length > 0;
+}
+
 function hasValidActiveEffectIdentity(
   effect: Record<string, unknown>,
+  isValidAbilityId: (value: string) => boolean = isAbilityId,
 ): boolean {
   return (
     typeof effect.effectId === "string" &&
     effect.effectId.length > 0 &&
     typeof effect.abilityId === "string" &&
-    isAbilityId(effect.abilityId) &&
+    isValidAbilityId(effect.abilityId) &&
     typeof effect.anchorCharacterId === "string" &&
     isCharacterId(effect.anchorCharacterId) &&
     typeof effect.affectedCharacterId === "string" &&
@@ -110,12 +115,15 @@ function hasValidActiveEffectOperations(operations: unknown): boolean {
   );
 }
 
-export function assertActiveEffectStructure(effect: unknown): void {
+export function assertActiveEffectStructure(
+  effect: unknown,
+  isValidAbilityId: (value: string) => boolean = isAbilityId,
+): void {
   if (!isRecord(effect) || !isRecord(effect.duration)) {
     throw new Error("The canonical active effects are structurally invalid.");
   }
   if (
-    !hasValidActiveEffectIdentity(effect) ||
+    !hasValidActiveEffectIdentity(effect, isValidAbilityId) ||
     !hasValidEffectBranch(effect.kind, isActiveEffectKind) ||
     !hasValidActiveEffectDuration(effect.duration) ||
     !hasValidActiveEffectOperations(effect.operations)
@@ -272,12 +280,16 @@ function assertEndedMatchDecision(value: EndedMatchState): void {
 
 function assertMatchStatePersistence(value: MatchState): void {
   const state = value as unknown as Record<string, unknown>;
-  assertStringArray(state.spentAbilityIds, "spent Abilities", isAbilityId);
+  const isValidAbilityId =
+    value.configurationVersion === MATCH_CONFIGURATION.version
+      ? isAbilityId
+      : isHistoricalAbilityId;
+  assertStringArray(state.spentAbilityIds, "spent Abilities", isValidAbilityId);
   if (!Array.isArray(state.activeEffects)) {
     throw new Error("The canonical active effects are structurally invalid.");
   }
   state.activeEffects.forEach((effect) => {
-    assertActiveEffectStructure(effect);
+    assertActiveEffectStructure(effect, isValidAbilityId);
   });
   const names = state.displayNames;
   if (
@@ -300,8 +312,14 @@ function assertMatchStatePersistence(value: MatchState): void {
     "acknowledged Team Elimination state",
     isTeam,
   );
+  const remainingMovementPaces = state.remainingMovementPaces;
   if (
     typeof state.majorActionUsed !== "boolean" ||
+    state.movementPaces !== 2 ||
+    typeof remainingMovementPaces !== "number" ||
+    !Number.isSafeInteger(remainingMovementPaces) ||
+    remainingMovementPaces < 0 ||
+    remainingMovementPaces > state.movementPaces ||
     !state.eliminatedTeams.every((team) => isTeam(team)) ||
     new Set(state.eliminatedTeams).size !== state.eliminatedTeams.length ||
     !state.acknowledgedEliminations.every((team) => isTeam(team)) ||

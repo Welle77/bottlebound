@@ -342,7 +342,7 @@ export function createIndexedDbMatchStore(
   }
 
   async function commit(event: MatchEvent, state: MatchState): Promise<void> {
-    assertCommit(event, state);
+    assertCommit(event, state, state.configurationVersion);
     const database = await open();
     const transaction = database.transaction(
       [METADATA_STORE, SNAPSHOT_STORE, EVENT_STORE, SUMMARY_STORE],

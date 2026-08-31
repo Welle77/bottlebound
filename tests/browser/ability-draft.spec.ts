@@ -492,6 +492,7 @@ test("a second Major Action in one turn needs the same recorded override as Basi
   await expect(
     page.getByRole("heading", { name: "Active Match" }),
   ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Use Ability" })).toBeEnabled();
 
   await page.getByRole("button", { name: "Use Ability" }).click();
   await page.getByRole("button", { name: "Use Brutal Shove" }).click();

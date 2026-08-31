@@ -176,6 +176,8 @@ export function reopenMatch(
     activeSlot: state.activeSlot,
     spentReactionIds: state.spentReactionIds,
     spentAbilityIds: state.spentAbilityIds,
+    movementPaces: state.movementPaces,
+    remainingMovementPaces: state.remainingMovementPaces,
     majorActionUsed: state.majorActionUsed,
     eliminatedTeams: state.eliminatedTeams,
     acknowledgedEliminations: state.acknowledgedEliminations,

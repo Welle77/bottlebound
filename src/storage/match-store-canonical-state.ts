@@ -33,12 +33,13 @@ function assertCanonicalConfigurationVersion(
   value: Record<string, unknown>,
   expectedConfigurationVersion: string | undefined,
 ): void {
+  const configurationVersion = value.configurationVersion;
   if (
-    typeof value.configurationVersion !== "string" ||
-    value.configurationVersion.length === 0 ||
-    value.configurationVersion !== MATCH_CONFIGURATION.version ||
-    (expectedConfigurationVersion !== undefined &&
-      value.configurationVersion !== expectedConfigurationVersion)
+    typeof configurationVersion !== "string" ||
+    configurationVersion.length === 0 ||
+    (expectedConfigurationVersion === undefined
+      ? configurationVersion !== MATCH_CONFIGURATION.version
+      : configurationVersion !== expectedConfigurationVersion)
   ) {
     throw new Error(
       "The canonical snapshot configuration version is incompatible.",

@@ -1,4 +1,4 @@
-export const MATCH_SCHEMA_VERSION = 4;
+export const MATCH_SCHEMA_VERSION = 5;
 
 export const TEAMS = ["Drow", "Duergar"] as const;
 
@@ -174,6 +174,7 @@ export const MATCH_EVENT_TYPES = [
   "InitiativeRerolled",
   "MatchStarted",
   "TurnFinished",
+  "Dashed",
   "ActionResolved",
   "EliminationContinued",
   "SimultaneousEliminationRuled",
@@ -310,6 +311,8 @@ export type ActiveEffect = {
 type CombatMatchState = {
   readonly spentReactionIds: readonly ReactionId[];
   readonly spentAbilityIds: readonly AbilityId[];
+  readonly movementPaces: 2;
+  readonly remainingMovementPaces: 0 | 1 | 2;
   readonly majorActionUsed: boolean;
   readonly eliminatedTeams: readonly Team[];
   readonly acknowledgedEliminations: readonly Team[];
@@ -440,6 +443,13 @@ export type TurnFinishedEvent = {
   readonly skippedSlots: readonly number[];
   /** Every effect that expired at this turn boundary; empty when none did. */
   readonly expiredEffects: readonly ActiveEffect[];
+} & EventBase;
+
+export type DashedEvent = {
+  readonly type: "Dashed";
+  readonly sourceCharacterId: CharacterId;
+  readonly movementPaces: 2;
+  readonly remainingMovementPaces: 0;
 } & EventBase;
 
 export type EliminationContinuedEvent = {
@@ -615,6 +625,7 @@ export type ReversibleMatchEvent =
   | InitiativeEvent
   | MatchStartedEvent
   | TurnFinishedEvent
+  | DashedEvent
   | ActionResolvedEvent
   | EliminationContinuedEvent
   | SimultaneousEliminationRuledEvent
@@ -632,6 +643,7 @@ export type MatchEvent =
   | InitiativeEvent
   | MatchStartedEvent
   | TurnFinishedEvent
+  | DashedEvent
   | ActionResolvedEvent
   | EliminationContinuedEvent
   | SimultaneousEliminationRuledEvent
@@ -657,6 +669,8 @@ export type UndoPreview = {
 export const initialCombatState = Object.freeze({
   spentReactionIds: Object.freeze([]),
   spentAbilityIds: Object.freeze([]),
+  movementPaces: 2 as const,
+  remainingMovementPaces: 2 as const,
   majorActionUsed: false,
   eliminatedTeams: Object.freeze([]),
   acknowledgedEliminations: Object.freeze([]),

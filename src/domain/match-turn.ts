@@ -5,6 +5,7 @@ import type {
   ActiveMatchState,
   CharacterId,
   CommandResult,
+  DashedEvent,
   EliminationContinuedEvent,
   MatchCharacter,
   MatchOutcome,
@@ -32,6 +33,52 @@ type EffectBoundaryContext = {
 
 function isSimultaneousEliminationOutcome(value: unknown): boolean {
   return value === "draw" || (typeof value === "string" && isTeam(value));
+}
+
+/** Records the active character's full-movement choice for this turn. */
+export function dash(
+  state: ActiveMatchState,
+  sourceCharacterId: CharacterId,
+  occurredAt: string,
+): CommandResult<ActiveMatchState, DashedEvent> {
+  if ((state as MatchState).phase === "ended") {
+    throw new Error("The Ended Match is read-only.");
+  }
+  const activeCharacterId = state.initiative[state.activeSlot - 1]?.characterId;
+  if (sourceCharacterId !== activeCharacterId) {
+    throw new Error("Dash needs the active character as its source.");
+  }
+  const activeCharacter = state.characters.find(
+    ({ characterId }) => characterId === sourceCharacterId,
+  );
+  if (!activeCharacter || activeCharacter.hp === 0) {
+    throw new Error("A Downed character cannot Dash.");
+  }
+  if (
+    state.remainingMovementPaces !== state.movementPaces ||
+    state.majorActionUsed
+  ) {
+    throw new Error("Dash needs an unused turn economy.");
+  }
+  const sequence = state.sequence + 1;
+  return {
+    state: {
+      ...state,
+      sequence,
+      remainingMovementPaces: 0,
+      majorActionUsed: true,
+    },
+    event: {
+      type: "Dashed",
+      matchId: state.matchId,
+      sequence,
+      configurationVersion: state.configurationVersion,
+      occurredAt,
+      sourceCharacterId,
+      movementPaces: 2,
+      remainingMovementPaces: 0,
+    },
+  };
 }
 
 function nextTurnPosition(state: ActiveMatchState): TurnPosition {
@@ -225,6 +272,7 @@ export function finishTurn(
       sequence,
       round,
       activeSlot,
+      remainingMovementPaces: 2,
       majorActionUsed: false,
       characters: finalCharacters,
       activeEffects: finalActiveEffects,

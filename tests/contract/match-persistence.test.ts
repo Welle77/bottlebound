@@ -5,6 +5,7 @@ import {
   MATCH_CONFIGURATION_VERSION,
   MATCH_SCHEMA_VERSION,
   createSetup,
+  dash,
   finishTurn,
   generateInitiative,
   rerollInitiative,
@@ -41,7 +42,7 @@ describe("Match command persistence contract", () => {
     expect(setup.event).toMatchObject({
       configurationVersion: MATCH_CONFIGURATION_VERSION,
     });
-    expect(MATCH_SCHEMA_VERSION).toBe(4);
+    expect(MATCH_SCHEMA_VERSION).toBe(5);
   });
 
   it("commits one matching event and snapshot for every Match command", async () => {
@@ -62,10 +63,25 @@ describe("Match command persistence contract", () => {
       { occurredAt: "2026-08-22T14:02:00.000Z", confirmed: true },
     );
     const started = startMatch(rerolled.state, "2026-08-22T14:03:00.000Z");
-    const finished = finishTurn(started.state, "2026-08-22T14:04:00.000Z");
+    const sourceCharacterId = started.state.initiative[0]?.characterId;
+    if (!sourceCharacterId)
+      throw new Error("The Match needs an active character.");
+    const dashed = dash(
+      started.state,
+      sourceCharacterId,
+      "2026-08-22T14:04:00.000Z",
+    );
+    const finished = finishTurn(dashed.state, "2026-08-22T14:05:00.000Z");
     const committed: { state: MatchState; event: MatchEvent }[] = [];
 
-    for (const result of [setup, generated, rerolled, started, finished]) {
+    for (const result of [
+      setup,
+      generated,
+      rerolled,
+      started,
+      dashed,
+      finished,
+    ]) {
       await store.commit(result.event, result.state);
       committed.push(result);
       await expect(store.restore()).resolves.toEqual({
@@ -78,7 +94,7 @@ describe("Match command persistence contract", () => {
     const undone = undoLastEvent(
       finished.state,
       committed.map(({ event }) => event),
-      { occurredAt: "2026-08-22T14:05:00.000Z", confirmed: true },
+      { occurredAt: "2026-08-22T14:06:00.000Z", confirmed: true },
     );
     await store.commit(undone.event, undone.state);
 
@@ -92,7 +108,7 @@ describe("Match command persistence contract", () => {
       summary: null,
     });
     expect(undone.state.schemaVersion).toBe(MATCH_SCHEMA_VERSION);
-    expect(MATCH_SCHEMA_VERSION).toBe(4);
+    expect(MATCH_SCHEMA_VERSION).toBe(5);
     expect(generated.event.type).toBe("InitiativeGenerated");
     expect(rerolled.event.type).toBe("InitiativeRerolled");
   });

@@ -69,3 +69,25 @@ test("a failed Finish Turn leaves the last committed Active Match visible", asyn
   await page.reload();
   await expect(page.getByText("Round 1 · Slot 1 of 12")).toBeVisible();
 });
+
+test("the referee records Dash once and the normal action controls become unavailable", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Create Match" }).click();
+  await page.getByRole("button", { name: "Generate initiative" }).click();
+  await page.getByRole("button", { name: "Start Match" }).click();
+
+  const dash = page.getByRole("button", { name: "Dash" });
+  await expect(dash).toBeEnabled();
+  await dash.click();
+
+  await expect(dash).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Basic Attack" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Use Ability" }),
+  ).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Finish Turn" })).toBeEnabled();
+});

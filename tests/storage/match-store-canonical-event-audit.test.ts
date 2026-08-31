@@ -148,6 +148,46 @@ function redirectedResolution(): ActionResolvedEvent {
   ).event;
 }
 
+describe("canonical Event configuration versions", () => {
+  it("accepts a matching historical version during restore validation", () => {
+    const historicalRulesVersion = "BB-prior-release";
+    const event = {
+      ...createSetup("historical-event", "2026-08-24T09:00:00.000Z").event,
+      configurationVersion: historicalRulesVersion,
+    };
+
+    expect(() => {
+      assertCanonicalEvent(event, historicalRulesVersion);
+    }).not.toThrow();
+  });
+
+  it("rejects a historical version outside restore validation", () => {
+    const event = {
+      ...createSetup("historical-event", "2026-08-24T09:00:00.000Z").event,
+      configurationVersion: "BB-prior-release",
+    };
+
+    expect(() => {
+      assertCanonicalEvent(event);
+    }).toThrow("configuration version is incompatible");
+  });
+
+  it("accepts a matching historical snapshot version only during restore validation", () => {
+    const historicalRulesVersion = "BB-prior-release";
+    const state = {
+      ...createSetup("historical-snapshot", "2026-08-24T09:00:00.000Z").state,
+      configurationVersion: historicalRulesVersion,
+    };
+
+    expect(() => {
+      assertCanonicalState(state, historicalRulesVersion);
+    }).not.toThrow();
+    expect(() => {
+      assertCanonicalState(state);
+    }).toThrow("configuration version is incompatible");
+  });
+});
+
 describe("canonical Action Resolution recorded Ability Override", () => {
   it("admits an Ability resolution whose recorded Override sentence is persisted", () => {
     const event = overriddenResolution();
@@ -258,7 +298,7 @@ describe("canonical Ability attack metadata", () => {
         withoutCurrentMetadata(overriddenResolution()),
         historicalRulesVersion,
       );
-    }).toThrow("configuration version is incompatible");
+    }).toThrow("The canonical Action Resolution Event is invalid.");
   });
 
   it("rejects retired Ability ids and attack metadata", () => {
@@ -282,7 +322,7 @@ describe("canonical Ability attack metadata", () => {
 
     expect(() => {
       assertCanonicalEvent(historical, historicalRulesVersion);
-    }).toThrow("configuration version is incompatible");
+    }).toThrow("The canonical Action Resolution Event is invalid.");
   });
 
   it("rejects retired Reaction ids and attack metadata", () => {
@@ -312,7 +352,7 @@ describe("canonical Ability attack metadata", () => {
 
     expect(() => {
       assertCanonicalEvent(historical, historicalRulesVersion);
-    }).toThrow("configuration version is incompatible");
+    }).toThrow("The canonical Action Resolution Event is invalid.");
   });
 });
 
@@ -355,7 +395,7 @@ describe("canonical active-effect persistence", () => {
 
     expect(() => {
       assertCanonicalState(historical, historicalRulesVersion);
-    }).toThrow("configuration version is incompatible");
+    }).toThrow("The canonical spent Reactions is structurally invalid.");
   });
 });
 

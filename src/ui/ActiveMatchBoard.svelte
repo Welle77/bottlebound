@@ -14,6 +14,7 @@
     continueMatch,
     openAbilityPicker,
     openBasicAttack,
+    recordDash,
     recordSimultaneousRuling,
   } from "../app/actions";
   import { patchShellState, state } from "./shell-state.svelte";
@@ -187,6 +188,12 @@
       activeHp,
       nextHp,
       activeDowned,
+      dashAvailable:
+        !saving &&
+        !activeDowned &&
+        match.eliminatedTeams.length !== 2 &&
+        match.remainingMovementPaces === match.movementPaces &&
+        !match.majorActionUsed,
       rows,
       saving,
       canUndo,
@@ -503,6 +510,8 @@
           disabled={view.saving ||
             !view.combatAvailable ||
             view.activeDowned ||
+            (view.match.remainingMovementPaces === 0 &&
+              view.match.majorActionUsed) ||
             view.match.eliminatedTeams.length === 2}
           aria-describedby={view.combatAvailable
             ? undefined
@@ -518,6 +527,8 @@
           disabled={view.saving ||
             !view.combatAvailable ||
             view.activeDowned ||
+            (view.match.remainingMovementPaces === 0 &&
+              view.match.majorActionUsed) ||
             view.match.eliminatedTeams.length === 2}
           aria-describedby={view.combatAvailable
             ? undefined
@@ -525,6 +536,15 @@
           onclick={openAbilityPicker}
         >
           Use Ability
+        </button>
+        <button
+          id="dash"
+          class="secondary-action"
+          type="button"
+          disabled={!view.dashAvailable}
+          onclick={() => void recordDash()}
+        >
+          Dash
         </button>
         <button
           id="finish-turn"
