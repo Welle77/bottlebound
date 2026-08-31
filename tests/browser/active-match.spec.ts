@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 test("the referee starts, advances, wraps, and restores an Active Match", async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
   await page.goto("/");
   await page.getByRole("button", { name: "Create Match" }).click();
   await page.getByRole("button", { name: "Generate initiative" }).click();
@@ -14,6 +15,47 @@ test("the referee starts, advances, wraps, and restores an Active Match", async 
   await expect(page.getByText("Round 1 · Slot 1 of 12")).toBeVisible();
   await expect(page.locator("[data-active-character]")).toContainText("Active");
   await expect(page.locator("[data-next-character]")).toContainText("Next");
+  await expect(page.locator("#rules-round, #rules-turn")).toHaveCount(0);
+  const surfaceOrder = await page
+    .locator("[data-surface-order]")
+    .evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute("data-surface-order")),
+    );
+  expect(surfaceOrder).toEqual([
+    "active-player",
+    "actions",
+    "next-player",
+    "finish-turn",
+    "initiative-order",
+    "end-game",
+  ]);
+  await expect(
+    page.locator('[data-surface-order="actions"] button'),
+  ).toHaveText(["Dash", "Basic Attack", "Use Ability"]);
+  await expect(page.locator(".active-order thead th")).toHaveText([
+    "Character",
+    "Team",
+    "HP",
+  ]);
+  await expect(page.locator('.active-order [data-label="Slot"]')).toHaveCount(
+    0,
+  );
+  await expect(page.locator('.active-order [data-label="Turn"]')).toHaveCount(
+    0,
+  );
+  await expect(page.locator(".critical-hp")).toHaveCount(0);
+  const actionButtonTops = await page
+    .locator('[data-surface-order="actions"] button')
+    .evaluateAll((buttons) =>
+      buttons.map((button) => Math.round(button.getBoundingClientRect().top)),
+    );
+  expect(new Set(actionButtonTops).size).toBe(1);
+  await expect(page.locator(".finish-turn-action")).toHaveCSS("width", "256px");
+  await expect(page.locator(".finish-turn-action button")).toHaveCSS(
+    "width",
+    "256px",
+  );
+  await expect(page.locator(".turn-position-row .turn-undo")).toHaveCount(0);
   await expect(page.locator("[data-active-order-row]")).toHaveCount(12);
   await expect(page.locator(".active-match .primary-action")).toHaveCount(1);
   await expect(
@@ -23,6 +65,7 @@ test("the referee starts, advances, wraps, and restores an Active Match", async 
   const finishTurn = page.getByRole("button", { name: "Finish Turn" });
   await finishTurn.click();
   await expect(page.getByText("Round 1 · Slot 2 of 12")).toBeVisible();
+  await expect(page.locator(".turn-position-row .turn-undo")).toBeVisible();
   await page.reload();
   await expect(page.getByText("Round 1 · Slot 2 of 12")).toBeVisible();
 

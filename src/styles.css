@@ -308,6 +308,19 @@ dd {
   font-weight: 900;
 }
 
+.turn-position-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.turn-undo {
+  min-height: 2.5rem;
+  padding: 0.5rem 0.75rem;
+}
+
 .turn-cards {
   display: grid;
   gap: var(--space-3);
@@ -347,6 +360,10 @@ dd {
 .turn-card dd {
   margin-top: 0.2rem;
   font-weight: 900;
+}
+
+.critical-hp {
+  color: var(--danger);
 }
 
 .initiative-scope {
@@ -438,8 +455,27 @@ dd {
   font-weight: 900;
 }
 
-.active-match .match-actions .primary-action {
+.active-match > .match-actions {
+  flex-wrap: nowrap;
+  margin-bottom: var(--space-3);
+}
+
+.active-match > .match-actions > button {
+  min-width: 0;
+  flex: 1 1 0;
+  padding-inline: 0.35rem;
+  font-size: clamp(0.68rem, 2.8vw, 0.95rem);
+  white-space: normal;
+}
+
+.finish-turn-action {
+  margin-top: var(--space-3);
+}
+
+.finish-turn-action button {
   width: 100%;
+  min-height: 4rem;
+  font-size: clamp(1.1rem, 4vw, 1.5rem);
 }
 
 .action-draft {
@@ -468,11 +504,6 @@ dd {
 
 .attack-profile p {
   margin: 0;
-}
-
-.attack-profile .rules-context-link {
-  grid-column: 1 / -1;
-  justify-self: start;
 }
 
 .contact-list,
@@ -510,6 +541,23 @@ dd {
   width: 1.5rem;
   height: 1.5rem;
   flex: 0 0 auto;
+}
+
+.contact-team-cards {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.contact-team-card {
+  border: 0.125rem solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface);
+  padding: var(--space-2);
+}
+
+.contact-team-card h3 {
+  margin-bottom: var(--space-2);
+  color: var(--accent);
 }
 
 .reaction-control span,

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CharacterId, MatchState } from "../domain/match";
+  import type { CharacterId, MatchState, Team } from "../domain/match";
   import { MATCH_CONFIGURATION } from "../domain/match-configuration";
   import {
     draftAffectedCharacterIds,
@@ -23,10 +23,23 @@
     const activeLegIndex = draft.attackLegs.length - 1;
     const activeLeg = draft.attackLegs.at(activeLegIndex);
     if (!activeLeg) return null;
+    const attackingCharacter = MATCH_CONFIGURATION.characters.find(
+      ({ id }) => id === draft.sourceCharacterId,
+    );
+    if (!attackingCharacter) return null;
+    const opposingTeam: Team =
+      attackingCharacter.team === "Drow" ? "Duergar" : "Drow";
     const closedCharacterIds = new Set(
       draft.attackLegs.slice(0, activeLegIndex).flatMap((leg) => leg),
     );
-    return { draft, activeLegIndex, activeLeg, closedCharacterIds };
+    return {
+      draft,
+      activeLegIndex,
+      activeLeg,
+      closedCharacterIds,
+      attackingTeam: attackingCharacter.team,
+      teamOrder: [opposingTeam, attackingCharacter.team] as const,
+    };
   });
 
   // Interpolated suffix keeps its leading space; literal whitespace at
@@ -80,30 +93,39 @@
       Select contacts in their physical order. Allies and the attacker remain
       valid choices.
     </p>
-    <div class="contact-list">
-      {#each MATCH_CONFIGURATION.characters as character (character.id)}
-        {@const order = model.activeLeg.indexOf(character.id)}
-        {@const duplicate = model.closedCharacterIds.has(character.id)}
-        {@const closedLegIndex = duplicate
-          ? model.draft.attackLegs
-              .slice(0, model.activeLegIndex)
-              .findIndex((leg) => leg.includes(character.id)) + 1
-          : 0}
-        <label class="contact-control">
-          <!-- Single-line runs: getByLabel(REGEX) probes receive raw label
-               text, so every spec-matched phrase stays contiguous. -->
-          <input
-            type="checkbox"
-            data-hit-character={character.id}
-            checked={order >= 0}
-            disabled={duplicate}
-            onchange={handleContactChange(character.id)}
-          />
-          <!-- Single-line runs; interpolated separators keep their spaces
-               because Svelte trims whitespace at block-content edges. -->
-          <span><CharacterName character={character} displayNames={match.displayNames} /> · {character.team}{#if duplicate}{DUPLICATE_SUFFIX}{closedLegIndex}{/if}</span>
-          {#if order >= 0}<strong>Contact {order + 1}</strong>{/if}
-        </label>
+    <div class="contact-team-cards">
+      {#each model.teamOrder as team (team)}
+        <article class="contact-team-card" data-contact-team={team}>
+          <h3>
+            {team === model.attackingTeam ? "Attacking team" : "Opposing team"}
+            · {team}
+          </h3>
+          <div class="contact-list">
+            {#each MATCH_CONFIGURATION.characters.filter((character) => character.team === team) as character (character.id)}
+              {@const order = model.activeLeg.indexOf(character.id)}
+              {@const duplicate = model.closedCharacterIds.has(character.id)}
+              {@const closedLegIndex = duplicate
+                ? model.draft.attackLegs
+                    .slice(0, model.activeLegIndex)
+                    .findIndex((leg) => leg.includes(character.id)) + 1
+                : 0}
+              <label class="contact-control">
+                <!-- Single-line runs: getByLabel(REGEX) probes receive raw label
+                     text, so every spec-matched phrase stays contiguous. -->
+                <input
+                  type="checkbox"
+                  data-hit-character={character.id}
+                  checked={order >= 0}
+                  disabled={duplicate}
+                  onchange={handleContactChange(character.id)}
+                />
+                <!-- Single-line runs; interpolated separators keep their spaces
+                     because Svelte trims whitespace at block-content edges. -->
+                <span><CharacterName character={character} displayNames={match.displayNames} /> · {character.team}{#if duplicate}{DUPLICATE_SUFFIX}{closedLegIndex}{/if}</span>
+              </label>
+            {/each}
+          </div>
+        </article>
       {/each}
     </div>
   </fieldset>

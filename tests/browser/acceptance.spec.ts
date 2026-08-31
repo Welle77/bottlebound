@@ -92,37 +92,15 @@ test("invalid saved data stops recovery without creating replacement data", asyn
     page.getByRole("heading", { name: "Saved Match needs recovery" }),
   ).toBeVisible();
   await expect(
-    page.getByText("The console did not create replacement Match data."),
+    page.getByText("Starting a new Match will replace the incompatible saved data."),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Create Match" })).toHaveCount(
-    0,
-  );
+  await page.getByRole("button", { name: "Create Match" }).click();
   await expect(
-    page.evaluate(async () => {
-      const database = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open("bottlebound-match", 2);
-        request.addEventListener("success", () => resolve(request.result));
-        request.addEventListener("error", () => reject(request.error));
-      });
-      const transaction = database.transaction(
-        ["metadata", "snapshots", "events"],
-        "readonly",
-      );
-      const count = (storeName: string) =>
-        new Promise<number>((resolve, reject) => {
-          const request = transaction.objectStore(storeName).count();
-          request.addEventListener("success", () => resolve(request.result));
-          request.addEventListener("error", () => reject(request.error));
-        });
-      const counts = await Promise.all([
-        count("metadata"),
-        count("snapshots"),
-        count("events"),
-      ]);
-      database.close();
-      return counts;
-    }),
-  ).resolves.toEqual([1, 1, 1]);
+    page.getByRole("heading", { name: "Initiative Setup" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Saved canonical data is incompatible"),
+  ).toHaveCount(0);
 });
 
 test("the Setup controls and layout meet browser usability checks", async ({

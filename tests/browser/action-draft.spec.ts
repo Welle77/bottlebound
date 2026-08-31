@@ -42,19 +42,20 @@ test("the referee reviews, commits, restores, and undoes an ordered Basic Attack
   await expect(
     page.getByRole("heading", { name: "Record Basic Attack" }),
   ).toBeVisible();
-  await expect(page.getByText(/This draft stays local/)).toBeVisible();
+  await expect(page.getByText(/This draft stays local/)).toHaveCount(0);
+  await expect(page.locator("#rules-basic-attack")).toHaveCount(0);
+  await expect(page.locator("[data-contact-team]")).toHaveText([
+    /Opposing team · Duergar/,
+    /Attacking team · Drow/,
+  ]);
   await expect(page.locator(".attack-profile")).toContainText(/Source:/);
   await expect(page.locator(".attack-profile")).toContainText(/(Melee|Ranged)/);
   await expect(page.locator(".attack-profile")).toContainText(/Damage: 1/);
 
   await page.getByLabel(/Paladin · Drow/).check();
   await page.getByLabel(/Ranger · Duergar/).check();
-  await expect(page.getByLabel(/Paladin · Drow/).locator("..")).toContainText(
-    "Contact 1",
-  );
-  await expect(page.getByLabel(/Ranger · Duergar/).locator("..")).toContainText(
-    "Contact 2",
-  );
+  await expect(page.getByText("Contact 1", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Contact 2", { exact: true })).toHaveCount(0);
   await completePhysicalChecks(page);
   await page.getByRole("button", { name: "Review Action Resolution" }).click();
   await expect(
@@ -64,15 +65,6 @@ test("the referee reviews, commits, restores, and undoes an ordered Basic Attack
   await expect(page.locator("[data-action-review-hit]").first()).toContainText(
     "Paladin",
   );
-  await page.getByRole("button", { name: "Basic Attack rules" }).click();
-  await expect(
-    page.getByRole("dialog", { name: "BOTTLEBOUND Rules" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Close Rules" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Review Basic Attack" }),
-  ).toBeVisible();
-
   await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
   await expect(
     page.getByRole("heading", { name: "Active Match" }),

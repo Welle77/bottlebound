@@ -15,8 +15,7 @@
   const blocked = $derived(
     readiness.matchCreation === "blocked" ||
       !state.current.matchLoaded ||
-      state.current.saving ||
-      state.current.matchError !== null,
+      state.current.saving,
   );
   // One composed run of text so matchers see exactly the legacy
   // single-spaced guidance sentence across its conditional halves.
@@ -34,8 +33,18 @@
       <p class="eyebrow">Recovery stopped</p>
       <h2 id="recovery-heading">Saved Match needs recovery</h2>
       <p>{state.current.matchError}</p>
-      <p>The console did not create replacement Match data.</p>
+      <p>Starting a new Match will replace the incompatible saved data.</p>
     </div>
+    <button
+      id="create-match"
+      class="primary-action"
+      type="button"
+      disabled={blocked}
+      aria-describedby="recovery-heading"
+      onclick={() => void createMatch()}
+    >
+      {state.current.saving ? "Saving…" : "Start new Match"}
+    </button>
   </section>
 {:else if state.current.match === null}
   <section class="action-panel" aria-labelledby="match-heading">

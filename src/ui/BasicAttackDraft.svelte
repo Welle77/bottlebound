@@ -7,7 +7,6 @@
   import { MATCH_CONFIGURATION } from "../domain/match-configuration";
   import { confirmBasicAttack } from "../app/actions";
   import { attackPreviewRow } from "./ability-draft";
-  import { openRules } from "./rules-dialog";
   import { patchShellState, state } from "./shell-state.svelte";
   import CharacterName from "./CharacterName.svelte";
   import DraftChecksFieldset from "./DraftChecksFieldset.svelte";
@@ -226,10 +225,6 @@
     });
   }
 
-  function handleOpenRules(event: MouseEvent): void {
-    if (!(event.currentTarget instanceof HTMLButtonElement)) return;
-    openRules(event.currentTarget, MATCH_CONFIGURATION.labels.basicAttack);
-  }
 </script>
 
 {#snippet attackProfile(b: BasicAttackDraftBase)}
@@ -240,15 +235,6 @@
     <p><strong>Type:</strong> {b.attack.attackType === "melee" ? "Melee" : "Ranged"}</p>
     <p><strong>Range:</strong> {b.attack.rangePaces} paces</p>
     <p><strong>Damage:</strong> {b.attack.damage}</p>
-    <button
-      id="rules-basic-attack"
-      class="rules-context-link"
-      type="button"
-      data-open-rules-query={MATCH_CONFIGURATION.labels.basicAttack}
-      onclick={handleOpenRules}
-    >
-      {MATCH_CONFIGURATION.labels.basicAttack} rules
-    </button>
   </div>
 {/snippet}
 
@@ -383,7 +369,6 @@
     {:else if contacts}
       <p class="eyebrow">Action Draft · Physical result</p>
       <h2 id="action-draft-heading">Record Basic Attack</h2>
-      <p>This draft stays local until final confirmation.</p>
       {@render attackProfile(base)}
       {#if contacts.closedLeg}
         <section class="closed-attack-leg" data-closed-attack-leg>

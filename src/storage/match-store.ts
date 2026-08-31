@@ -120,18 +120,6 @@ function transactionComplete(transaction: IDBTransaction): Promise<void> {
   });
 }
 
-function isReplacementCommit(
-  current: CurrentMatchMetadata | undefined,
-  event: MatchEvent,
-): boolean {
-  return (
-    current !== undefined &&
-    current.matchId !== event.matchId &&
-    event.type === "SetupCreated" &&
-    event.sequence === 1
-  );
-}
-
 async function abortCommit(
   context: ReadonlyDeepCommitContext,
   message: string,
@@ -144,15 +132,12 @@ async function abortCommit(
 async function replaceExistingMatch(
   context: ReadonlyDeepCommitContext,
 ): Promise<void> {
-  const current = context.current;
-  if (current === undefined) return;
   const oldSnapshotStore = context.transaction.objectStore(SNAPSHOT_STORE);
   const eventStore = context.transaction.objectStore(EVENT_STORE);
-  const oldKeys = await requestResult(
-    eventStore.index("matchId").getAllKeys(current.matchId),
-  );
-  oldSnapshotStore.delete(current.matchId);
-  oldKeys.forEach((key) => eventStore.delete(key));
+  const snapshotKeys = await requestResult(oldSnapshotStore.getAllKeys());
+  const eventKeys = await requestResult(eventStore.getAllKeys());
+  snapshotKeys.forEach((key) => oldSnapshotStore.delete(key));
+  eventKeys.forEach((key) => eventStore.delete(key));
 }
 
 async function getCommittedHistory(
@@ -354,6 +339,12 @@ export function createIndexedDbMatchStore(
       metadataStore,
       CURRENT_MATCH_KEY,
     );
+    const savedSnapshotKeys = await requestResult(
+      transaction.objectStore(SNAPSHOT_STORE).getAllKeys(),
+    );
+    const savedEventKeys = await requestResult(
+      transaction.objectStore(EVENT_STORE).getAllKeys(),
+    );
     const context: CommitContext = {
       transaction,
       completion,
@@ -362,7 +353,13 @@ export function createIndexedDbMatchStore(
       event,
       state,
     };
-    if (isReplacementCommit(current, event)) {
+    if (
+      event.type === "SetupCreated" &&
+      event.sequence === 1 &&
+      (current !== undefined ||
+        savedSnapshotKeys.length > 0 ||
+        savedEventKeys.length > 0)
+    ) {
       await replaceExistingMatch(context);
     } else {
       await validateExistingCommit(context);

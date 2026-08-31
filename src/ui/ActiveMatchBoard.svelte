@@ -18,7 +18,6 @@
     recordSimultaneousRuling,
   } from "../app/actions";
   import { patchShellState, state } from "./shell-state.svelte";
-  import { openRules } from "./rules-dialog";
   import { outcomeLabel } from "./format";
   import ConfirmationDialog from "./ConfirmationDialog.svelte";
   import PriorSummaryCard from "./PriorSummaryCard.svelte";
@@ -248,12 +247,6 @@
     void recordSimultaneousRuling(outcome);
   }
 
-  function openContextRules(query: string): (event: MouseEvent) => void {
-    return (event) => {
-      if (!(event.currentTarget instanceof HTMLButtonElement)) return;
-      openRules(event.currentTarget, query);
-    };
-  }
 </script>
 
 {#if view}
@@ -264,28 +257,21 @@
              interpolations for every matcher, matching legacy output. -->
         <p class="eyebrow">Active · Sequence {view.match.sequence}</p>
         <h2 id="active-heading">Active Match</h2>
-        <p class="turn-position">Round {view.match.round} · Slot {view.match.activeSlot} of {view.match.initiative.length}</p>        <div class="rules-context-links">
-          <button
-            id="rules-round"
-            class="rules-context-link"
-            type="button"
-            data-open-rules-query={MATCH_CONFIGURATION.labels.turn}
-            onclick={openContextRules(MATCH_CONFIGURATION.labels.turn)}
-          >
-            Round rules
-          </button>
-          <button
-            id="rules-turn"
-            class="rules-context-link"
-            type="button"
-            data-open-rules-query={MATCH_CONFIGURATION.labels.turn}
-            onclick={openContextRules(MATCH_CONFIGURATION.labels.turn)}
-          >
-            Turn rules
-          </button>
-        </div>
       </div>
       <span class="readiness-badge" data-state="ready">Saved</span>
+    </div>
+    <div class="turn-position-row">
+      <p class="turn-position">Round {view.match.round} · Slot {view.match.activeSlot} of {view.match.initiative.length}</p>
+      {#if view.canUndo}
+        <button
+          id="request-undo"
+          class="secondary-action turn-undo"
+          type="button"
+          onclick={requestUndo}
+        >
+          Undo
+        </button>
+      {/if}
     </div>
     {#if view.matchError}
       <p class="blocking-error" role="alert">
@@ -294,7 +280,7 @@
       </p>
     {/if}
     <div class="turn-cards">
-      <article class="turn-card active-character" data-active-character>
+      <article class="turn-card active-character" data-active-character data-surface-order="active-player">
         <p class="eyebrow">Active{view.activeDowned ? " · Downed" : ""}</p>
         <h3>
           <CharacterName
@@ -305,12 +291,66 @@
         <dl>
           <div><dt>Team</dt><dd>{view.activeCharacter.team}</dd></div>
           <div>
-            <dt>HP</dt><dd>{view.activeHp}/{view.activeCharacter.baseHp}</dd>
+            <dt>HP</dt><dd class:critical-hp={view.activeHp === 1}>{view.activeHp}/{view.activeCharacter.baseHp}</dd>
           </div>
           <div><dt>Slot</dt><dd>{view.activeSlot}</dd></div>
         </dl>
       </article>
-      <article class="turn-card" data-next-character>
+    </div>
+    {#if !view.combatAvailable}
+      <p id="combat-version-status" class="blocking-error" role="status">
+        {view.combatStatusText}
+      </p>
+    {/if}
+    {#if view.showCommands}
+      <div class="match-actions" data-surface-order="actions">
+        <button
+          id="dash"
+          class="secondary-action"
+          type="button"
+          disabled={!view.dashAvailable}
+          onclick={() => void recordDash()}
+        >
+          Dash
+        </button>
+        <button
+          id="basic-attack"
+          class="secondary-action"
+          type="button"
+          disabled={view.saving ||
+            !view.combatAvailable ||
+            view.activeDowned ||
+            (view.match.remainingMovementPaces === 0 &&
+              view.match.majorActionUsed) ||
+            view.match.eliminatedTeams.length === 2}
+          aria-describedby={view.combatAvailable
+            ? undefined
+            : "combat-version-status"}
+          onclick={openBasicAttack}
+        >
+          Basic Attack
+        </button>
+        <button
+          id="use-ability"
+          class="secondary-action"
+          type="button"
+          disabled={view.saving ||
+            !view.combatAvailable ||
+            view.activeDowned ||
+            (view.match.remainingMovementPaces === 0 &&
+              view.match.majorActionUsed) ||
+            view.match.eliminatedTeams.length === 2}
+          aria-describedby={view.combatAvailable
+            ? undefined
+            : "combat-version-status"}
+          onclick={openAbilityPicker}
+        >
+          Use Ability
+        </button>
+      </div>
+    {/if}
+    <div class="turn-cards">
+      <article class="turn-card" data-next-character data-surface-order="next-player">
         <p class="eyebrow">Next Active</p>
         <h3>
           <CharacterName
@@ -321,16 +361,24 @@
         <dl>
           <div><dt>Team</dt><dd>{view.nextCharacter.team}</dd></div>
           <div>
-            <dt>HP</dt><dd>{view.nextHp}/{view.nextCharacter.baseHp}</dd>
+            <dt>HP</dt><dd class:critical-hp={view.nextHp === 1}>{view.nextHp}/{view.nextCharacter.baseHp}</dd>
           </div>
           <div><dt>Slot</dt><dd>{view.nextSlot}</dd></div>
         </dl>
       </article>
     </div>
-    {#if !view.combatAvailable}
-      <p id="combat-version-status" class="blocking-error" role="status">
-        {view.combatStatusText}
-      </p>
+    {#if view.showCommands}
+      <div class="finish-turn-action" data-surface-order="finish-turn">
+        <button
+          id="finish-turn"
+          class="primary-action"
+          type="button"
+          disabled={view.saving || view.match.eliminatedTeams.length === 2}
+          onclick={() => void advanceTurn()}
+        >
+          {view.saving ? "Saving…" : "Finish Turn"}
+        </button>
+      </div>
     {/if}
     {#if view.promptKind === "normal"}
       <section
@@ -471,22 +519,19 @@
         </div>
       </section>
     {/if}
-    <div class="table-wrap">
+    <div class="table-wrap" data-surface-order="initiative-order">
       <table class="initiative-table active-order">
         <caption>Complete initiative order</caption>
         <thead>
           <tr>
-            <th>Slot</th>
             <th>Character</th>
             <th>Team</th>
             <th>HP</th>
-            <th>Turn</th>
           </tr>
         </thead>
         <tbody>
           {#each view.rows as row (row.key)}
             <tr data-active-order-row data-turn={row.turnKey}>
-              <td data-label="Slot">{row.slot}</td>
               <th scope="row">
                 <CharacterName
                   character={row.character}
@@ -494,81 +539,14 @@
                 />
               </th>
               <td data-label="Team">{row.team}</td>
-              <td data-label="HP">{row.hp}/{row.baseHp}</td>
-              <td data-label="Turn">{row.turnLabel}</td>
+              <td data-label="HP" class:critical-hp={row.hp === 1}>{row.hp}/{row.baseHp}</td>
             </tr>
           {/each}
         </tbody>
       </table>
     </div>
-    {#if view.showCommands}
-      <div class="match-actions">
-        <button
-          id="basic-attack"
-          class="secondary-action"
-          type="button"
-          disabled={view.saving ||
-            !view.combatAvailable ||
-            view.activeDowned ||
-            (view.match.remainingMovementPaces === 0 &&
-              view.match.majorActionUsed) ||
-            view.match.eliminatedTeams.length === 2}
-          aria-describedby={view.combatAvailable
-            ? undefined
-            : "combat-version-status"}
-          onclick={openBasicAttack}
-        >
-          Basic Attack
-        </button>
-        <button
-          id="use-ability"
-          class="secondary-action"
-          type="button"
-          disabled={view.saving ||
-            !view.combatAvailable ||
-            view.activeDowned ||
-            (view.match.remainingMovementPaces === 0 &&
-              view.match.majorActionUsed) ||
-            view.match.eliminatedTeams.length === 2}
-          aria-describedby={view.combatAvailable
-            ? undefined
-            : "combat-version-status"}
-          onclick={openAbilityPicker}
-        >
-          Use Ability
-        </button>
-        <button
-          id="dash"
-          class="secondary-action"
-          type="button"
-          disabled={!view.dashAvailable}
-          onclick={() => void recordDash()}
-        >
-          Dash
-        </button>
-        <button
-          id="finish-turn"
-          class="primary-action"
-          type="button"
-          disabled={view.saving || view.match.eliminatedTeams.length === 2}
-          onclick={() => void advanceTurn()}
-        >
-          {view.saving ? "Saving…" : "Finish Turn"}
-        </button>
-        {#if view.canUndo}
-          <button
-            id="request-undo"
-            class="secondary-action"
-            type="button"
-            onclick={requestUndo}
-          >
-            Undo
-          </button>
-        {/if}
-      </div>
-    {/if}
     {#if view.showEndGameControl}
-      <section class="end-game-control" aria-labelledby="end-game-heading">
+      <section class="end-game-control" aria-labelledby="end-game-heading" data-surface-order="end-game">
         <h3 id="end-game-heading">End Game</h3>
         <p>Close the Match with the calculated winner and Decision Basis.</p>
         <button
