@@ -399,7 +399,7 @@ describe("IndexedDbMatchStore", () => {
     await expect(
       store.commit({ ...tied.event, tieOrder: [] }, tied.state),
     ).rejects.toThrow("tied-group order");
-    const firstTie = tied.event.tieOrder[0];
+    const [firstTie] = tied.event.tieOrder;
     const firstStep = firstTie?.steps[0];
     const firstAttempt = firstStep?.attempts[0];
     if (!firstTie || !firstStep || !firstAttempt) {
@@ -458,7 +458,7 @@ describe("IndexedDbMatchStore", () => {
       "2026-08-22T14:01:00.000Z",
     );
     await store.commit(tied.event, tied.state);
-    const firstTie = tied.event.tieOrder[0];
+    const [firstTie] = tied.event.tieOrder;
     const firstStep = firstTie?.steps[0];
     const firstAttempt = firstStep?.attempts[0];
     if (!firstTie || !firstStep || !firstAttempt) {

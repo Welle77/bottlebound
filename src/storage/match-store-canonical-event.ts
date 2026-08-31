@@ -324,7 +324,7 @@ function assertReactionProtection(
   reactionResolution: Record<string, unknown>,
   affectedCharacterIds: readonly CharacterId[],
 ): void {
-  const protectedCharacterId = reactionResolution.protectedCharacterId;
+  const { protectedCharacterId } = reactionResolution;
   if (
     typeof protectedCharacterId !== "string" ||
     !isCharacterId(protectedCharacterId) ||
@@ -460,7 +460,8 @@ function assertActionResolutionRedirect(value: Record<string, unknown>): void {
     typeof redirectOwner.ownerCharacterId === "string"
       ? redirectOwner.ownerCharacterId
       : null;
-  const firstLeg: unknown = (value.attackLegs as readonly unknown[])[0];
+  const [firstLeg]: readonly [unknown?, ...unknown[]] =
+    value.attackLegs as readonly unknown[];
   const initialAffectedCharacterIds =
     isRecord(firstLeg) && Array.isArray(firstLeg.affectedCharacterIds)
       ? (firstLeg.affectedCharacterIds as readonly unknown[])
@@ -537,7 +538,7 @@ function assertEliminationContinuedEvent(value: Record<string, unknown>): void {
 function assertSimultaneousEliminationEvent(
   value: Record<string, unknown>,
 ): void {
-  const outcome = value.outcome;
+  const { outcome } = value;
   const outcomeIsValid =
     (typeof outcome === "string" && isTeam(outcome)) || outcome === "draw";
   if (
@@ -564,7 +565,7 @@ function assertMatchReopenedEvent(value: Record<string, unknown>): void {
   }
 }
 function assertUndoAppliedEvent(value: Record<string, unknown>): void {
-  const targetType: unknown = value.targetType;
+  const { targetType } = value;
   const targetTypeIsValid =
     typeof targetType === "string" &&
     isMatchEventType(targetType) &&

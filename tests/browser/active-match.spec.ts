@@ -95,7 +95,7 @@ test("a failed Finish Turn leaves the last committed Active Match visible", asyn
   await expect(page.getByText("Round 1 · Slot 1 of 12")).toBeVisible();
 
   await page.evaluate(() => {
-    const add = IDBObjectStore.prototype.add;
+    const { add } = IDBObjectStore.prototype;
     IDBObjectStore.prototype.add = function (...args) {
       if (this.name === "events") {
         throw new DOMException("Injected storage failure", "DataError");

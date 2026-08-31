@@ -406,7 +406,7 @@ export function createIndexedDbMatchStore(
       }
       return null;
     }
-    const state = allSnapshots[0];
+    const [state] = allSnapshots;
     if (allSnapshots.length !== 1) {
       transaction.abort();
       await completion.catch(() => undefined);

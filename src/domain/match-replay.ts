@@ -237,7 +237,7 @@ function coinFlipEndGamePreviewOrThrow(
   current: ActiveMatchState,
   event: MatchEndedEvent,
 ): EndGamePreview {
-  const coinFlipResult: unknown = event.coinFlipResult;
+  const { coinFlipResult } = event;
   if (typeof coinFlipResult !== "string" || !isTeam(coinFlipResult)) {
     throw new Error("End Game does not follow Match State.");
   }
@@ -592,7 +592,7 @@ function applyReplayEvent(
 export function restoreStateFromEvents(
   events: readonly MatchEvent[],
 ): MatchState {
-  const first = events[0];
+  const [first] = events;
   if (!first || first.type !== "SetupCreated") {
     throw new Error("Undo needs a complete Match Event history.");
   }

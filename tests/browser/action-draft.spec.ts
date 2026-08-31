@@ -158,7 +158,7 @@ test("cancel, reload, and a failed save discard no committed attack", async ({
   await completePhysicalChecks(page);
   await page.getByRole("button", { name: "Review Action Resolution" }).click();
   await page.evaluate(() => {
-    const add = IDBObjectStore.prototype.add;
+    const { add } = IDBObjectStore.prototype;
     IDBObjectStore.prototype.add = function (...args) {
       if (this.name === "events")
         throw new DOMException("Injected failure", "DataError");

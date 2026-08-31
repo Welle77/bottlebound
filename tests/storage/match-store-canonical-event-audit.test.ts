@@ -382,7 +382,7 @@ describe("canonical active-effect persistence", () => {
 
   it("rejects retired effect and spent Ability ids", () => {
     const { state } = markedResolution();
-    const effect = state.activeEffects[0];
+    const [effect] = state.activeEffects;
     if (!effect) throw new Error("Hunter's Mark must apply one active effect.");
     const historicalRulesVersion = "BB-retired";
     const historical = {

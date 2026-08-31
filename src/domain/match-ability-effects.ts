@@ -52,7 +52,7 @@ function buildAbilityEffects(
   },
 ): readonly ActiveEffect[] {
   const { affectedIds, sequence, anchorId } = context;
-  const name = ability.name;
+  const { name } = ability;
   // Hunter's Mark / Hex (add-damage until the end of the source's next
   // scheduled initiative position; rules §15 card durations)
   if (isAbilityNamed(ability, "Hunter’s Mark") || name === "Hex") {
@@ -264,7 +264,7 @@ function resolvePhysicalAttackTargetIds(
   context: AbilityTargetContext,
 ): readonly CharacterId[] {
   const { state, input } = context;
-  const attackLegs = input.attackLegs;
+  const { attackLegs } = input;
   if (!attackLegs || attackLegs.length === 0) {
     throw new Error("A physical ability needs ordered bottle contacts.");
   }
@@ -347,7 +347,7 @@ function validateUtilityTarget(context: {
   }
   const sourceTeam = teamOfCharacter(ability.ownerCharacterId);
   const targetTeam = teamOfCharacter(targetId);
-  const relation = ability.targetPolicy.relation;
+  const { relation } = ability.targetPolicy;
   if (
     ((relation === "ally" && targetTeam !== sourceTeam) ||
       (relation === "enemy" && targetTeam === sourceTeam)) &&
@@ -355,7 +355,7 @@ function validateUtilityTarget(context: {
   ) {
     throw new Error("invalid-target-relation");
   }
-  const lifeState = ability.targetPolicy.lifeState;
+  const { lifeState } = ability.targetPolicy;
   if (
     ((lifeState === "active" && targetCharacter.hp === 0) ||
       (lifeState === "downed" && targetCharacter.hp !== 0)) &&

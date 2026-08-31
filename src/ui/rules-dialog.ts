@@ -33,7 +33,7 @@ export function openRules(opener: HTMLElement, query?: string): void {
  * main is still inert (T04 learning).
  */
 export function closeRules(): void {
-  const openerId = rulesUi.current.openerId;
+  const { openerId } = rulesUi.current;
   rulesUi.set({ ...rulesUi.current, open: false });
   applyDialogInert(false);
   if (openerId) document.getElementById(openerId)?.focus();

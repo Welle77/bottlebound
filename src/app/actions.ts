@@ -89,14 +89,14 @@ export async function commitResult(result: CommandResult): Promise<boolean> {
   }
 }
 export async function recordMove(): Promise<void> {
-  const match = state.current.match;
+  const { match } = state.current;
   if (match?.phase !== "active") return;
   const sourceCharacterId = match.initiative[match.activeSlot - 1]?.characterId;
   if (!sourceCharacterId) return;
   await commitResult(dash(match, sourceCharacterId, new Date().toISOString()));
 }
 export function openBasicAttack(): void {
-  const match = state.current.match;
+  const { match } = state.current;
   if (
     match?.phase !== "active" ||
     match.configurationVersion !== MATCH_CONFIGURATION.version
@@ -126,7 +126,7 @@ export function openBasicAttack(): void {
 }
 
 export function openAbilityPicker(): void {
-  const match = state.current.match;
+  const { match } = state.current;
   if (
     match?.phase !== "active" ||
     match.configurationVersion !== MATCH_CONFIGURATION.version ||
@@ -147,7 +147,7 @@ export function closeAbilityPicker(): void {
 }
 
 export function openAbilityDraft(abilityId: AbilityId): void {
-  const match = state.current.match;
+  const { match } = state.current;
   if (
     match?.phase !== "active" ||
     match.configurationVersion !== MATCH_CONFIGURATION.version
@@ -198,7 +198,7 @@ export function setAbilityStep(step: ActionDraft["step"]): void {
   patchShellState({ actionDraft: { ...draft, step } });
 }
 export async function confirmBasicAttack(): Promise<void> {
-  const match = state.current.match;
+  const { match } = state.current;
   const draft = state.current.actionDraft;
   if (match?.phase !== "active" || !draft || draft.step !== "review") return;
   await commitResult(
@@ -249,7 +249,7 @@ export function cancelAbilityDraft(): void {
  * Override surface as an explicit Override prompt instead of a dead end.
  */
 export async function confirmAbility(): Promise<void> {
-  const match = state.current.match;
+  const { match } = state.current;
   const draft = state.current.actionDraft;
   if (
     match?.phase !== "active" ||
@@ -305,7 +305,7 @@ export async function start(): Promise<void> {
   }
 }
 export async function saveDisplayNames(): Promise<void> {
-  const match = state.current.match;
+  const { match } = state.current;
   if (match?.phase !== "setup") return;
   const requested = Array.from(
     appRoot.querySelectorAll<HTMLInputElement>("[data-display-name-for]"),
@@ -333,7 +333,7 @@ export async function advanceTurn(): Promise<void> {
   }
 }
 export async function continueMatch(): Promise<void> {
-  const match = state.current.match;
+  const { match } = state.current;
   if (match?.phase !== "active" || match.eliminatedTeams.length !== 1) return;
   const [eliminatedTeam] = match.eliminatedTeams;
   if (eliminatedTeam === undefined) return;
@@ -485,7 +485,7 @@ async function discardSetupMatch(
 
 export async function confirmAction(): Promise<void> {
   if (!state.current.confirmation) return;
-  const confirmation = state.current.confirmation;
+  const { confirmation } = state.current;
   patchShellState({ confirmation: null });
   if (confirmation === "remove-summary") {
     await removePriorSummary();
@@ -495,7 +495,7 @@ export async function confirmAction(): Promise<void> {
     await startNewMatch();
     return;
   }
-  const match = state.current.match;
+  const { match } = state.current;
   if (match === null) return;
   if (confirmation === "undo") {
     await confirmUndo(match);

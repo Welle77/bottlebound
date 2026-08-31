@@ -152,7 +152,7 @@ function assertEliminationContinuedCommit(
   event: EliminationContinuedEvent,
   state: MatchState,
 ): void {
-  const eliminatedTeam: unknown = event.eliminatedTeam;
+  const { eliminatedTeam } = event;
   const eliminatedTeamIsValid =
     typeof eliminatedTeam === "string" && isTeam(eliminatedTeam);
   if (!eliminatedTeamIsValid) {
@@ -311,7 +311,7 @@ export function assertRestoredMatch(
 ): asserts state is MatchState {
   if (!isRecord(metadata))
     throw new Error("Saved canonical metadata is invalid.");
-  const configurationVersion = metadata.configurationVersion;
+  const { configurationVersion } = metadata;
   if (
     typeof configurationVersion !== "string" ||
     configurationVersion.length === 0

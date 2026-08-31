@@ -162,7 +162,7 @@ function matchingRanges(
 
 function excerptFor(text: string, ranges: readonly SourceRange[]) {
   if (text.length <= MAX_COMPLETE_EXCERPT) return { excerpt: text, offset: 0 };
-  const first = ranges[0];
+  const [first] = ranges;
   const last = ranges.at(-1);
   if (!first || !last) return { excerpt: text, offset: 0 };
 

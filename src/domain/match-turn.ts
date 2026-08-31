@@ -236,9 +236,9 @@ export function finishTurn(
   }
   const sequence = state.sequence + 1;
   const walk = nextTurnPosition(state);
-  const activeSlot = walk.activeSlot;
-  const round = walk.round;
-  const skippedSlots = walk.skippedSlots;
+  const { activeSlot } = walk;
+  const { round } = walk;
+  const { skippedSlots } = walk;
   if (skippedSlots.length === state.initiative.length) {
     throw new Error("Finish Turn needs one non-Downed character.");
   }

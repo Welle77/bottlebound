@@ -93,7 +93,7 @@ function hasValidEffectBranch(
 function hasValidActiveEffectDuration(
   duration: Record<string, unknown>,
 ): boolean {
-  const boundaryTrigger = duration.boundaryTrigger;
+  const { boundaryTrigger } = duration;
   const boundaryTriggerIsValid =
     boundaryTrigger === undefined ||
     hasValidEffectBranch(boundaryTrigger, isEffectBoundaryTrigger);
@@ -215,8 +215,8 @@ function assertMatchStateInitiative(value: MatchState): void {
 
 function assertMatchStateTurn(value: MatchState): void {
   const state = value as unknown as Record<string, unknown>;
-  const round: unknown = state.round;
-  const activeSlot: unknown = state.activeSlot;
+  const { round } = state;
+  const { activeSlot } = state;
   if (
     (value.phase === "active" || value.phase === "ended") &&
     (!Number.isSafeInteger(round) ||
@@ -236,17 +236,19 @@ function assertEndedMatchState(value: MatchState): void {
 }
 
 function assertEndedMatchMetadata(value: EndedMatchState): void {
-  const endedAt: unknown = value.endedAt;
-  const endedSequence: unknown = value.endedSequence;
-  const sequence: unknown = value.sequence;
-  const outcome: unknown = value.outcome;
+  const { endedAt } = value;
+  const { endedSequence } = value;
+  const { sequence } = value;
+  const { outcome }: { outcome: unknown } = value as unknown as {
+    outcome: unknown;
+  };
   if (
     typeof endedAt !== "string" ||
     endedAt.length === 0 ||
     !Number.isSafeInteger(endedSequence) ||
-    (endedSequence as number) < 2 ||
+    endedSequence < 2 ||
     !Number.isSafeInteger(sequence) ||
-    (endedSequence as number) > (sequence as number) ||
+    endedSequence > sequence ||
     outcome === null
   ) {
     throw new Error("The Ended Match state is structurally invalid.");
@@ -254,7 +256,7 @@ function assertEndedMatchMetadata(value: EndedMatchState): void {
 }
 
 function assertEndedMatchDecision(value: EndedMatchState): void {
-  const decisionBasis: unknown = value.decisionBasis;
+  const { decisionBasis } = value;
   if (typeof decisionBasis !== "string" || !isDecisionBasis(decisionBasis)) {
     throw new Error("The Ended Match decision basis is invalid.");
   }
@@ -266,7 +268,7 @@ function assertEndedMatchDecision(value: EndedMatchState): void {
     value.finalHpTotals,
     "The Ended Match final team tallies are invalid.",
   );
-  const coinFlipResult: unknown = value.coinFlipResult;
+  const { coinFlipResult } = value;
   if (
     coinFlipResult !== null &&
     (typeof coinFlipResult !== "string" || !isTeam(coinFlipResult))
@@ -279,7 +281,7 @@ function assertEndedMatchDecision(value: EndedMatchState): void {
 }
 
 function isValidCombatEconomy(state: Record<string, unknown>): boolean {
-  const remainingMovementPaces = state.remainingMovementPaces;
+  const { remainingMovementPaces } = state;
   const actionsUsed =
     typeof state.actionsUsed === "number"
       ? state.actionsUsed
@@ -380,10 +382,10 @@ function assertMatchSummaryHeader(
   if (!isRecord(value)) {
     throw new Error("The Match Summary is structurally invalid.");
   }
-  const outcome: unknown = value.outcome;
-  const decisionBasis: unknown = value.decisionBasis;
-  const configurationVersion: unknown = value.configurationVersion;
-  const endedAt: unknown = value.endedAt;
+  const { outcome } = value;
+  const { decisionBasis } = value;
+  const { configurationVersion } = value;
+  const { endedAt } = value;
   if (
     !isValidOutcome(outcome) ||
     !isValidDecisionBasis(decisionBasis) ||
@@ -409,8 +411,8 @@ function isValidDecisionBasis(value: unknown): value is DecisionBasis {
 }
 
 function assertMatchSummaryCoinFlip(value: MatchSummary): void {
-  const coinFlipResult: unknown = value.coinFlipResult;
-  const decisionBasis: unknown = value.decisionBasis;
+  const { coinFlipResult } = value;
+  const { decisionBasis } = value;
   if (
     coinFlipResult !== undefined &&
     (typeof coinFlipResult !== "string" || !isTeam(coinFlipResult))

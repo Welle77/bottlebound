@@ -521,7 +521,7 @@ export function resolveAbility(
     ...state.activeEffects,
     ...initialApplied,
   ]);
-  const characters = shapeshiftExpiry.characters;
+  const { characters } = shapeshiftExpiry;
   const pendingAppliedEffects: readonly ActiveEffect[] = [
     ...initialApplied,
     ...abilityOutcome.applied,

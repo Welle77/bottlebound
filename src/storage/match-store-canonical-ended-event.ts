@@ -2,7 +2,7 @@ import { isDecisionBasis, isTeam } from "../domain/match";
 import { isRecord } from "./match-store-canonical-state";
 
 function assertEndedTeamsAndOutcome(value: Record<string, unknown>): void {
-  const outcome = value.outcome;
+  const { outcome } = value;
   const outcomeIsValid =
     (typeof outcome === "string" && isTeam(outcome)) || outcome === "draw";
   if (
@@ -51,7 +51,7 @@ function assertEndedFinalTotals(value: Record<string, unknown>): void {
 }
 
 function assertEndedCoinFlip(value: Record<string, unknown>): void {
-  const coinFlipResult = value.coinFlipResult;
+  const { coinFlipResult } = value;
   const coinFlipIsValid =
     coinFlipResult === null ||
     (typeof coinFlipResult === "string" && isTeam(coinFlipResult));

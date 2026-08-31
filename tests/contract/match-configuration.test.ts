@@ -172,8 +172,8 @@ describe("application-owned Match Configuration", () => {
 
   it("is deeply immutable at the public configuration boundary", () => {
     expectDeeplyFrozen(MATCH_CONFIGURATION);
-    const firstCharacter = MATCH_CONFIGURATION.roster[0];
-    const firstAbility = MATCH_CONFIGURATION.abilities[0];
+    const [firstCharacter] = MATCH_CONFIGURATION.roster;
+    const [firstAbility] = MATCH_CONFIGURATION.abilities;
     if (!firstCharacter || !firstAbility)
       throw new Error("Configuration is empty.");
     expect(() => {

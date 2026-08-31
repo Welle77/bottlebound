@@ -163,8 +163,8 @@ export function targetCandidates(
   const ownerTeam = rulesCharacterOf(ability.ownerCharacterId).team;
   return MATCH_CONFIGURATION.characters.map((character) => {
     const hp = hpById.get(character.id) ?? 0;
-    const relation = ability.targetPolicy.relation;
-    const lifeState = ability.targetPolicy.lifeState;
+    const { relation } = ability.targetPolicy;
+    const { lifeState } = ability.targetPolicy;
     const reasons: readonly string[] = [
       ...(relation === "enemy" && character.team === ownerTeam
         ? ["Enemies only"]

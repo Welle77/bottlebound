@@ -107,6 +107,7 @@ export default defineConfig(
       "max-lines": ["error", { max: 800 }],
       "max-params": "error",
       "prefer-const": "error",
+      "prefer-destructuring": "error",
     },
   },
 

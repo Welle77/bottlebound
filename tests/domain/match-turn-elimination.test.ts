@@ -40,7 +40,10 @@ describe("Active Match commands", () => {
     if (!firstEntry) {
       throw new Error("The test expected complete initiative.");
     }
-    const initiative = generated.state.initiative;
+    const { initiative } = generated.state;
+    if (!initiative) {
+      throw new Error("The test expected complete initiative.");
+    }
     expect(() =>
       startMatch(
         {
@@ -314,7 +317,7 @@ describe("Active Match commands", () => {
       },
       { history: baseHistory, current: started.state },
     );
-    const current = afterAttacks.current;
+    const { current } = afterAttacks;
     expect(current).toMatchObject({
       eliminatedTeams: ["Duergar"],
       outcome: "Drow",

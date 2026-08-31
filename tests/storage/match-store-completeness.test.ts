@@ -230,8 +230,8 @@ describe("IndexedDbMatchStore combined Display Name and Ability persistence", ()
 
     const initialHistory = [setup, generated, started] as const;
     const built = buildUntilSorcerer(started.state, [...initialHistory], 4);
-    const history = built.history;
-    const state = built.state;
+    const { history } = built;
+    const { state } = built;
 
     // The sorcerer targets its own Wizard, violating the enemy relation
     // policy; the referee sentence must ride the committed event.

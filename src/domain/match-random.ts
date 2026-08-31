@@ -12,7 +12,7 @@ export const cryptoRandomSource: RandomSource = {
   nextUint32(): number {
     const value = new Uint32Array(1);
     globalThis.crypto.getRandomValues(value);
-    const result = value[0];
+    const [result] = value;
     if (result === undefined) {
       throw new Error("Cryptographic randomness did not return a value.");
     }

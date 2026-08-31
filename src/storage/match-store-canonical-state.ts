@@ -33,7 +33,7 @@ function assertCanonicalConfigurationVersion(
   value: Record<string, unknown>,
   expectedConfigurationVersion: string | undefined,
 ): void {
-  const configurationVersion = value.configurationVersion;
+  const { configurationVersion } = value;
   if (
     typeof configurationVersion !== "string" ||
     configurationVersion.length === 0 ||
@@ -49,7 +49,7 @@ function assertCanonicalConfigurationVersion(
 
 function assertCanonicalSnapshotHeader(value: Record<string, unknown>): void {
   const snapshotPhase: unknown = value.phase;
-  const sequence: unknown = value.sequence;
+  const { sequence } = value;
   const phaseIsValid =
     typeof snapshotPhase === "string" && isPhase(snapshotPhase);
   if (
@@ -179,9 +179,9 @@ function assertCanonicalEndedState(value: MatchState): void {
 
 function assertCanonicalEndedMetadata(value: MatchState): void {
   const ended = value as unknown as Record<string, unknown>;
-  const endedAt: unknown = ended.endedAt;
-  const endedSequence: unknown = ended.endedSequence;
-  const sequence: unknown = ended.sequence;
+  const { endedAt } = ended;
+  const { endedSequence } = ended;
+  const { sequence } = ended;
   if (
     typeof endedAt !== "string" ||
     endedAt.length === 0 ||
@@ -225,7 +225,7 @@ function assertCanonicalFinalTallies(ended: Record<string, unknown>): void {
 }
 
 function assertCanonicalCoinFlipResult(ended: Record<string, unknown>): void {
-  const coinFlipResult: unknown = ended.coinFlipResult;
+  const { coinFlipResult } = ended;
   const coinFlipIsValid =
     coinFlipResult === null ||
     (typeof coinFlipResult === "string" && isTeam(coinFlipResult));
@@ -297,7 +297,7 @@ export function assertCoinFlipTieOrder(
     ) {
       throw new Error("The canonical digital coin-flip order is invalid.");
     }
-    const attempts = step.attempts;
+    const { attempts } = step;
     attempts.forEach((attempt, attemptIndex) => {
       if (
         !isRecord(attempt) ||
@@ -307,7 +307,7 @@ export function assertCoinFlipTieOrder(
       ) {
         throw new Error("The canonical digital coin-flip order is invalid.");
       }
-      const flips: readonly unknown[] = attempt.flips;
+      const { flips } = attempt;
       const candidate = flips.reduce<number>(
         (result, flip) => result * 2 + (flip === "heads" ? 1 : 0),
         0,

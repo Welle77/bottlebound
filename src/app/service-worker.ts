@@ -33,7 +33,7 @@ export async function registerServiceWorker(): Promise<void> {
     const registration = await navigator.serviceWorker.register("/sw.js", {
       scope: "/",
     });
-    const controller = navigator.serviceWorker.controller;
+    const { controller } = navigator.serviceWorker;
     if (controller) {
       patchShellState({ serviceWorker: "controlled" });
       checkCachedShell(controller);

@@ -25,6 +25,7 @@ export default defineConfig({
     conditions: ["browser"],
   },
   test: {
+    include: ["tests/**/*.test.ts"],
     exclude: [
       "tests/browser/**",
       "node_modules/**",
