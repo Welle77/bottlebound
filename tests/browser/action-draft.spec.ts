@@ -38,6 +38,7 @@ test("the referee reviews, commits, restores, and undoes an ordered Basic Attack
   page,
 }) => {
   await startMatch(page);
+  await activateCharacter(page, "Rogue");
   await page.getByRole("button", { name: "Basic Attack" }).click();
   await expect(
     page.getByRole("heading", { name: "Record Basic Attack" }),
@@ -190,7 +191,7 @@ test("cancel, reload, and a failed save discard no committed attack", async ({
   await page.getByRole("button", { name: "Cancel draft" }).click();
 });
 
-test("a second Basic Attack needs and records the referee override", async ({
+test("a second Basic Attack uses the turn's second normal action", async ({
   page,
 }) => {
   await startMatch(page);
@@ -204,10 +205,8 @@ test("a second Basic Attack needs and records the referee override", async ({
     const confirm = page.getByRole("button", {
       name: "Confirm Action Resolution",
     });
-    if (attack === 2) {
-      await expect(confirm).toBeDisabled();
-      await page.getByLabel(/Record referee override/).check();
-    }
+    await expect(confirm).toBeEnabled();
+    await expect(page.getByLabel(/Record referee override/)).toHaveCount(0);
     await confirm.click();
     if (attack === 1) {
       await expect(
@@ -372,7 +371,7 @@ test("a spent protective Reaction needs a clear recorded Override", async ({
       await expect(
         page.getByText("Referee allowed a state-invalid Reaction."),
       ).toBeVisible();
-      await page.getByLabel(/Record referee override/).check();
+      await expect(page.getByLabel(/Record referee override/)).toHaveCount(0);
     }
     await page
       .getByRole("button", { name: "Confirm Action Resolution" })

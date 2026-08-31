@@ -98,7 +98,7 @@ test("invalid saved data stops recovery without creating replacement data", asyn
       "Starting a new Match will replace the incompatible saved data.",
     ),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Create Match" }).click();
+  await page.getByRole("button", { name: "Start new Match" }).click();
   await expect(
     page.getByRole("heading", { name: "Initiative Setup" }),
   ).toBeVisible();

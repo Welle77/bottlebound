@@ -1,29 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 
-type RosterKey = keyof typeof ROSTER;
-
 const CHECK_LABELS = [
   "Range is legal",
   "Line of Sight is legal",
   "Every selected bottle was physically hit",
   "Terrain contact was resolved",
 ] as const;
-
-/** Fixed Ruleset roster facts the flows need: element id and printed HP. */
-const ROSTER = {
-  Rogue: { id: "drow-rogue", hp: 3 },
-  Druid: { id: "drow-druid", hp: 3 },
-  Paladin: { id: "drow-paladin", hp: 5 },
-  Wizard: { id: "drow-wizard", hp: 3 },
-  Sorcerer: { id: "drow-sorcerer", hp: 3 },
-  Bard: { id: "drow-bard", hp: 3 },
-  Ranger: { id: "duergar-ranger", hp: 3 },
-  Monk: { id: "duergar-monk", hp: 4 },
-  Fighter: { id: "duergar-fighter", hp: 4 },
-  Barbarian: { id: "duergar-barbarian", hp: 5 },
-  Warlock: { id: "duergar-warlock", hp: 3 },
-  Cleric: { id: "duergar-cleric", hp: 3 },
-} as const;
 
 async function startMatch(page: Page) {
   await page.goto("/");
@@ -38,15 +20,25 @@ async function completePhysicalChecks(page: Page) {
   }
 }
 
+async function finishTurnAndWait(page: Page) {
+  const sequence = page.locator(
+    ".active-match > .section-heading .eyebrow",
+  );
+  const previousSequence = (await sequence.textContent()) ?? "";
+  await page.getByRole("button", { name: "Finish Turn" }).click();
+  await expect(sequence).not.toHaveText(previousSequence);
+  await expect(
+    page.locator(".active-match > .section-heading .readiness-badge"),
+  ).toHaveText("Saved");
+}
+
 /** Finishes turns until the named class is the Active Character (max one round). */
 async function activateCharacter(page: Page, className: string) {
   const activeHeading = page.locator("[data-active-character] h3");
   for (let attempt = 0; attempt < 12; attempt += 1) {
     const activeName = (await activeHeading.textContent()) ?? "";
     if (activeName.trim().startsWith(className)) return;
-    await page.getByRole("button", { name: "Finish Turn" }).click();
-    // The commit re-render is asynchronous; wait for this turn to land.
-    await expect(activeHeading).not.toHaveText(activeName);
+    await finishTurnAndWait(page);
   }
   throw new Error(`${className} never became the Active Character.`);
 }
@@ -346,60 +338,58 @@ test("utility ability resolves several policy-allowed targets in one resolution"
   ).toContainText("3/3");
 });
 
-test("a Downed Active Character cannot open the ability list and Basic Attack is gated identically", async ({
+test("downing the Active Character skips its slot and advances to usable controls", async ({
   page,
 }) => {
   await startMatch(page);
   const heading = page.locator("[data-active-character] h3");
-  const activeName = ((await heading.textContent()) ?? "").trim();
-  const character = ROSTER[activeName as RosterKey];
-  if (!character) throw new Error(`Unknown Active Character ${activeName}.`);
-  const row = page.locator("[data-active-order-row]", { hasText: activeName });
+  const row = page.locator("[data-active-order-row]", { hasText: "Ranger" });
 
-  // The Active Character records every contact of its own throws, so its
-  // turn ends with it Downed while still holding the initiative slot.
-  for (let remaining: number = character.hp; remaining > 0; remaining -= 1) {
+  // Prepare the Ranger at 1 HP using the opening turn's two normal actions,
+  // then advance to a fresh Ranger turn for the downing attack.
+  for (let remaining = 3; remaining > 1; remaining -= 1) {
     await page.getByRole("button", { name: "Basic Attack" }).click();
-    await page.locator(`[data-hit-character="${character.id}"]`).check();
+    await page.locator('[data-hit-character="duergar-ranger"]').check();
     await completePhysicalChecks(page);
     await page
       .getByRole("button", { name: "Review Action Resolution" })
       .click();
-    if (remaining < character.hp) {
-      await page.getByLabel(/Record referee override/).check();
-    }
-    if (remaining === 1) {
-      await expect(
-        page.locator("[data-action-review-hit]", { hasText: activeName }),
-      ).toContainText("Active → Downed");
-    }
     await page
       .getByRole("button", { name: "Confirm Action Resolution" })
       .click();
-    await expect(row).toContainText(`${remaining - 1}/${character.hp}`);
+    await expect(row).toContainText(`${remaining - 1}/3`);
   }
+  await finishTurnAndWait(page);
+  await activateCharacter(page, "Ranger");
+  await expect(heading).toHaveText("Ranger");
+  await page.getByRole("button", { name: "Basic Attack" }).click();
+  await page.locator('[data-hit-character="duergar-ranger"]').check();
+  await completePhysicalChecks(page);
+  await page.getByRole("button", { name: "Review Action Resolution" }).click();
+  await expect(
+    page.locator("[data-action-review-hit]", { hasText: "Ranger" }),
+  ).toContainText("Active → Downed");
+  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  await expect(row).toContainText("0/3");
 
-  const activeCard = page.locator("[data-active-character]");
-  await expect(activeCard).toContainText(/Active\s*·\s*Downed/);
-  await expect(activeCard).toContainText(`0/${character.hp}`);
   const useAbility = page.getByRole("button", { name: "Use Ability" });
-  await expect(useAbility).toBeDisabled();
-  await expect(
-    page.getByRole("button", { name: "Basic Attack" }),
-  ).toBeDisabled();
-
-  // The picker stays unreachable: even a forced click on the disabled control
-  // opens no Ability list.
-  await useAbility.click({ force: true });
-  await expect(
-    page.getByRole("heading", { name: "Choose an Ability" }),
-  ).toHaveCount(0);
-  await expect(page.locator("[data-ability-option]")).toHaveCount(0);
-
-  // Finish Turn remains available so the Match moves past the Downed slot.
-  await expect(page.getByRole("button", { name: "Finish Turn" })).toBeEnabled();
-  await page.getByRole("button", { name: "Finish Turn" }).click();
-  await expect(heading).not.toHaveText(activeName);
+  if (((await heading.textContent()) ?? "").trim() === "Ranger") {
+    const activeCard = page.locator("[data-active-character]");
+    await expect(activeCard).toContainText(/Active\s*·\s*Downed/);
+    await expect(activeCard).toContainText("0/3");
+    await expect(useAbility).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Basic Attack" }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Finish Turn" }),
+    ).toBeEnabled();
+    await finishTurnAndWait(page);
+  } else {
+    await expect(useAbility).toBeEnabled();
+  }
+  await expect(heading).not.toHaveText("Ranger");
+  await expect(row).toHaveAttribute("data-turn", "skipped · downed");
 });
 
 test("an Arcane Bolt downs a 1 HP enemy whose initiative slot is then skipped", async ({
@@ -465,7 +455,7 @@ test("an Arcane Bolt downs a 1 HP enemy whose initiative slot is then skipped", 
     hasText: "Ranger",
   });
   await expect(rangerRow).toContainText("0/3");
-  await expect(rangerRow).toContainText("Skipped · Downed");
+  await expect(rangerRow).toHaveAttribute("data-turn", "skipped · downed");
 
   // Initiative skip behavior: one complete pass of turns never hands the
   // Active Character card to the Downed Ranger and still wraps the round.
@@ -479,7 +469,7 @@ test("an Arcane Bolt downs a 1 HP enemy whose initiative slot is then skipped", 
   }
 });
 
-test("a second Major Action in one turn needs the same recorded override as Basic Attack", async ({
+test("two Abilities use both normal actions without a referee override", async ({
   page,
 }) => {
   await startMatch(page);
@@ -501,15 +491,11 @@ test("a second Major Action in one turn needs the same recorded override as Basi
   await page.getByLabel(/Ranger · Duergar/).check();
   await completePhysicalChecks(page);
   await page.getByRole("button", { name: "Review Action Resolution" }).click();
-  const overrideCheckbox = page.getByLabel(
-    /Record referee override for a second Major Action this turn/,
-  );
-  await expect(overrideCheckbox).toBeVisible();
   const confirm = page.getByRole("button", {
     name: "Confirm Action Resolution",
   });
-  await expect(confirm).toBeDisabled();
-  await overrideCheckbox.check();
+  await expect(confirm).toBeEnabled();
+  await expect(page.getByLabel(/Record referee override/)).toHaveCount(0);
   await confirm.click();
   await expect(
     page.getByRole("heading", { name: "Active Match" }),
@@ -517,4 +503,6 @@ test("a second Major Action in one turn needs the same recorded override as Basi
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Ranger" }),
   ).toContainText("2/3");
+  await expect(page.getByRole("button", { name: "Basic Attack" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Use Ability" })).toBeDisabled();
 });

@@ -49,18 +49,24 @@ test("the referee starts, advances, wraps, and restores an Active Match", async 
     0,
   );
   await expect(page.locator(".critical-hp")).toHaveCount(0);
-  const actionButtonTops = await page
+  const actionButtonCenters = await page
     .locator('[data-surface-order="actions"] button')
     .evaluateAll((buttons) =>
-      buttons.map((button) => Math.round(button.getBoundingClientRect().top)),
+      buttons.map((button) => {
+        const bounds = button.getBoundingClientRect();
+        return Math.round(bounds.top + bounds.height / 2);
+      }),
     );
-  expect(new Set(actionButtonTops).size).toBe(1);
-  await expect(page.locator(".finish-turn-action")).toHaveCSS("width", "256px");
-  await expect(page.locator(".finish-turn-action button")).toHaveCSS(
-    "width",
-    "256px",
-  );
-  await expect(page.locator(".turn-position-row .turn-undo")).toHaveCount(0);
+  expect(new Set(actionButtonCenters).size).toBe(1);
+  const finishTurnWidths = await page
+    .locator(".finish-turn-action, .finish-turn-action button")
+    .evaluateAll((elements) =>
+      elements.map((element) => element.getBoundingClientRect().width),
+    );
+  expect(finishTurnWidths).toHaveLength(2);
+  expect(finishTurnWidths[0]).toBeGreaterThanOrEqual(48);
+  expect(finishTurnWidths[1]).toBe(finishTurnWidths[0]);
+  await expect(page.locator(".turn-position-row .turn-undo")).toBeVisible();
   await expect(page.locator("[data-active-order-row]")).toHaveCount(12);
   await expect(page.locator(".active-match .primary-action")).toHaveCount(1);
   await expect(

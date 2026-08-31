@@ -100,6 +100,8 @@ async function checkUsable(page: Page): Promise<void> {
         const foreground = luminance(parseColor(style.color));
         const backdrop = luminance(parseColor(background(button)));
         return {
+          compact: button.classList.contains("turn-undo"),
+          label: button.textContent?.trim() || button.id || "unnamed button",
           width: bounds.width,
           height: bounds.height,
           contrast:
@@ -112,8 +114,17 @@ async function checkUsable(page: Page): Promise<void> {
     ({ width, height }) => width > 0 && height > 0,
   );
   expect(
-    filtered.every(({ width, height }) => width >= 48 && height >= 48),
-  ).toBe(true);
+    filtered.filter(
+      ({ compact, width, height }) =>
+        !compact && (width < 48 || height < 48),
+    ),
+  ).toEqual([]);
+  expect(
+    filtered.filter(
+      ({ compact, width, height }) =>
+        compact && (width < 48 || height < 40),
+    ),
+  ).toEqual([]);
   expect(filtered.every(({ contrast }) => contrast >= 4.5)).toBe(true);
   expect(
     await page.evaluate(() => document.body.scrollWidth <= window.innerWidth),

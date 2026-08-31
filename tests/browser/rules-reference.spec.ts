@@ -394,7 +394,7 @@ test("contextual rules preserve confirmations and committed Match progress", asy
   await page.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(
-    page.getByRole("heading", { name: "Undo Initiative Setup?" }),
+    page.getByRole("heading", { name: "Undo Generate Initiative?" }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Confirm Undo" }),
@@ -402,13 +402,10 @@ test("contextual rules preserve confirmations and committed Match progress", asy
   expect(await persistedMatchData(page)).toEqual(committedBeforeRules);
   await page.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("button", { name: "Start Match" }).click();
-  await page.getByRole("button", { name: "Turn rules" }).click();
+  await expect(page.getByRole("button", { name: "Turn rules" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Round rules" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Rules", exact: true }).click();
   await expect(
     dialog.getByRole("searchbox", { name: "Search rules" }),
-  ).toHaveValue("Turn");
-  await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "Round rules" }).click();
-  await expect(
-    dialog.getByRole("searchbox", { name: "Search rules" }),
-  ).toHaveValue("Turn");
+  ).toHaveValue("Initiative");
 });

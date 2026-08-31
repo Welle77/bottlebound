@@ -72,10 +72,12 @@ async function eliminateOpposingTeam(page: Page): Promise<{
     await page
       .getByRole("button", { name: "Review Action Resolution" })
       .click();
-    if (attack > 0) await page.getByLabel(/Record referee override/).check();
     await page
       .getByRole("button", { name: "Confirm Action Resolution" })
       .click();
+    if (attack < 4) {
+      await page.getByRole("button", { name: "Finish Turn" }).click();
+    }
   }
   return { eliminatedTeam, winner: sourceTeam };
 }
@@ -83,7 +85,6 @@ async function eliminateOpposingTeam(page: Page): Promise<{
 async function recordAttack(
   page: Page,
   targets: readonly string[],
-  repeated: boolean,
 ) {
   await page.getByRole("button", { name: "Basic Attack", exact: true }).click();
   for (const characterId of targets) {
@@ -98,7 +99,6 @@ async function recordAttack(
     await page.getByLabel(label).check();
   }
   await page.getByRole("button", { name: "Review Action Resolution" }).click();
-  if (repeated) await page.getByLabel(/Record referee override/).check();
   await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
 }
 
@@ -129,14 +129,21 @@ async function eliminateBothTeams(page: Page) {
     ...TEAM_CHARACTERS.Drow,
     ...TEAM_CHARACTERS.Duergar,
   ].filter((characterId) => !finalists.includes(characterId));
-  let repeated = false;
+  const attackCount = 5 + source.hp;
+  let completedAttacks = 0;
   for (let attack = 0; attack < 5; attack += 1) {
-    await recordAttack(page, otherTargets, repeated);
-    repeated = true;
+    await recordAttack(page, otherTargets);
+    completedAttacks += 1;
+    if (completedAttacks < attackCount) {
+      await page.getByRole("button", { name: "Finish Turn" }).click();
+    }
   }
   for (let attack = 0; attack < source.hp; attack += 1) {
-    await recordAttack(page, finalists, repeated);
-    repeated = true;
+    await recordAttack(page, finalists);
+    completedAttacks += 1;
+    if (completedAttacks < attackCount) {
+      await page.getByRole("button", { name: "Finish Turn" }).click();
+    }
   }
   return finalists;
 }
@@ -154,13 +161,14 @@ test("normal Team Elimination continues, ends, reopens, and removes exactly", as
     page.getByText(`All six ${eliminatedTeam} characters are Downed.`),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "End Game" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Undo" })).toBeVisible();
+  const turnUndo = page.locator(".turn-position-row .turn-undo");
+  await expect(turnUndo).toBeVisible();
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByText(/Continue was acknowledged/)).toBeVisible();
   await page.reload();
   await expect(page.getByText(/Continue was acknowledged/)).toBeVisible();
 
-  await page.getByRole("button", { name: "Undo" }).click();
+  await turnUndo.click();
   await expect(
     page.getByRole("heading", { name: "Undo Continue?" }),
   ).toBeVisible();
@@ -227,16 +235,28 @@ test("Continue skips every eliminated-team slot and preserves round wrap", async
     if (familyName === undefined) {
       throw new Error("The character id has no name segments.");
     }
-    await expect(
-      page.locator(`[data-active-order-row]`, {
+    const row = page.locator(`[data-active-order-row]`, {
         has: page.locator(`th`, {
           hasText: new RegExp(familyName, "i"),
         }),
-      }),
-    ).toContainText("Skipped · Downed");
+      });
+    await expect(row.locator('[data-label="HP"]')).toHaveText(/^0\//);
   }
   await page.getByRole("button", { name: "Finish Turn" }).click();
   await expect(page.locator("[data-active-character]")).toContainText(winner);
+  for (const characterId of TEAM_CHARACTERS[eliminatedTeam]) {
+    const familyName = characterId.split("-").at(-1);
+    if (familyName === undefined) {
+      throw new Error("The character id has no name segments.");
+    }
+    await expect(
+      page.locator(`[data-active-order-row]`, {
+        has: page.locator("th", {
+          hasText: new RegExp(familyName, "i"),
+        }),
+      }),
+    ).toHaveAttribute("data-turn", "skipped · downed");
+  }
   await page.getByRole("button", { name: "Basic Attack" }).click();
   await expect(page.getByLabel(/Record referee override/)).toHaveCount(0);
   await page.getByRole("button", { name: "Cancel draft" }).click();
@@ -293,7 +313,7 @@ for (const ruling of [
       page.getByRole("heading", { name: ruling.result }),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: "Undo" }).click();
+    await page.locator(".turn-position-row .turn-undo").click();
     await expect(
       page.getByRole("heading", {
         name: "Undo Simultaneous Elimination Ruling?",
@@ -303,7 +323,7 @@ for (const ruling of [
     await expect(
       page.getByRole("heading", { name: "Both teams are eliminated" }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Undo" }).click();
+    await page.locator(".turn-position-row .turn-undo").click();
     await expect(
       page.getByRole("heading", { name: "Undo Action Resolution?" }),
     ).toBeVisible();
@@ -312,7 +332,7 @@ for (const ruling of [
       page.getByRole("heading", { name: "Both teams are eliminated" }),
     ).toHaveCount(0);
 
-    await recordAttack(page, finalists, true);
+    await recordAttack(page, finalists);
     await page.getByLabel(ruling.label).check();
     await page.getByRole("button", { name: "Record referee ruling" }).click();
 
