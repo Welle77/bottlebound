@@ -278,6 +278,27 @@ function assertEndedMatchDecision(value: EndedMatchState): void {
   }
 }
 
+function isValidCombatEconomy(state: Record<string, unknown>): boolean {
+  const remainingMovementPaces = state.remainingMovementPaces;
+  const actionsUsed =
+    typeof state.actionsUsed === "number"
+      ? state.actionsUsed
+      : state.majorActionUsed
+        ? 1
+        : 0;
+  return (
+    typeof state.majorActionUsed === "boolean" &&
+    Number.isSafeInteger(actionsUsed) &&
+    actionsUsed >= 0 &&
+    actionsUsed <= 2 &&
+    state.movementPaces === 2 &&
+    typeof remainingMovementPaces === "number" &&
+    Number.isSafeInteger(remainingMovementPaces) &&
+    remainingMovementPaces >= 0 &&
+    remainingMovementPaces <= state.movementPaces
+  );
+}
+
 function assertMatchStatePersistence(value: MatchState): void {
   const state = value as unknown as Record<string, unknown>;
   const isValidAbilityId =
@@ -312,14 +333,8 @@ function assertMatchStatePersistence(value: MatchState): void {
     "acknowledged Team Elimination state",
     isTeam,
   );
-  const remainingMovementPaces = state.remainingMovementPaces;
   if (
-    typeof state.majorActionUsed !== "boolean" ||
-    state.movementPaces !== 2 ||
-    typeof remainingMovementPaces !== "number" ||
-    !Number.isSafeInteger(remainingMovementPaces) ||
-    remainingMovementPaces < 0 ||
-    remainingMovementPaces > state.movementPaces ||
+    !isValidCombatEconomy(state) ||
     !state.eliminatedTeams.every((team) => isTeam(team)) ||
     new Set(state.eliminatedTeams).size !== state.eliminatedTeams.length ||
     !state.acknowledgedEliminations.every((team) => isTeam(team)) ||

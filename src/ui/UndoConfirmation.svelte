@@ -1,22 +1,19 @@
 <script lang="ts">
-  import { getUndoPreview } from "../domain/match";
-  import type { ReversibleMatchEvent } from "../domain/match";
-  import { confirmAction } from "../app/actions";
-  import { openRules } from "./rules-dialog";
-  import { patchShellState, state } from "./shell-state.svelte";
-  import UndoStatePanel from "./UndoStatePanel.svelte";
+import { getUndoPreview } from "../domain/match";
+import type { ReversibleMatchEvent } from "../domain/match";
+import { confirmAction } from "../app/actions";
+import { patchShellState, state } from "./shell-state.svelte";
 
-  // Converted undo confirmation (T06): the alertdialog wrapper around the
-  // two reactive undo-state panels, previously the undo branch of the legacy
-  // confirmationPanel() template. Since T08 every other confirmation is the
-  // converted ConfirmationDialog component.
+  // Undo uses a compact modal because the referee only needs to confirm the
+  // destructive history change. The complete restored state remains owned by
+  // the domain preview and does not need to fill the active match surface.
   const TARGET_LABELS: Record<ReversibleMatchEvent["type"], string> = {
     DisplayNamesAssigned: "Assign Display Names",
     InitiativeGenerated: "Generate Initiative",
     InitiativeRerolled: "Reroll Initiative",
     MatchStarted: "Start Match",
     TurnFinished: "Finish Turn",
-    Dashed: "Dash",
+    Dashed: "Move",
     ActionResolved: "Action Resolution",
     EliminationContinued: "Continue",
     SimultaneousEliminationRuled: "Simultaneous Elimination Ruling",
@@ -31,68 +28,26 @@
   const targetLabel = $derived(
     preview ? TARGET_LABELS[preview.target.type] : "",
   );
-  const rulesQuery = $derived.by(() => {
-    if (!preview) return "";
-    return preview.target.type === "TurnFinished" ||
-      preview.target.type === "MatchStarted" ||
-      preview.target.type === "ActionResolved"
-      ? "Turn"
-      : "Initiative";
-  });
-
-  function handleOpenRules(event: MouseEvent): void {
-    if (!(event.currentTarget instanceof HTMLButtonElement)) return;
-    openRules(event.currentTarget, rulesQuery);
-  }
-
   function handleCancel(): void {
-    if (state.current.confirmation === "end") {
-      patchShellState({ endGamePreview: null });
-    }
     patchShellState({ confirmation: null });
   }
 </script>
 
 {#if preview}
-  <!-- Legacy parity: the confirmation wrapper keeps its alertdialog role on
-       a section element exactly as the deleted template rendered it. -->
-  <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
-  <section
-    class="confirmation-panel undo-confirmation"
-    role="alertdialog"
+  <dialog
+    open
+    class="undo-modal"
+    aria-modal="true"
     aria-labelledby="confirmation-heading"
     aria-describedby="confirmation-detail"
   >
-    <div>
-      <p class="eyebrow">Confirmation required</p>
-      <h3 id="confirmation-heading">Undo {targetLabel}?</h3>
-      <p id="confirmation-detail">
-        Check the complete committed state and the complete state that Undo
-        will restore.
-      </p>
-      <button
-        id="rules-undo"
-        class="rules-context-link"
-        type="button"
-        data-open-rules-query={rulesQuery}
-        onclick={handleOpenRules}
-      >
-        Undo rules
-      </button>
-    </div>
-    <div class="undo-comparison">
-      <UndoStatePanel match={preview.currentState} current />
-      <UndoStatePanel match={preview.restoredState} current={false} />
-    </div>
+    <p class="eyebrow">Confirmation required</p>
+    <h3 id="confirmation-heading">Undo {targetLabel}?</h3>
+    <p id="confirmation-detail">
+      Are you sure you want to undo this action? The last committed change will
+      be removed and the previous Match state will be restored.
+    </p>
     <div class="button-row">
-      <button
-        id="confirm-action"
-        class="danger-action"
-        type="button"
-        onclick={() => void confirmAction()}
-      >
-        Confirm Undo
-      </button>
       <button
         id="cancel-action"
         class="secondary-action"
@@ -101,6 +56,14 @@
       >
         Cancel
       </button>
+      <button
+        id="confirm-action"
+        class="danger-action"
+        type="button"
+        onclick={() => void confirmAction()}
+      >
+        Confirm Undo
+      </button>
     </div>
-  </section>
+  </dialog>
 {/if}

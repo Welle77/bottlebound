@@ -3,10 +3,9 @@ import type { MatchState } from "../domain/match";
 import {
   MATCH_CONFIGURATION,
   type MatchConfigurationAbility,
-} from "../domain/match-configuration";
+  } from "../domain/match-configuration";
   import { closeAbilityPicker, openAbilityDraft } from "../app/actions";
   import { rulesCharacterOf, unspentAbilities } from "./ability-draft";
-  import { openRules } from "./rules-dialog";
   import CharacterName from "./CharacterName.svelte";
 
   // Converted ability picker (T07): the "Use Ability" list panel reacts to
@@ -27,14 +26,6 @@ import {
     return `${ability.actionType === "powerful" ? MATCH_CONFIGURATION.labels.powerfulAbility : MATCH_CONFIGURATION.labels.standardAbility} · Range ${ability.range}${ability.targetPolicy.lifeState === "active" ? " · Active targets" : ""}`;
   }
 
-  function handleOpenRules(
-    ability: MatchConfigurationAbility,
-  ): (event: MouseEvent) => void {
-    return (event) => {
-      if (!(event.currentTarget instanceof HTMLButtonElement)) return;
-      openRules(event.currentTarget, ability.name);
-    };
-  }
 </script>
 
 <section class="match-panel ability-list" aria-labelledby="ability-list-heading">
@@ -55,15 +46,6 @@ import {
             <p class="ability-effect">{ability.rulesText}</p>
           </div>
           <div class="match-actions">
-            <button
-              id={`rules-ability-${ability.id}`}
-              class="rules-context-link"
-              type="button"
-              data-open-rules-query={ability.name}
-              onclick={handleOpenRules(ability)}
-            >
-              {ability.name} rules
-            </button>
             <button
               class="secondary-action"
               type="button"

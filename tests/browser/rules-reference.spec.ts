@@ -389,12 +389,9 @@ test("contextual rules preserve confirmations and committed Match progress", asy
   expect(await persistedMatchData(page)).toEqual(committedBeforeRules);
   await page.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("button", { name: "Undo" }).click();
-  await page.getByRole("button", { name: "Undo rules" }).click();
-  await expect(dialog).toBeVisible();
   await expect(
-    dialog.getByRole("searchbox", { name: "Search rules" }),
-  ).toHaveValue("Initiative");
-  await page.keyboard.press("Escape");
+    page.getByRole("heading", { name: "Undo Initiative Setup?" }),
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Confirm Undo" }),
   ).toBeVisible();

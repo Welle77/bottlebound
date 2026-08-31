@@ -313,6 +313,8 @@ type CombatMatchState = {
   readonly spentAbilityIds: readonly AbilityId[];
   readonly movementPaces: 2;
   readonly remainingMovementPaces: 0 | 1 | 2;
+  /** Number of Move, Basic Attack, or Ability actions used this turn. */
+  readonly actionsUsed?: 0 | 1 | 2;
   readonly majorActionUsed: boolean;
   readonly eliminatedTeams: readonly Team[];
   readonly acknowledgedEliminations: readonly Team[];
@@ -671,6 +673,7 @@ export const initialCombatState = Object.freeze({
   spentAbilityIds: Object.freeze([]),
   movementPaces: 2 as const,
   remainingMovementPaces: 2 as const,
+  actionsUsed: 0 as const,
   majorActionUsed: false,
   eliminatedTeams: Object.freeze([]),
   acknowledgedEliminations: Object.freeze([]),

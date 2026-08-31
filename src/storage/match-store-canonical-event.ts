@@ -644,6 +644,7 @@ function assertInitiativeEvent(
       spentAbilityIds: [],
       movementPaces: 2,
       remainingMovementPaces: 2,
+      actionsUsed: 0,
       majorActionUsed: false,
       eliminatedTeams: [],
       acknowledgedEliminations: [],

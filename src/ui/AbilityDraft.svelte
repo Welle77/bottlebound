@@ -11,7 +11,6 @@
     rulesCharacterOf,
     targetCandidates,
   } from "./ability-draft";
-  import { openRules } from "./rules-dialog";
   import {
     patchShellState,
     state,
@@ -221,8 +220,6 @@
     );
     const warnings = draftWarnings(match, draft, ability);
     const needsAbilityOverride = warnings.length > 0;
-    const needsMajorOverride =
-      match.majorActionUsed && !draft.majorActionOverride;
     const backStep: DraftStep =
       ability.interaction === "physical-attack"
         ? "contacts"
@@ -238,8 +235,8 @@
       needsAbilityOverride,
       confirmDisabled:
         // Disabled unless the referee cleared every warning or recorded the
-        // Ability Override, and no second-Major-Action Override is owed.
-        (needsAbilityOverride && !draft.abilityOverride) || needsMajorOverride,
+        // Ability Override.
+        needsAbilityOverride && !draft.abilityOverride,
       backStep,
       saving: state.current.saving,
     };
@@ -285,18 +282,6 @@
     };
   }
 
-  function handleMajorOverrideChange(event: Event): void {
-    if (!(event.currentTarget instanceof HTMLInputElement)) return;
-    const currentDraft = state.current.actionDraft;
-    if (!currentDraft || currentDraft.kind !== "ability") return;
-    patchShellState({
-      actionDraft: {
-        ...currentDraft,
-        majorActionOverride: event.currentTarget.checked,
-      },
-    });
-  }
-
   function handleAbilityOverrideChange(event: Event): void {
     if (!(event.currentTarget instanceof HTMLInputElement)) return;
     const currentDraft = state.current.actionDraft;
@@ -309,10 +294,6 @@
     });
   }
 
-  function handleOpenRules(event: MouseEvent): void {
-    if (!(event.currentTarget instanceof HTMLButtonElement)) return;
-    openRules(event.currentTarget, base?.ability.name ?? MATCH_CONFIGURATION.labels.ability);
-  }
 </script>
 
 {#snippet abilityProfile(b: AbilityDraftBase)}
@@ -323,15 +304,6 @@
     <p><strong>{MATCH_CONFIGURATION.labels.ability}:</strong> {b.ability.name} · {b.ability.actionType === "powerful" ? MATCH_CONFIGURATION.labels.powerfulAbility : MATCH_CONFIGURATION.labels.standardAbility}</p>
     <p><strong>Range:</strong> {b.ability.range}</p>
     <p><strong>Effect:</strong> {b.ability.rulesText}</p>
-    <button
-      id={`rules-ability-draft-${b.ability.id}`}
-      class="rules-context-link"
-      type="button"
-      data-open-rules-query={b.ability.name}
-      onclick={handleOpenRules}
-    >
-      {b.ability.name} rules
-    </button>
   </div>
 {/snippet}
 
@@ -611,17 +583,6 @@
         </section>
       {:else}
         <p>No Reactions apply in this resolution.</p>
-      {/if}
-      {#if base.match.majorActionUsed}
-        <label class="override-control">
-          <input
-            id="major-action-override"
-            type="checkbox"
-            checked={base.draft.majorActionOverride}
-            onchange={handleMajorOverrideChange}
-          />
-          Record referee override for a second Major Action this turn
-        </label>
       {/if}
       {#if review.needsAbilityOverride}
         <div class="draft-warning" role="alert">

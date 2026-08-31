@@ -54,11 +54,8 @@ export function dash(
   if (!activeCharacter || activeCharacter.hp === 0) {
     throw new Error("A Downed character cannot Dash.");
   }
-  if (
-    state.remainingMovementPaces !== state.movementPaces ||
-    state.majorActionUsed
-  ) {
-    throw new Error("Dash needs an unused turn economy.");
+  if ((state.actionsUsed ?? (state.majorActionUsed ? 1 : 0)) >= 2) {
+    throw new Error("Move needs an unused action.");
   }
   const sequence = state.sequence + 1;
   return {
@@ -66,6 +63,10 @@ export function dash(
       ...state,
       sequence,
       remainingMovementPaces: 0,
+      actionsUsed: Math.min(
+        2,
+        (state.actionsUsed ?? (state.majorActionUsed ? 1 : 0)) + 1,
+      ) as 1 | 2,
       majorActionUsed: true,
     },
     event: {
@@ -273,6 +274,7 @@ export function finishTurn(
       round,
       activeSlot,
       remainingMovementPaces: 2,
+      actionsUsed: 0,
       majorActionUsed: false,
       characters: finalCharacters,
       activeEffects: finalActiveEffects,

@@ -150,8 +150,7 @@
       <PriorSummaryCard />
     {/if}
     {#if state.current.confirmation === "undo"}
-      <!-- Converted undo confirmation (T06): real markup hosting the two
-           reactive undo-state panels. -->
+      <!-- Compact Undo confirmation modal. -->
       <UndoConfirmation />
     {:else}
       <!-- Converted confirmations (T08): reroll, discard, and remove-summary

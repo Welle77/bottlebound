@@ -14,7 +14,7 @@
     continueMatch,
     openAbilityPicker,
     openBasicAttack,
-    recordDash,
+    recordMove,
     recordSimultaneousRuling,
   } from "../app/actions";
   import { patchShellState, state } from "./shell-state.svelte";
@@ -178,6 +178,8 @@
     const promptKind = getPromptKind(match);
     const activeHp = requireHp(hpByCharacter, activeEntry.characterId);
     const nextHp = requireHp(hpByCharacter, nextEntry.characterId);
+    const actionsUsed =
+      match.actionsUsed ?? (match.majorActionUsed ? 1 : 0);
     return {
       match,
       activeSlot: activeEntry.slot,
@@ -187,12 +189,12 @@
       activeHp,
       nextHp,
       activeDowned,
-      dashAvailable:
+      actionsUsed,
+      moveAvailable:
         !saving &&
         !activeDowned &&
         match.eliminatedTeams.length !== 2 &&
-        match.remainingMovementPaces === match.movementPaces &&
-        !match.majorActionUsed,
+        (match.actionsUsed ?? (match.majorActionUsed ? 1 : 0)) < 2,
       rows,
       saving,
       canUndo,
@@ -295,6 +297,22 @@
           </div>
           <div><dt>Slot</dt><dd>{view.activeSlot}</dd></div>
         </dl>
+        <div
+          class="action-usage"
+          aria-label={`${view.actionsUsed} of 2 actions used`}
+        >
+          <span class="action-usage-label">Actions</span>
+          <span
+            class:spent={view.actionsUsed >= 1}
+            class="action-usage-marker"
+            aria-hidden="true"
+          ></span>
+          <span
+            class:spent={view.actionsUsed >= 2}
+            class="action-usage-marker"
+            aria-hidden="true"
+          ></span>
+        </div>
       </article>
     </div>
     {#if !view.combatAvailable}
@@ -305,13 +323,13 @@
     {#if view.showCommands}
       <div class="match-actions" data-surface-order="actions">
         <button
-          id="dash"
+          id="move"
           class="secondary-action"
           type="button"
-          disabled={!view.dashAvailable}
-          onclick={() => void recordDash()}
+          disabled={!view.moveAvailable}
+          onclick={() => void recordMove()}
         >
-          Dash
+          Move
         </button>
         <button
           id="basic-attack"
@@ -320,8 +338,8 @@
           disabled={view.saving ||
             !view.combatAvailable ||
             view.activeDowned ||
-            (view.match.remainingMovementPaces === 0 &&
-              view.match.majorActionUsed) ||
+            (view.match.actionsUsed ??
+              (view.match.majorActionUsed ? 1 : 0)) >= 2 ||
             view.match.eliminatedTeams.length === 2}
           aria-describedby={view.combatAvailable
             ? undefined
@@ -337,8 +355,8 @@
           disabled={view.saving ||
             !view.combatAvailable ||
             view.activeDowned ||
-            (view.match.remainingMovementPaces === 0 &&
-              view.match.majorActionUsed) ||
+            (view.match.actionsUsed ??
+              (view.match.majorActionUsed ? 1 : 0)) >= 2 ||
             view.match.eliminatedTeams.length === 2}
           aria-describedby={view.combatAvailable
             ? undefined

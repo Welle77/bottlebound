@@ -46,7 +46,7 @@ test("the referee reviews, commits, restores, and undoes an ordered Basic Attack
   await expect(page.locator("#rules-basic-attack")).toHaveCount(0);
   await expect(page.locator("[data-contact-team]")).toHaveText([
     /Opposing team · Duergar/,
-    /Attacking team · Drow/,
+    /Your team · Drow/,
   ]);
   await expect(page.locator(".attack-profile")).toContainText(/Source:/);
   await expect(page.locator(".attack-profile")).toContainText(/(Melee|Ranged)/);
@@ -252,12 +252,7 @@ test("protective Reactions prevent only selected damage and restore after Undo",
   await page.reload();
 
   await page.getByRole("button", { name: "Undo" }).click();
-  await expect(page.locator("[data-undo-current]")).toContainText(
-    "Divine Shield, Misty Escape, Mirror Veil, Shield Wall",
-  );
-  await expect(page.locator("[data-undo-restored]")).toContainText(
-    "Spent Reactions: None",
-  );
+  await expect(page.getByText(/Are you sure you want to undo this action/)).toBeVisible();
   await page.getByRole("button", { name: "Confirm Undo" }).click();
   await page.getByRole("button", { name: "Basic Attack" }).click();
   await page.getByLabel(/Ranger · Duergar/).check();
@@ -366,10 +361,5 @@ test("Deflecting Palm closes the first leg and records later unique contacts", a
   ).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Undo" }).click();
-  await expect(page.locator("[data-undo-current]")).toContainText(
-    "Deflecting Palm",
-  );
-  await expect(page.locator("[data-undo-restored]")).toContainText(
-    "Spent Reactions: None",
-  );
+  await expect(page.getByText(/Are you sure you want to undo this action/)).toBeVisible();
 });

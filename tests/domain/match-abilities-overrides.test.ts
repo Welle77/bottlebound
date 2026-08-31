@@ -176,7 +176,7 @@ describe("resolveAbility override-recording branches", () => {
     expect(restoreStateFromEvents(run.events)).toEqual(overridden.state);
   });
 
-  it("requires an Override for an already-spent Ability choice before the second-Major-Action override", () => {
+  it("allows an ability Override to authorize a second action", () => {
     const run = startedAuditMatch("ability-override-already-spent");
     const markId = abilityId("duergar-ranger", "Hunter's Mark");
     const unoverridden = resolveAbility(
@@ -197,16 +197,6 @@ describe("resolveAbility override-recording branches", () => {
     expect(() => resolveAbility(run.state, repeat, stamp(2))).toThrow(
       "ability-already-spent",
     );
-    // Gate order: the spent Override alone still leaves the second Major
-    // Action of this turn unrecorded.
-    expect(() =>
-      resolveAbility(
-        run.state,
-        { ...repeat, abilityOverride: ABILITY_OVERRIDE },
-        stamp(3),
-      ),
-    ).toThrow("A second ability needs a recorded referee override.");
-
     const overridden = resolveAbility(
       run.state,
       {

@@ -50,9 +50,6 @@
       Rules
     </button>
   </div>
-  <p class="lede">
-    Run one reliable initiative order, even after an offline restart.
-  </p>
   {#if !matchOpen}
     <label class="console-setting">
       <input

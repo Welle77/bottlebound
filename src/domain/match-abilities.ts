@@ -127,8 +127,13 @@ function validateAbilityUse(context: {
   ) {
     throw new Error("ability-already-spent");
   }
-  if (state.majorActionUsed && majorActionOverride === null) {
-    throw new Error("A second ability needs a recorded referee override.");
+  if (
+    (state.actionsUsed ?? (state.majorActionUsed ? 1 : 0)) >= 2 &&
+    majorActionOverride === null
+  ) {
+    throw new Error(
+      "Ability needs an unused action or a recorded referee override.",
+    );
   }
   const powerfulProhibited = state.activeEffects.some(
     (effect) =>
@@ -578,6 +583,10 @@ export function resolveAbility(
     state: {
       ...state,
       sequence,
+      actionsUsed: Math.min(
+        2,
+        (state.actionsUsed ?? (state.majorActionUsed ? 1 : 0)) + 1,
+      ) as 1 | 2,
       majorActionUsed: true,
       spentAbilityIds: [
         ...new Set([...state.spentAbilityIds, ability.id]),

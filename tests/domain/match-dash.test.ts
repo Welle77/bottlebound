@@ -14,8 +14,8 @@ import {
 } from "../../src/domain/match";
 import { queuedRandom } from "./match-test-support";
 
-describe("Dash", () => {
-  it("spends the active character's full movement and normal action", () => {
+describe("Move", () => {
+  it("spends one of two actions and the active character's full movement", () => {
     const setup = createSetup("dash-match", "2026-08-31T07:32:00.000Z");
     const generated = generateInitiative(
       setup.state,
@@ -43,29 +43,35 @@ describe("Dash", () => {
       movementPaces: 2,
       remainingMovementPaces: 0,
     });
-    expect(() =>
-      resolveBasicAttack(
-        dashed.state,
-        {
-          sourceCharacterId,
-          affectedCharacterIds: ["duergar-ranger"],
-          physicalConfirmations: {
-            range: true,
-            lineOfSight: true,
-            legalBottleContact: true,
-            terrainContact: true,
-          },
-          majorActionOverride: null,
+    const attacked = resolveBasicAttack(
+      dashed.state,
+      {
+        sourceCharacterId,
+        affectedCharacterIds: ["duergar-ranger"],
+        physicalConfirmations: {
+          range: true,
+          lineOfSight: true,
+          legalBottleContact: true,
+          terrainContact: true,
         },
-        "2026-08-31T07:36:00.000Z",
-      ),
-    ).toThrow("A second Basic Attack needs a recorded referee override.");
+        majorActionOverride: null,
+      },
+      "2026-08-31T07:36:00.000Z",
+    );
+    expect(attacked.state.actionsUsed).toBe(2);
+    expect(() =>
+      dash(attacked.state, sourceCharacterId, "2026-08-31T07:37:00.000Z"),
+    ).toThrow("unused action");
 
     expect(
-      finishTurn(dashed.state, "2026-08-31T07:37:00.000Z").state,
-    ).toMatchObject({ remainingMovementPaces: 2, majorActionUsed: false });
+      finishTurn(attacked.state, "2026-08-31T07:37:00.000Z").state,
+    ).toMatchObject({
+      remainingMovementPaces: 2,
+      actionsUsed: 0,
+      majorActionUsed: false,
+    });
 
-    const ended = endMatch(dashed.state, {
+    const ended = endMatch(attacked.state, {
       occurredAt: "2026-08-31T07:38:00.000Z",
       confirmed: true,
       random: { nextUint32: () => 0 },
@@ -75,11 +81,12 @@ describe("Dash", () => {
     ).toMatchObject({
       movementPaces: 2,
       remainingMovementPaces: 0,
+      actionsUsed: 2,
       majorActionUsed: true,
     });
   });
 
-  it("replays and undoes a Dash through canonical Match history", () => {
+  it("replays and undoes a Move through canonical Match history", () => {
     const setup = createSetup("dash-history", "2026-08-31T07:40:00.000Z");
     const generated = generateInitiative(
       setup.state,

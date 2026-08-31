@@ -97,7 +97,7 @@
       {#each model.teamOrder as team (team)}
         <article class="contact-team-card" data-contact-team={team}>
           <h3>
-            {team === model.attackingTeam ? "Attacking team" : "Opposing team"}
+            {team === model.attackingTeam ? "Your team" : "Opposing team"}
             · {team}
           </h3>
           <div class="contact-list">

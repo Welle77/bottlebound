@@ -121,7 +121,10 @@ function assertActionResolvedCommit(
   event: ActionResolvedEvent,
   state: MatchState,
 ): void {
-  if (state.phase !== "active" || !state.majorActionUsed) {
+  if (
+    state.phase !== "active" ||
+    (state.actionsUsed ?? (state.majorActionUsed ? 1 : 0)) < 1
+  ) {
     throw new Error("The Action Resolution Event and snapshot do not match.");
   }
   const activeSource = state.initiative[state.activeSlot - 1]?.characterId;
@@ -230,7 +233,7 @@ function assertDashCommit(event: DashedEvent, state: MatchState): void {
     state.initiative[state.activeSlot - 1]?.characterId !==
       event.sourceCharacterId ||
     state.remainingMovementPaces !== event.remainingMovementPaces ||
-    !state.majorActionUsed
+    (state.actionsUsed ?? (state.majorActionUsed ? 1 : 0)) < 1
   ) {
     throw new Error("The Dash Event and snapshot do not match.");
   }

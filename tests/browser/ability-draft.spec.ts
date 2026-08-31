@@ -118,12 +118,7 @@ test("self ability confirms in one step, spends, persists, and undoes exactly", 
 
   await page.getByRole("button", { name: "Back" }).click();
   await page.getByRole("button", { name: "Undo" }).click();
-  await expect(page.locator("[data-undo-current]")).toContainText(
-    "Spent Abilities: Second Wind",
-  );
-  await expect(page.locator("[data-undo-restored]")).toContainText(
-    "Spent Abilities: None",
-  );
+  await expect(page.getByText(/Are you sure you want to undo this action/)).toBeVisible();
   await page.getByRole("button", { name: "Confirm Undo" }).click();
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Fighter" }),
