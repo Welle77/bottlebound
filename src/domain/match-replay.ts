@@ -1,11 +1,16 @@
 import { MATCH_CONFIGURATION } from "./match-configuration";
-import { isAbilityId, isActionKind, isTeam } from "./match-types";
+import {
+  isAbilityId,
+  isActionKind,
+  isTeam,
+  nextActionCount,
+} from "./match-types";
 import { resolveAbility } from "./match-abilities";
 import { resolveBasicAttack } from "./match-combat";
 import { getEndGamePreview, reopenMatch } from "./match-endgame";
 import {
   assertMatchStateStructure,
-  canonicalMatchRecordsEqual,
+  validatedMatchRecordsEqual,
 } from "./match-history";
 import { createSetupForConfigurationVersion } from "./match-setup";
 import {
@@ -51,10 +56,7 @@ function applyHistoricalActionResolution(
   return {
     ...state,
     sequence: event.sequence,
-    actionsUsed: Math.min(
-      2,
-      (state.actionsUsed ?? (state.majorActionUsed ? 1 : 0)) + 1,
-    ) as 1 | 2,
+    actionsUsed: nextActionCount(state.actionsUsed, state.majorActionUsed),
     majorActionUsed: true,
     spentReactionIds: [
       ...new Set([
@@ -329,7 +331,7 @@ function applyTurnFinished(
     "The Finish Turn Event cannot apply to this Match State.",
   );
   const expected = finishTurn(active, event.occurredAt);
-  if (!canonicalMatchRecordsEqual(expected.event, event)) {
+  if (!validatedMatchRecordsEqual(expected.event, event)) {
     throw new Error("The Finish Turn Event does not follow Match State.");
   }
   return expected.state;
@@ -344,7 +346,7 @@ function applyDash(
     "The Dash Event cannot apply to this Match State.",
   );
   const expected = dash(active, event.sourceCharacterId, event.occurredAt);
-  if (!canonicalMatchRecordsEqual(expected.event, event)) {
+  if (!validatedMatchRecordsEqual(expected.event, event)) {
     throw new Error("The Dash Event does not follow Match State.");
   }
   return expected.state;
@@ -381,7 +383,7 @@ function applyAbilityResolution(
     },
     event.occurredAt,
   );
-  return canonicalMatchRecordsEqual(expected.event, event)
+  return validatedMatchRecordsEqual(expected.event, event)
     ? expected.state
     : applyHistoricalActionResolution(current, event);
 }
@@ -409,7 +411,7 @@ function applyBasicAttackResolution(
     },
     event.occurredAt,
   );
-  if (!canonicalMatchRecordsEqual(expected.event, event)) {
+  if (!validatedMatchRecordsEqual(expected.event, event)) {
     throw new Error("The Action Resolution does not follow Match State.");
   }
   return expected.state;
@@ -445,7 +447,7 @@ function applyEliminationContinued(
     event.eliminatedTeam,
     event.occurredAt,
   );
-  if (!canonicalMatchRecordsEqual(expected.event, event)) {
+  if (!validatedMatchRecordsEqual(expected.event, event)) {
     throw new Error("Continue does not follow Match State.");
   }
   return expected.state;
@@ -463,7 +465,7 @@ function applySimultaneousEliminationRuling(
     overrideEvidence: event.overrideEvidence,
     occurredAt: event.occurredAt,
   });
-  if (!canonicalMatchRecordsEqual(expected.event, event)) {
+  if (!validatedMatchRecordsEqual(expected.event, event)) {
     throw new Error(
       "The simultaneous-elimination ruling does not follow Match State.",
     );
@@ -486,10 +488,10 @@ function applyMatchEnded(
   if (
     preview.outcome !== event.outcome ||
     preview.decisionBasis !== event.decisionBasis ||
-    !canonicalMatchRecordsEqual(preview.finalCounts, event.finalCounts) ||
-    !canonicalMatchRecordsEqual(preview.finalHpTotals, event.finalHpTotals) ||
+    !validatedMatchRecordsEqual(preview.finalCounts, event.finalCounts) ||
+    !validatedMatchRecordsEqual(preview.finalHpTotals, event.finalHpTotals) ||
     (preview.coinFlipResult ?? null) !== event.coinFlipResult ||
-    !canonicalMatchRecordsEqual(
+    !validatedMatchRecordsEqual(
       [...active.eliminatedTeams],
       event.eliminatedTeams,
     )
@@ -518,7 +520,7 @@ function applyMatchReopened(
     throw new Error("Reopen Match cannot apply to this Match State.");
   }
   const expected = reopenMatch(current, event.occurredAt);
-  if (!canonicalMatchRecordsEqual(expected.event, event)) {
+  if (!validatedMatchRecordsEqual(expected.event, event)) {
     throw new Error("Reopen Match does not follow Match State.");
   }
   return expected.state;
@@ -630,7 +632,7 @@ export function getUndoPreview(
   if (events.length !== state.sequence) {
     throw new Error("Undo needs the complete committed Match Event history.");
   }
-  if (!canonicalMatchRecordsEqual(restoreStateFromEvents(events), state)) {
+  if (!validatedMatchRecordsEqual(restoreStateFromEvents(events), state)) {
     throw new Error("Undo needs the exact committed Match State and history.");
   }
   const targetIndex = events.findIndex(
@@ -640,7 +642,7 @@ export function getUndoPreview(
   return {
     target,
     currentState: state,
-    restoredState: { ...restored, sequence: state.sequence + 1 } as MatchState,
+    restoredState: { ...restored, sequence: state.sequence + 1 },
   };
 }
 

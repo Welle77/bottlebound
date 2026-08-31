@@ -35,6 +35,54 @@ const immutableDataOptions = {
   ],
 };
 
+const projectEslintPlugin = {
+  rules: {
+    "no-inline-type-assertions": {
+      meta: {
+        type: "problem",
+        docs: {
+          description:
+            "Require named type references for TypeScript assertions",
+        },
+        schema: [],
+      },
+      create(context) {
+        return {
+          TSAsExpression(node) {
+            if (node.typeAnnotation.type !== "TSTypeReference") {
+              context.report({
+                node,
+                message:
+                  "Use a named type reference for type assertions; `as const` is allowed.",
+              });
+            }
+          },
+        };
+      },
+    },
+    "no-tests-in-application-folders": {
+      meta: {
+        type: "problem",
+        docs: {
+          description: "Keep test files outside application folders",
+        },
+        schema: [],
+      },
+      create(context) {
+        return {
+          Program(node) {
+            context.report({
+              node,
+              message:
+                "Test files must not live under an application folder (src/, build/): move this file into the tests/ tree.",
+            });
+          },
+        };
+      },
+    },
+  },
+};
+
 export default defineConfig(
   globalIgnores(["dist", "playwright-report", "test-results", ".worktrees"]),
 
@@ -56,6 +104,21 @@ export default defineConfig(
     rules: {
       "@typescript-eslint/consistent-type-definitions": ["error", "type"],
     },
+  },
+
+  // Prefer named type references over inline type assertions.
+  {
+    name: "style/no-inline-type-assertions",
+    files: [
+      "src/**/*.ts",
+      "src/**/*.svelte",
+      "tests/**/*.ts",
+      "tests/**/*.svelte",
+      "build/**/*.ts",
+      "vite.config.ts",
+    ],
+    plugins: { project: projectEslintPlugin },
+    rules: { "project/no-inline-type-assertions": "error" },
   },
 
   // Project-wide size and complexity limits.
@@ -156,17 +219,9 @@ export default defineConfig(
 
   // Testing standard: no test file under application folders.
   {
-    name: "standards/no-misplaced-tests",
+    name: "standards/no-tests-in-application-folders",
     files: misplacedTestFiles,
-    rules: {
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector: "Program",
-          message:
-            "Test files must not live under an application folder (src/, build/): move this file into the tests/ tree.",
-        },
-      ],
-    },
+    plugins: { project: projectEslintPlugin },
+    rules: { "project/no-tests-in-application-folders": "error" },
   },
 );

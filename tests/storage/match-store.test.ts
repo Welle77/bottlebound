@@ -320,7 +320,7 @@ describe("IndexedDbMatchStore", () => {
     await rewriteCurrentSnapshotAsRetiredSchema(factory, databaseName);
     const before = await readRawMatch(factory, databaseName);
 
-    await expect(store.restore()).rejects.toThrow(/canonical/i);
+    await expect(store.restore()).rejects.toThrow(/validated/i);
     await expect(readRawMatch(factory, databaseName)).resolves.toEqual(before);
   });
 
@@ -336,7 +336,7 @@ describe("IndexedDbMatchStore", () => {
     );
     const before = await readRawMatch(factory, databaseName);
 
-    await expect(store.restore()).rejects.toThrow(/canonical/i);
+    await expect(store.restore()).rejects.toThrow(/validated/i);
     await expect(readRawMatch(factory, databaseName)).resolves.toEqual(before);
   });
 
@@ -364,7 +364,7 @@ describe("IndexedDbMatchStore", () => {
     });
   });
 
-  it("rejects incompatible, structurally invalid, and partial canonical data", async () => {
+  it("rejects incompatible, structurally invalid, and partial validated data", async () => {
     const store = createIndexedDbMatchStore(new IDBFactory(), "invalid-data");
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     await store.commit(setup.event, setup.state);

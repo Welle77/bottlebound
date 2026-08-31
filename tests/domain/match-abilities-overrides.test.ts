@@ -5,6 +5,8 @@ import {
   resolveBasicAttack,
   restoreStateFromEvents,
   type ActionResolvedEvent,
+  type ActiveEffect,
+  type AttackLeg,
   type CharacterId,
   type MatchEvent,
 } from "../../src/domain/match";
@@ -34,6 +36,32 @@ const ABILITY_OVERRIDE =
   "The referee recorded an Override for this state-invalid ability choice.";
 const SECOND_MAJOR_OVERRIDE =
   "Referee confirmed a second Major Action this turn.";
+
+type HistoricalActionResolvedEvent = Omit<
+  ActionResolvedEvent,
+  | "abilityId"
+  | "attackId"
+  | "attackLegs"
+  | "attackType"
+  | "damage"
+  | "rangePaces"
+  | "spentAbilityIds"
+  | "appliedEffects"
+> & {
+  readonly abilityId: null;
+  readonly attackId: string;
+  readonly attackLegs: readonly (Omit<AttackLeg, "attackId" | "rangePaces"> & {
+    readonly attackId: string;
+    readonly rangePaces: number;
+  })[];
+  readonly attackType: string;
+  readonly damage: number;
+  readonly rangePaces: number;
+  readonly spentAbilityIds: readonly string[];
+  readonly appliedEffects: readonly (Omit<ActiveEffect, "abilityId"> & {
+    readonly abilityId: string;
+  })[];
+};
 
 function asResolution(result: {
   readonly event: unknown;
@@ -116,13 +144,13 @@ describe("resolveAbility override-recording branches", () => {
       })),
       spentAbilityIds: [attackId],
       appliedEffects: [{ ...appliedEffect, abilityId: attackId }],
-    } as unknown as MatchEvent;
+    } as HistoricalActionResolvedEvent;
     const historicalEvents = [
       ...run.events.map((recorded): MatchEvent => ({
         ...recorded,
         configurationVersion,
       })),
-      historicalEvent,
+      historicalEvent as MatchEvent,
     ];
 
     expect(restoreStateFromEvents(historicalEvents)).toEqual({

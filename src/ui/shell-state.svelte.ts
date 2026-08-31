@@ -104,7 +104,7 @@ export type ShellState = {
   readonly network: NetworkState;
   readonly serviceWorker: ServiceWorkerState;
   readonly appShellCache: AppShellCacheState;
-  readonly canonicalStorage: ProbeState;
+  readonly validatedStorage: ProbeState;
   readonly storageDetail: string;
   readonly match: MatchState | null;
   readonly events: readonly MatchEvent[];
@@ -124,7 +124,7 @@ function createInitialShellState(): ShellState {
     network: navigator.onLine ? "online" : "offline",
     serviceWorker: "serviceWorker" in navigator ? "registering" : "unsupported",
     appShellCache: "checking",
-    canonicalStorage: "checking",
+    validatedStorage: "checking",
     storageDetail: "Running a write and removal safety check.",
     match: null,
     events: [],

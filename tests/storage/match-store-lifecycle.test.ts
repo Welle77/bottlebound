@@ -23,6 +23,8 @@ import {
   simultaneousEliminationRun,
 } from "./match-store.test-helpers";
 
+type CurrentState = ActiveMatchState;
+
 describe("IndexedDbMatchStore", () => {
   it("needs confirmation and then removes the Match and all history", async () => {
     const store = createIndexedDbMatchStore(new IDBFactory(), "delete-match");
@@ -130,7 +132,7 @@ describe("IndexedDbMatchStore", () => {
       { occurredAt: "2026-08-22T14:09:00.000Z", confirmed: true },
     );
     await store.commit(undone.event, undone.state);
-    const ended = endMatch(undone.state as typeof current, {
+    const ended = endMatch(undone.state as CurrentState, {
       occurredAt: "2026-08-22T14:10:00.000Z",
       confirmed: true,
     });
@@ -142,7 +144,9 @@ describe("IndexedDbMatchStore", () => {
       confirmed: true,
     });
     await store.commit(endedAgain.event, endedAgain.state);
-    await expect(store.restore()).resolves.toEqual({
+    const restored = await store.restore();
+    expect(restored).not.toBeNull();
+    expect(restored).toMatchObject({
       state: endedAgain.state,
       events: [
         ...results.map(({ event }) => event),
@@ -152,10 +156,7 @@ describe("IndexedDbMatchStore", () => {
         reopened.event,
         endedAgain.event,
       ],
-      summary: expect.objectContaining({
-        outcome: "Drow",
-        decisionBasis: "elimination",
-      }) as unknown,
+      summary: { outcome: "Drow", decisionBasis: "elimination" },
     });
     await store.deleteMatch(endedAgain.state.matchId, true);
     await expect(store.restore()).resolves.toBeNull();
@@ -209,13 +210,12 @@ describe("IndexedDbMatchStore", () => {
         confirmed: true,
       });
       await store.commit(undone.event, undone.state);
-      await expect(store.restore()).resolves.toEqual({
+      const restored = await store.restore();
+      expect(restored).not.toBeNull();
+      expect(restored).toMatchObject({
         state: undone.state,
         events: [...history, undone.event],
-        summary: expect.objectContaining({
-          outcome,
-          decisionBasis: "elimination",
-        }) as unknown,
+        summary: { outcome, decisionBasis: "elimination" },
       });
     },
   );

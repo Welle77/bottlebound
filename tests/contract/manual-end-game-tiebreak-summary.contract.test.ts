@@ -19,7 +19,7 @@ import {
   type MatchState,
 } from "../../src/domain/match";
 import { MATCH_CONFIGURATION } from "../../src/domain/match-configuration";
-import { assertCanonicalEvent } from "../../src/storage/match-store-canonical-event";
+import { assertValidatedEvent } from "../../src/storage/match-store-validated-event";
 import { initiativeCharacterId } from "../domain/match-test-support";
 import {
   createIndexedDbMatchStore,
@@ -284,15 +284,12 @@ describe("Manual End Game Decision Basis contract", () => {
       confirmed: true,
     });
 
-    expect(() =>
-      finishTurn(
-        ended.state as unknown as ActiveMatchState,
-        "2026-08-23T13:04:00.000Z",
-      ),
-    ).toThrow("read-only");
+    expect(() => finishTurn(ended.state, "2026-08-23T13:04:00.000Z")).toThrow(
+      "read-only",
+    );
     expect(() =>
       resolveBasicAttack(
-        ended.state as unknown as ActiveMatchState,
+        ended.state,
         {
           sourceCharacterId: initiativeCharacterId(started.state, 0),
           affectedCharacterIds: ["duergar-ranger"],
@@ -311,8 +308,7 @@ describe("Manual End Game Decision Basis contract", () => {
       // acknowledgeElimination also guards ended via cast
       // use active-typed ended to trigger guard
       ((): unknown => {
-        const activeEnded = ended.state as unknown as ActiveMatchState;
-        return finishTurn(activeEnded, "2026-08-23T13:06:00.000Z");
+        return finishTurn(ended.state, "2026-08-23T13:06:00.000Z");
       })(),
     ).toThrow();
   });
@@ -418,13 +414,10 @@ describe("Manual End Game Decision Basis contract", () => {
       ...elimEvents,
     ];
     expect(() =>
-      restoreStateFromEvents([
-        ...history,
-        legacyEnded as unknown as MatchEvent,
-      ]),
+      restoreStateFromEvents([...history, legacyEnded as MatchEvent]),
     ).toThrow("End Game does not follow Match State.");
-    expect(() => assertCanonicalEvent(legacyEnded)).toThrow(
-      "The canonical End Game Event is invalid.",
+    expect(() => assertValidatedEvent(legacyEnded)).toThrow(
+      "The validated End Game Event is invalid.",
     );
   });
 });
@@ -530,7 +523,7 @@ describe("Match Summary lifecycle contract", () => {
     const badState = {
       ...failingEnded.state,
       bad: () => undefined,
-    } as unknown as MatchState;
+    } as MatchState;
     await expect(store.commit(failingEnded.event, badState)).rejects.toThrow();
     expect(await store.getSummary()).toEqual(prior);
     const afterFail = await store.restore();

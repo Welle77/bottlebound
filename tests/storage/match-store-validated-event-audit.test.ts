@@ -15,12 +15,12 @@ import {
   queuedRandom,
 } from "../domain/match-test-support";
 import type { MatchEvent } from "../../src/domain/match";
-import { assertCanonicalEvent } from "../../src/storage/match-store-canonical-event";
-import { assertCanonicalState } from "../../src/storage/match-store-canonical-state";
+import { assertValidatedEvent } from "../../src/storage/match-store-validated-event";
+import { assertValidatedState } from "../../src/storage/match-store-validated-state";
 
 /**
  * Rules coverage audit (ticket T04): stacked character-based damage
- * (Hunter's Mark / Hex, rules §11 and §15 cards) widens the canonical effect
+ * (Hunter's Mark / Hex, rules §11 and §15 cards) widens the validated effect
  * ledger beyond the previous 0/1 bound while staying bounded by the written
  * card values.
  */
@@ -35,7 +35,7 @@ function slotOf(state: ActiveMatchState, characterId: string): number {
 }
 
 function markedHistory(): ActiveMatchState {
-  const setup = createSetup("audit-canonical", "2026-08-24T09:00:00.000Z");
+  const setup = createSetup("audit-validated", "2026-08-24T09:00:00.000Z");
   const generated = generateInitiative(
     setup.state,
     queuedRandom(...AUDIT_ROLLS),
@@ -67,7 +67,7 @@ const ABILITY_OVERRIDE =
 
 /** Slot 1 is the Duergar Ranger; Arcane Bolt belongs to the Drow Sorcerer. */
 function overriddenResolution(): ActionResolvedEvent {
-  const setup = createSetup("audit-canonical", "2026-08-24T09:00:00.000Z");
+  const setup = createSetup("audit-validated", "2026-08-24T09:00:00.000Z");
   const generated = generateInitiative(
     setup.state,
     queuedRandom(...AUDIT_ROLLS),
@@ -148,7 +148,7 @@ function redirectedResolution(): ActionResolvedEvent {
   ).event;
 }
 
-describe("canonical Event configuration versions", () => {
+describe("validated Event configuration versions", () => {
   it("accepts a matching historical version during restore validation", () => {
     const historicalRulesVersion = "BB-prior-release";
     const event = {
@@ -157,7 +157,7 @@ describe("canonical Event configuration versions", () => {
     };
 
     expect(() => {
-      assertCanonicalEvent(event, historicalRulesVersion);
+      assertValidatedEvent(event, historicalRulesVersion);
     }).not.toThrow();
   });
 
@@ -168,7 +168,7 @@ describe("canonical Event configuration versions", () => {
     };
 
     expect(() => {
-      assertCanonicalEvent(event);
+      assertValidatedEvent(event);
     }).toThrow("configuration version is incompatible");
   });
 
@@ -180,15 +180,15 @@ describe("canonical Event configuration versions", () => {
     };
 
     expect(() => {
-      assertCanonicalState(state, historicalRulesVersion);
+      assertValidatedState(state, historicalRulesVersion);
     }).not.toThrow();
     expect(() => {
-      assertCanonicalState(state);
+      assertValidatedState(state);
     }).toThrow("configuration version is incompatible");
   });
 });
 
-describe("canonical Action Resolution recorded Ability Override", () => {
+describe("validated Action Resolution recorded Ability Override", () => {
   it("admits an Ability resolution whose recorded Override sentence is persisted", () => {
     const event = overriddenResolution();
     expect(event).toMatchObject({
@@ -196,38 +196,38 @@ describe("canonical Action Resolution recorded Ability Override", () => {
       abilityOverride: ABILITY_OVERRIDE,
     });
     expect(() => {
-      assertCanonicalEvent(event);
+      assertValidatedEvent(event);
     }).not.toThrow();
   });
 
   it("rejects persisted events that omit the recorded Override field", () => {
-    const base = overriddenResolution() as unknown as Record<string, unknown>;
+    const base = overriddenResolution() as Record<string, unknown>;
     const { abilityOverride, ...legacyWithoutOverride } = base;
     void abilityOverride;
-    const legacy = legacyWithoutOverride as unknown as MatchEvent;
+    const legacy = legacyWithoutOverride as MatchEvent;
     expect(() => {
-      assertCanonicalEvent(legacy);
-    }).toThrow("The canonical Action Resolution Event is invalid.");
+      assertValidatedEvent(legacy);
+    }).toThrow("The validated Action Resolution Event is invalid.");
   });
 
   it("rejects a blank recorded Ability Override sentence", () => {
     const blank = {
       ...overriddenResolution(),
       abilityOverride: "   ",
-    } as unknown as MatchEvent;
+    } as MatchEvent;
     expect(() => {
-      assertCanonicalEvent(blank);
-    }).toThrow("The canonical Action Resolution Event is invalid.");
+      assertValidatedEvent(blank);
+    }).toThrow("The validated Action Resolution Event is invalid.");
   });
 });
 
-describe("canonical Ability attack metadata", () => {
+describe("validated Ability attack metadata", () => {
   it("admits an historic Ability resolution without optional abilityId", () => {
     const { abilityId, ...historicEvent } = overriddenResolution();
     void abilityId;
 
     expect(() => {
-      assertCanonicalEvent(historicEvent);
+      assertValidatedEvent(historicEvent);
     }).not.toThrow();
   });
 
@@ -241,16 +241,16 @@ describe("canonical Ability attack metadata", () => {
     };
 
     expect(() => {
-      assertCanonicalEvent(invalid);
-    }).toThrow("The canonical Action Resolution Event is invalid.");
+      assertValidatedEvent(invalid);
+    }).toThrow("The validated Action Resolution Event is invalid.");
   });
 
   it("rejects an Ability resolution with a non-Ability attack kind", () => {
     const invalid = { ...overriddenResolution(), attackType: "ranged" };
 
     expect(() => {
-      assertCanonicalEvent(invalid);
-    }).toThrow("The canonical Action Resolution Event is invalid.");
+      assertValidatedEvent(invalid);
+    }).toThrow("The validated Action Resolution Event is invalid.");
   });
 
   it("rejects an invented optional Ability id", () => {
@@ -260,8 +260,8 @@ describe("canonical Ability attack metadata", () => {
     };
 
     expect(() => {
-      assertCanonicalEvent(invalid);
-    }).toThrow("The canonical Action Resolution Event is invalid.");
+      assertValidatedEvent(invalid);
+    }).toThrow("The validated Action Resolution Event is invalid.");
   });
 
   it("accepts omitted and null historical optional Ability ids", () => {
@@ -270,8 +270,8 @@ describe("canonical Ability attack metadata", () => {
     void abilityId;
 
     expect(() => {
-      assertCanonicalEvent(omitted);
-      assertCanonicalEvent({ ...event, abilityId: null });
+      assertValidatedEvent(omitted);
+      assertValidatedEvent({ ...event, abilityId: null });
     }).not.toThrow();
   });
 
@@ -294,11 +294,11 @@ describe("canonical Ability attack metadata", () => {
     };
 
     expect(() => {
-      assertCanonicalEvent(
+      assertValidatedEvent(
         withoutCurrentMetadata(overriddenResolution()),
         historicalRulesVersion,
       );
-    }).toThrow("The canonical Action Resolution Event is invalid.");
+    }).toThrow("The validated Action Resolution Event is invalid.");
   });
 
   it("rejects retired Ability ids and attack metadata", () => {
@@ -321,8 +321,8 @@ describe("canonical Ability attack metadata", () => {
     };
 
     expect(() => {
-      assertCanonicalEvent(historical, historicalRulesVersion);
-    }).toThrow("The canonical Action Resolution Event is invalid.");
+      assertValidatedEvent(historical, historicalRulesVersion);
+    }).toThrow("The validated Action Resolution Event is invalid.");
   });
 
   it("rejects retired Reaction ids and attack metadata", () => {
@@ -351,12 +351,12 @@ describe("canonical Ability attack metadata", () => {
     };
 
     expect(() => {
-      assertCanonicalEvent(historical, historicalRulesVersion);
-    }).toThrow("The canonical Action Resolution Event is invalid.");
+      assertValidatedEvent(historical, historicalRulesVersion);
+    }).toThrow("The validated Action Resolution Event is invalid.");
   });
 });
 
-describe("canonical active-effect persistence", () => {
+describe("validated active-effect persistence", () => {
   it("validates active-effect identifiers in snapshots and event effect ledgers", () => {
     const { event, state } = markedResolution();
     const effect = event.appliedEffects?.[0];
@@ -369,14 +369,14 @@ describe("canonical active-effect persistence", () => {
 
     for (const invalidEffect of invalidEffects) {
       expect(() => {
-        assertCanonicalState({ ...state, activeEffects: [invalidEffect] });
-      }).toThrow("The canonical active effects are structurally invalid.");
+        assertValidatedState({ ...state, activeEffects: [invalidEffect] });
+      }).toThrow("The validated active effects are structurally invalid.");
       expect(() => {
-        assertCanonicalEvent({ ...event, appliedEffects: [invalidEffect] });
-      }).toThrow("The canonical Action Resolution Event is invalid.");
+        assertValidatedEvent({ ...event, appliedEffects: [invalidEffect] });
+      }).toThrow("The validated Action Resolution Event is invalid.");
       expect(() => {
-        assertCanonicalEvent({ ...event, expiredEffects: [invalidEffect] });
-      }).toThrow("The canonical Action Resolution Event is invalid.");
+        assertValidatedEvent({ ...event, expiredEffects: [invalidEffect] });
+      }).toThrow("The validated Action Resolution Event is invalid.");
     }
   });
 
@@ -394,12 +394,12 @@ describe("canonical active-effect persistence", () => {
     };
 
     expect(() => {
-      assertCanonicalState(historical, historicalRulesVersion);
-    }).toThrow("The canonical spent Reactions is structurally invalid.");
+      assertValidatedState(historical, historicalRulesVersion);
+    }).toThrow("The validated spent Reactions is structurally invalid.");
   });
 });
 
-describe("canonical Action Resolution effect damage bounds", () => {
+describe("validated Action Resolution effect damage bounds", () => {
   it("admits a Basic Attack that finalized at 2 damage from Hunter's Mark", () => {
     const state = markedHistory();
     const attacked = resolveBasicAttack(
@@ -419,7 +419,7 @@ describe("canonical Action Resolution effect damage bounds", () => {
     );
     expect(attacked.event.effects[0]).toMatchObject({ damage: 2 });
     expect(() => {
-      assertCanonicalEvent(attacked.event);
+      assertValidatedEvent(attacked.event);
     }).not.toThrow();
   });
 
@@ -453,9 +453,9 @@ describe("canonical Action Resolution effect damage bounds", () => {
         damage: 4,
         hpAfter: Math.max(0, effect.hpBefore - 4),
       })),
-    } as unknown as MatchEvent;
+    } as MatchEvent;
     expect(() => {
-      assertCanonicalEvent(overbound);
-    }).toThrow("The canonical Action Resolution effect is invalid.");
+      assertValidatedEvent(overbound);
+    }).toThrow("The validated Action Resolution effect is invalid.");
   });
 });

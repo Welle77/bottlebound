@@ -252,7 +252,9 @@ test("protective Reactions prevent only selected damage and restore after Undo",
   await page.reload();
 
   await page.getByRole("button", { name: "Undo" }).click();
-  await expect(page.getByText(/Are you sure you want to undo this action/)).toBeVisible();
+  await expect(
+    page.getByText(/Are you sure you want to undo this action/),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Confirm Undo" }).click();
   await page.getByRole("button", { name: "Basic Attack" }).click();
   await page.getByLabel(/Ranger · Duergar/).check();
@@ -361,5 +363,7 @@ test("Deflecting Palm closes the first leg and records later unique contacts", a
   ).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Undo" }).click();
-  await expect(page.getByText(/Are you sure you want to undo this action/)).toBeVisible();
+  await expect(
+    page.getByText(/Are you sure you want to undo this action/),
+  ).toBeVisible();
 });

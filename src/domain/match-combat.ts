@@ -5,17 +5,18 @@ import {
 } from "./match-configuration";
 import { resolveAttackDamageAgainstCharacter } from "./match-ability-effects";
 import { applyDownedCleanup } from "./match-turn";
+import { nextActionCount } from "./match-types";
 import type {
   ActionEffect,
   ActionResolvedEvent,
   ActiveEffect,
   ActiveMatchState,
+  EndedMatchState,
   BasicAttackInput,
   CharacterId,
   CommandResult,
   MatchCharacter,
   MatchOutcome,
-  MatchState,
   ProtectiveReactionChoice,
   ProtectiveReactionInput,
   ProtectiveReactionOperation,
@@ -58,7 +59,7 @@ export const AUTOMATED_REACTION_NAMES: ReadonlySet<AbilityName> = new Set([
 ]);
 
 export function protectiveReactionWarnings(
-  state: ActiveMatchState,
+  state: ActiveMatchState | EndedMatchState,
   reactionId: ReactionId,
   protectedCharacterId: CharacterId,
 ): readonly string[] {
@@ -163,9 +164,6 @@ function validateBasicAttack(
   state: ActiveMatchState,
   input: BasicAttackInput,
 ): ValidatedBasicAttack {
-  if ((state as MatchState).phase === "ended") {
-    throw new Error("The Ended Match is read-only.");
-  }
   if (state.configurationVersion !== MATCH_CONFIGURATION_VERSION) {
     throw new Error(
       "Basic Attack needs the exact bundled Match Configuration.",
@@ -537,10 +535,13 @@ function buildAttackLegs(context: {
 }
 
 export function resolveBasicAttack(
-  state: ActiveMatchState,
+  state: ActiveMatchState | EndedMatchState,
   input: BasicAttackInput,
   occurredAt: string,
 ): CommandResult<ActiveMatchState, ActionResolvedEvent> {
+  if (state.phase === "ended") {
+    throw new Error("The Ended Match is read-only.");
+  }
   const { attack, inputLegs, affectedCharacterIds, override } =
     validateBasicAttack(state, input);
   const reactions = resolveProtectiveReactions({
@@ -604,17 +605,14 @@ export function resolveBasicAttack(
     state: {
       ...state,
       sequence,
-      actionsUsed: Math.min(
-        2,
-        (state.actionsUsed ?? (state.majorActionUsed ? 1 : 0)) + 1,
-      ) as 1 | 2,
+      actionsUsed: nextActionCount(state.actionsUsed, state.majorActionUsed),
       majorActionUsed: true,
       spentReactionIds: [
         ...new Set([
           ...state.spentReactionIds,
           ...reactions.map(({ reactionId }) => reactionId),
         ]),
-      ] as readonly ReactionId[],
+      ],
       characters: attackOutcome.characters,
       activeEffects: attackOutcome.activeEffects,
       eliminatedTeams,

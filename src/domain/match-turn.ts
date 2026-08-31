@@ -1,15 +1,15 @@
 import { MATCH_CONFIGURATION } from "./match-configuration";
-import { isTeam } from "./match-types";
+import { isTeam, nextActionCount } from "./match-types";
 import type {
   ActiveEffect,
   ActiveMatchState,
+  EndedMatchState,
   CharacterId,
   CommandResult,
   DashedEvent,
   EliminationContinuedEvent,
   MatchCharacter,
   MatchOutcome,
-  MatchState,
   SimultaneousEliminationRuledEvent,
   Team,
   TurnFinishedEvent,
@@ -37,11 +37,11 @@ function isSimultaneousEliminationOutcome(value: unknown): boolean {
 
 /** Records the active character's full-movement choice for this turn. */
 export function dash(
-  state: ActiveMatchState,
+  state: ActiveMatchState | EndedMatchState,
   sourceCharacterId: CharacterId,
   occurredAt: string,
 ): CommandResult<ActiveMatchState, DashedEvent> {
-  if ((state as MatchState).phase === "ended") {
+  if (state.phase === "ended") {
     throw new Error("The Ended Match is read-only.");
   }
   const activeCharacterId = state.initiative[state.activeSlot - 1]?.characterId;
@@ -63,10 +63,7 @@ export function dash(
       ...state,
       sequence,
       remainingMovementPaces: 0,
-      actionsUsed: Math.min(
-        2,
-        (state.actionsUsed ?? (state.majorActionUsed ? 1 : 0)) + 1,
-      ) as 1 | 2,
+      actionsUsed: nextActionCount(state.actionsUsed, state.majorActionUsed),
       majorActionUsed: true,
     },
     event: {
@@ -228,10 +225,10 @@ function restoreExpiredShapeshifts(
 }
 
 export function finishTurn(
-  state: ActiveMatchState,
+  state: ActiveMatchState | EndedMatchState,
   occurredAt: string,
 ): CommandResult<ActiveMatchState, TurnFinishedEvent> {
-  if ((state as MatchState).phase === "ended") {
+  if (state.phase === "ended") {
     throw new Error("The Ended Match is read-only.");
   }
   const sequence = state.sequence + 1;
@@ -300,9 +297,6 @@ export function acknowledgeElimination(
   eliminatedTeam: Team,
   occurredAt: string,
 ): CommandResult<ActiveMatchState, EliminationContinuedEvent> {
-  if ((state as MatchState).phase === "ended") {
-    throw new Error("The Ended Match is read-only.");
-  }
   if (
     state.eliminatedTeams.length !== 1 ||
     state.eliminatedTeams[0] !== eliminatedTeam ||
@@ -337,12 +331,12 @@ export function acknowledgeElimination(
 }
 
 export function ruleSimultaneousElimination(
-  state: ActiveMatchState,
+  state: ActiveMatchState | EndedMatchState,
   outcome: Exclude<MatchOutcome, null>,
   ruling: { readonly overrideEvidence: string; readonly occurredAt: string },
 ): CommandResult<ActiveMatchState, SimultaneousEliminationRuledEvent> {
   const { overrideEvidence, occurredAt } = ruling;
-  if ((state as MatchState).phase === "ended") {
+  if (state.phase === "ended") {
     throw new Error("The Ended Match is read-only.");
   }
   if (

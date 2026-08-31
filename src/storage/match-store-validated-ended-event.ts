@@ -1,5 +1,5 @@
-import { isDecisionBasis, isTeam } from "../domain/match";
-import { isRecord } from "./match-store-canonical-state";
+import { isDecisionBasis, isInteger, isTeam } from "../domain/match";
+import { isRecord } from "./match-store-validated-state";
 
 function assertEndedTeamsAndOutcome(value: Record<string, unknown>): void {
   const { outcome } = value;
@@ -20,7 +20,7 @@ function assertEndedTeamsAndOutcome(value: Record<string, unknown>): void {
       (value.eliminatedTeams[0] !== "Drow" ||
         value.eliminatedTeams[1] !== "Duergar"))
   ) {
-    throw new Error("The canonical End Game Event is invalid.");
+    throw new Error("The validated End Game Event is invalid.");
   }
 }
 
@@ -29,24 +29,24 @@ function assertEndedDecisionBasis(value: Record<string, unknown>): void {
     typeof value.decisionBasis !== "string" ||
     !isDecisionBasis(value.decisionBasis)
   ) {
-    throw new Error("The canonical End Game Event is invalid.");
+    throw new Error("The validated End Game Event is invalid.");
   }
 }
 
 function assertEndedFinalTotals(value: Record<string, unknown>): void {
   if (
     !isRecord(value.finalCounts) ||
-    !Number.isInteger(value.finalCounts.Drow) ||
-    !Number.isInteger(value.finalCounts.Duergar) ||
-    (value.finalCounts.Drow as number) < 0 ||
-    (value.finalCounts.Duergar as number) < 0 ||
+    !isInteger(value.finalCounts.Drow) ||
+    !isInteger(value.finalCounts.Duergar) ||
+    value.finalCounts.Drow < 0 ||
+    value.finalCounts.Duergar < 0 ||
     !isRecord(value.finalHpTotals) ||
-    !Number.isInteger(value.finalHpTotals.Drow) ||
-    !Number.isInteger(value.finalHpTotals.Duergar) ||
-    (value.finalHpTotals.Drow as number) < 0 ||
-    (value.finalHpTotals.Duergar as number) < 0
+    !isInteger(value.finalHpTotals.Drow) ||
+    !isInteger(value.finalHpTotals.Duergar) ||
+    value.finalHpTotals.Drow < 0 ||
+    value.finalHpTotals.Duergar < 0
   ) {
-    throw new Error("The canonical End Game Event is invalid.");
+    throw new Error("The validated End Game Event is invalid.");
   }
 }
 
@@ -59,7 +59,7 @@ function assertEndedCoinFlip(value: Record<string, unknown>): void {
     !coinFlipIsValid ||
     (value.decisionBasis === "coinFlip") !== (value.coinFlipResult !== null)
   ) {
-    throw new Error("The canonical End Game Event is invalid.");
+    throw new Error("The validated End Game Event is invalid.");
   }
 }
 

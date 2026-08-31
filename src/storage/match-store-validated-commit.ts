@@ -1,6 +1,6 @@
 import {
   MATCH_SCHEMA_VERSION,
-  canonicalMatchRecordsEqual,
+  validatedMatchRecordsEqual,
   isCharacterId,
   isMatchEventType,
   isTeam,
@@ -11,12 +11,12 @@ import {
   type DashedEvent,
   type TurnFinishedEvent,
 } from "../domain/match";
-import { assertCanonicalEvent } from "./match-store-canonical-event";
+import { assertValidatedEvent } from "./match-store-validated-event";
 import {
-  assertCanonicalState,
+  assertValidatedState,
   isRecord,
   sameInitiative,
-} from "./match-store-canonical-state";
+} from "./match-store-validated-state";
 
 /**
  * Runtime check against a widened event-type view so persisted values that
@@ -91,7 +91,7 @@ function assertDisplayNamesCommit(
 ): void {
   if (
     state.phase !== "setup" ||
-    !canonicalMatchRecordsEqual(state.displayNames, event.displayNames)
+    !validatedMatchRecordsEqual(state.displayNames, event.displayNames)
   ) {
     throw new Error("The Display Name event and snapshot do not match.");
   }
@@ -140,7 +140,7 @@ function assertActionResolvedCommit(
     throw new Error("The Action Resolution Reaction state does not match.");
   }
   if (
-    !canonicalMatchRecordsEqual(event.eliminatedTeams, state.eliminatedTeams)
+    !validatedMatchRecordsEqual(event.eliminatedTeams, state.eliminatedTeams)
   ) {
     throw new Error(
       "The Action Resolution Team Elimination state does not match.",
@@ -174,7 +174,7 @@ function assertSimultaneousEliminationCommit(
   if (
     state.phase !== "active" ||
     state.outcome !== event.outcome ||
-    !canonicalMatchRecordsEqual(state.eliminatedTeams, event.eliminatedTeams)
+    !validatedMatchRecordsEqual(state.eliminatedTeams, event.eliminatedTeams)
   ) {
     throw new Error(
       "The simultaneous-elimination ruling and snapshot do not match.",
@@ -189,7 +189,7 @@ function assertMatchEndedCommit(
   if (
     state.phase !== "ended" ||
     state.outcome !== event.outcome ||
-    !canonicalMatchRecordsEqual(state.eliminatedTeams, event.eliminatedTeams) ||
+    !validatedMatchRecordsEqual(state.eliminatedTeams, event.eliminatedTeams) ||
     state.endedSequence !== event.sequence ||
     state.endedAt !== event.occurredAt
   ) {
@@ -197,8 +197,8 @@ function assertMatchEndedCommit(
   }
   if (
     event.decisionBasis !== state.decisionBasis ||
-    !canonicalMatchRecordsEqual(event.finalCounts, state.finalCounts) ||
-    !canonicalMatchRecordsEqual(event.finalHpTotals, state.finalHpTotals) ||
+    !validatedMatchRecordsEqual(event.finalCounts, state.finalCounts) ||
+    !validatedMatchRecordsEqual(event.finalHpTotals, state.finalHpTotals) ||
     event.coinFlipResult !== state.coinFlipResult
   ) {
     throw new Error("The End Game Event and snapshot do not match.");
@@ -246,11 +246,11 @@ export function assertCommit(
 ): void {
   if (event.configurationVersion !== state.configurationVersion) {
     throw new Error(
-      "The Match Event configuration version is incompatible with the canonical snapshot.",
+      "The Match Event configuration version is incompatible with the validated snapshot.",
     );
   }
-  assertCanonicalState(state, expectedConfigurationVersion);
-  assertCanonicalEvent(event, expectedConfigurationVersion);
+  assertValidatedState(state, expectedConfigurationVersion);
+  assertValidatedEvent(event, expectedConfigurationVersion);
   if (event.matchId !== state.matchId || event.sequence !== state.sequence) {
     throw new Error(
       "The Match Event and snapshot do not describe one sequence.",
@@ -299,7 +299,7 @@ export function assertCommit(
     return;
   }
   if (!isLiveCommittedEvent(event)) {
-    throw new Error("The canonical Match Event is structurally invalid.");
+    throw new Error("The validated Match Event is structurally invalid.");
   }
   assertLiveCommittedCommit(event, state);
 }
@@ -308,17 +308,17 @@ export function assertRestoredMatch(
   metadata: unknown,
   state: unknown,
   events: readonly unknown[],
-): asserts state is MatchState {
+): { readonly state: MatchState; readonly events: readonly MatchEvent[] } {
   if (!isRecord(metadata))
-    throw new Error("Saved canonical metadata is invalid.");
+    throw new Error("Saved validated metadata is invalid.");
   const { configurationVersion } = metadata;
   if (
     typeof configurationVersion !== "string" ||
     configurationVersion.length === 0
   ) {
-    throw new Error("Saved canonical metadata is invalid.");
+    throw new Error("Saved validated metadata is invalid.");
   }
-  assertCanonicalState(state, configurationVersion);
+  assertValidatedState(state, configurationVersion);
   if (
     metadata.matchId !== state.matchId ||
     metadata.sequence !== state.sequence ||
@@ -326,32 +326,34 @@ export function assertRestoredMatch(
     metadata.configurationVersion !== state.configurationVersion ||
     events.length !== state.sequence
   ) {
-    throw new Error("Saved canonical data has a partial sequence.");
+    throw new Error("Saved validated data has a partial sequence.");
   }
-  events.forEach((event, index) => {
-    assertCanonicalEvent(event, state.configurationVersion);
-    if (
-      event.matchId !== state.matchId ||
-      event.sequence !== index + 1 ||
-      (index === 0 && event.type !== "SetupCreated") ||
-      (index === 1 &&
-        event.type !== "InitiativeGenerated" &&
-        event.type !== "DisplayNamesAssigned")
-    ) {
-      throw new Error("Saved canonical data has a partial sequence.");
-    }
-  });
-  const lastEvent = events.at(-1);
+  const validatedEvents = events.reduce<readonly MatchEvent[]>(
+    (validated, event, index) => {
+      assertValidatedEvent(event, state.configurationVersion);
+      if (
+        event.matchId !== state.matchId ||
+        event.sequence !== index + 1 ||
+        (index === 0 && event.type !== "SetupCreated") ||
+        (index === 1 &&
+          event.type !== "InitiativeGenerated" &&
+          event.type !== "DisplayNamesAssigned")
+      ) {
+        throw new Error("Saved validated data has a partial sequence.");
+      }
+      return [...validated, event];
+    },
+    [],
+  );
+  const lastEvent = validatedEvents.at(-1);
   if (lastEvent === undefined)
-    throw new Error("Saved canonical data has no Match Event.");
-  assertCanonicalEvent(lastEvent, state.configurationVersion);
+    throw new Error("Saved validated data has no Match Event.");
+  assertValidatedEvent(lastEvent, state.configurationVersion);
   assertCommit(lastEvent, state, configurationVersion);
   if (
-    !canonicalMatchRecordsEqual(
-      restoreStateFromEvents(events as readonly MatchEvent[]),
-      state,
-    )
+    !validatedMatchRecordsEqual(restoreStateFromEvents(validatedEvents), state)
   ) {
-    throw new Error("Saved canonical data does not match its event history.");
+    throw new Error("Saved validated data does not match its event history.");
   }
+  return { state, events: validatedEvents };
 }

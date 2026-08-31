@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import { MATCH_CONFIGURATION } from "../../src/domain/match-configuration";
 
+type MutableCharacterName = { name: string };
+type MutableOperations = string[];
+
 function expectDeeplyFrozen(value: unknown): void {
   expect(Object.isFrozen(value)).toBe(true);
   if (typeof value !== "object" || value === null) return;
@@ -177,12 +180,10 @@ describe("application-owned Match Configuration", () => {
     if (!firstCharacter || !firstAbility)
       throw new Error("Configuration is empty.");
     expect(() => {
-      (firstCharacter as unknown as { name: string }).name = "Changed";
+      (firstCharacter as MutableCharacterName).name = "Changed";
     }).toThrow();
     expect(() => {
-      (firstAbility.operations as unknown as string[]).push(
-        "invented-operation",
-      );
+      (firstAbility.operations as MutableOperations).push("invented-operation");
     }).toThrow();
   });
 });

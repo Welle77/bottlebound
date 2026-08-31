@@ -7,6 +7,7 @@ import {
   resolveBasicAttack,
   restoreStateFromEvents,
   startMatch,
+  type ActiveMatchState,
 } from "../../src/domain/match";
 import { MATCH_CONFIGURATION } from "../../src/domain/match-configuration";
 import { initiativeCharacterId, queuedRandom } from "./match-test-support";
@@ -253,9 +254,7 @@ describe("Active Match commands", () => {
       getProtectiveReactionChoices(
         {
           ...started.state,
-          spentReactionIds: [
-            "duergar-monk-deflecting-palm",
-          ] as unknown as readonly import("../../src/domain/match").ReactionId[],
+          spentReactionIds: ["duergar-monk-deflecting-palm"],
         },
         ["duergar-monk"],
       ).some(({ reactionId }) => reactionId === "duergar-monk-deflecting-palm"),
@@ -313,17 +312,15 @@ describe("Active Match commands", () => {
       "2026-08-22T14:01:00.000Z",
     );
     const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
-    const state = {
+    const state: ActiveMatchState = {
       ...started.state,
-      spentReactionIds: [
-        "drow-paladin-divine-shield",
-      ] as unknown as readonly import("../../src/domain/match").ReactionId[],
+      spentReactionIds: ["drow-paladin-divine-shield"],
       characters: started.state.characters.map((character) =>
         character.characterId === "drow-paladin"
           ? { ...character, hp: 0 }
           : character,
       ),
-    } as unknown as import("../../src/domain/match").ActiveMatchState;
+    };
     const choice = getProtectiveReactionChoices(state, ["duergar-ranger"]).find(
       ({ reactionId }) => reactionId === "drow-paladin-divine-shield",
     );

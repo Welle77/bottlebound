@@ -215,8 +215,8 @@ describe("Setup Match commands", () => {
       type: "InitiativeGenerated",
       sequence: 2,
       results: result.state.initiative,
-      tieOrder: expect.any(Array) as readonly unknown[],
     });
+    expect(result.event.tieOrder).toEqual(expect.any(Array));
   });
 
   it("uses and stores fair digital coin flips to order a tie of three", () => {

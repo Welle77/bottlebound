@@ -1,11 +1,26 @@
+import * as z from "zod";
+
 export const MATCH_SCHEMA_VERSION = 5;
+
+export const SAFE_INTEGER = z.number().int();
 
 export const TEAMS = ["Drow", "Duergar"] as const;
 
 export type Team = (typeof TEAMS)[number];
 
+export function isInteger(value: unknown): value is number {
+  return SAFE_INTEGER.safeParse(value).success;
+}
+
+function isMember<T extends string>(
+  values: readonly T[],
+  value: string,
+): value is T {
+  return values.some((entry) => entry === value);
+}
+
 export function isTeam(value: string): value is Team {
-  return (TEAMS as readonly string[]).includes(value);
+  return isMember(TEAMS, value);
 }
 
 export const CHARACTER_IDS = [
@@ -38,7 +53,7 @@ export type CharacterId =
   | "duergar-cleric";
 
 export function isCharacterId(value: string): value is CharacterId {
-  return (CHARACTER_IDS as readonly string[]).includes(value);
+  return isMember(CHARACTER_IDS, value);
 }
 
 /** Every unlimited Basic Attack owned by the application configuration. */
@@ -93,7 +108,7 @@ export type ReactionId =
 
 export type AttackId = BasicAttackId | AbilityId;
 
-const BASIC_ATTACK_IDS: readonly BasicAttackId[] = [
+export const BASIC_ATTACK_IDS = [
   "drow-rogue-basic-attack",
   "drow-druid-basic-attack",
   "drow-paladin-basic-attack",
@@ -106,9 +121,9 @@ const BASIC_ATTACK_IDS: readonly BasicAttackId[] = [
   "duergar-barbarian-basic-attack",
   "duergar-warlock-basic-attack",
   "duergar-cleric-basic-attack",
-];
+] as const;
 
-const ABILITY_IDS: readonly AbilityId[] = [
+export const ABILITY_IDS = [
   "drow-rogue-backstab",
   "drow-rogue-vanish",
   "drow-druid-shapeshift",
@@ -133,26 +148,28 @@ const ABILITY_IDS: readonly AbilityId[] = [
   "duergar-warlock-eldritch-blast",
   "duergar-cleric-blessing-of-battle",
   "duergar-cleric-revivify",
-];
+] as const;
 
-const REACTION_IDS: readonly ReactionId[] = [
+export const REACTION_IDS = [
   "drow-paladin-divine-shield",
   "drow-wizard-misty-escape",
   "drow-sorcerer-mirror-veil",
   "duergar-monk-deflecting-palm",
   "duergar-fighter-shield-wall",
-];
+] as const;
+
+export const ATTACK_IDS = [...BASIC_ATTACK_IDS, ...ABILITY_IDS] as const;
 
 export function isBasicAttackId(value: string): value is BasicAttackId {
-  return (BASIC_ATTACK_IDS as readonly string[]).includes(value);
+  return isMember(BASIC_ATTACK_IDS, value);
 }
 
 export function isAbilityId(value: string): value is AbilityId {
-  return (ABILITY_IDS as readonly string[]).includes(value);
+  return isMember(ABILITY_IDS, value);
 }
 
 export function isReactionId(value: string): value is ReactionId {
-  return (REACTION_IDS as readonly string[]).includes(value);
+  return isMember(REACTION_IDS, value);
 }
 
 export function isAttackId(value: string): value is AttackId {
@@ -164,7 +181,7 @@ export const PHASES = ["setup", "active", "ended"] as const;
 export type Phase = (typeof PHASES)[number];
 
 export function isPhase(value: string): value is Phase {
-  return (PHASES as readonly string[]).includes(value);
+  return isMember(PHASES, value);
 }
 
 export const MATCH_EVENT_TYPES = [
@@ -186,15 +203,23 @@ export const MATCH_EVENT_TYPES = [
 export type MatchEventType = (typeof MATCH_EVENT_TYPES)[number];
 
 export function isMatchEventType(value: string): value is MatchEventType {
-  return (MATCH_EVENT_TYPES as readonly string[]).includes(value);
+  return isMember(MATCH_EVENT_TYPES, value);
 }
 
 export const ACTION_KINDS = ["Basic Attack", "Ability"] as const;
 
 export type ActionKind = (typeof ACTION_KINDS)[number];
 
+export function nextActionCount(
+  actionsUsed: 0 | 1 | 2 | undefined,
+  majorActionUsed: boolean,
+): 1 | 2 {
+  const currentCount = actionsUsed ?? (majorActionUsed ? 1 : 0);
+  return currentCount >= 1 ? 2 : 1;
+}
+
 export function isActionKind(value: string): value is ActionKind {
-  return (ACTION_KINDS as readonly string[]).includes(value);
+  return isMember(ACTION_KINDS, value);
 }
 
 export const ATTACK_KINDS = ["melee", "ranged", "ability"] as const;
@@ -202,7 +227,7 @@ export const ATTACK_KINDS = ["melee", "ranged", "ability"] as const;
 export type AttackKind = (typeof ATTACK_KINDS)[number];
 
 export function isAttackKind(value: string): value is AttackKind {
-  return (ATTACK_KINDS as readonly string[]).includes(value);
+  return isMember(ATTACK_KINDS, value);
 }
 
 export const DECISION_BASES = [
@@ -215,7 +240,7 @@ export const DECISION_BASES = [
 export type DecisionBasis = (typeof DECISION_BASES)[number];
 
 export function isDecisionBasis(value: string): value is DecisionBasis {
-  return (DECISION_BASES as readonly string[]).includes(value);
+  return isMember(DECISION_BASES, value);
 }
 
 export type RandomSource = {
@@ -243,7 +268,7 @@ export type EffectDurationKind = (typeof EFFECT_DURATION_KINDS)[number];
 export function isEffectDurationKind(
   value: string,
 ): value is EffectDurationKind {
-  return (EFFECT_DURATION_KINDS as readonly string[]).includes(value);
+  return isMember(EFFECT_DURATION_KINDS, value);
 }
 
 export const ACTIVE_EFFECT_KINDS = [
@@ -259,7 +284,7 @@ export const ACTIVE_EFFECT_KINDS = [
 export type ActiveEffectKind = (typeof ACTIVE_EFFECT_KINDS)[number];
 
 export function isActiveEffectKind(value: string): value is ActiveEffectKind {
-  return (ACTIVE_EFFECT_KINDS as readonly string[]).includes(value);
+  return isMember(ACTIVE_EFFECT_KINDS, value);
 }
 
 export const EFFECT_BOUNDARY_TRIGGERS = [
@@ -274,7 +299,7 @@ export type EffectBoundaryTrigger = (typeof EFFECT_BOUNDARY_TRIGGERS)[number];
 export function isEffectBoundaryTrigger(
   value: string,
 ): value is EffectBoundaryTrigger {
-  return (EFFECT_BOUNDARY_TRIGGERS as readonly string[]).includes(value);
+  return isMember(EFFECT_BOUNDARY_TRIGGERS, value);
 }
 
 export const EFFECT_OPERATIONS = [
@@ -289,7 +314,7 @@ export const EFFECT_OPERATIONS = [
 export type EffectOperation = (typeof EFFECT_OPERATIONS)[number];
 
 export function isEffectOperation(value: string): value is EffectOperation {
-  return (EFFECT_OPERATIONS as readonly string[]).includes(value);
+  return isMember(EFFECT_OPERATIONS, value);
 }
 
 export type ActiveEffect = {

@@ -52,15 +52,19 @@ function drawIndexWithCoinFlips(
   readonly selectedIndex: number;
   readonly attempts: readonly CoinFlipAttempt[];
 } {
+  type DrawnCoinFlips = {
+    readonly flips: readonly DigitalCoinFlipResult[];
+    readonly candidate: number;
+  };
   const bitCount = Math.ceil(Math.log2(upperExclusive));
   const { flips, candidate } = Array.from({ length: bitCount }, () =>
     nextBounded(random, 2) === 1 ? ("heads" as const) : ("tails" as const),
-  ).reduce(
+  ).reduce<DrawnCoinFlips>(
     (drawn, flip) => ({
       flips: [...drawn.flips, flip],
       candidate: drawn.candidate * 2 + (flip === "heads" ? 1 : 0),
     }),
-    { flips: [] as readonly DigitalCoinFlipResult[], candidate: 0 },
+    { flips: [], candidate: 0 } satisfies DrawnCoinFlips,
   );
   const accepted = candidate < upperExclusive;
   const attempts: readonly CoinFlipAttempt[] = [
@@ -80,33 +84,30 @@ export function orderByCoinFlips<T>(
 } {
   // The shuffle is a sequence of swaps; immer keeps each intermediate
   // snapshot immutable while the draft expresses the swap directly.
-  const shuffled = produce(
-    { ordered: [...values], steps: [] as readonly CoinFlipTieBreakStep[] },
-    (draft) => {
-      for (
-        let position = draft.ordered.length - 1;
-        position > 0;
-        position -= 1
-      ) {
-        const upperExclusive = position + 1;
-        const { selectedIndex, attempts } = drawIndexWithCoinFlips(
-          random,
-          upperExclusive,
-        );
-        const displaced = draft.ordered[position];
-        const promoted = draft.ordered[selectedIndex];
-        if (displaced === undefined || promoted === undefined) {
-          throw new Error(
-            "The initiative shuffle references an absent roster entry.",
-          );
-        }
-        draft.ordered[position] = promoted;
-        draft.ordered[selectedIndex] = displaced;
-        draft.steps.push(
-          castDraft({ position, upperExclusive, attempts, selectedIndex }),
+  const initialState: {
+    ordered: T[];
+    steps: CoinFlipTieBreakStep[];
+  } = { ordered: [...values], steps: [] };
+  const shuffled = produce(initialState, (draft) => {
+    for (let position = draft.ordered.length - 1; position > 0; position -= 1) {
+      const upperExclusive = position + 1;
+      const { selectedIndex, attempts } = drawIndexWithCoinFlips(
+        random,
+        upperExclusive,
+      );
+      const displaced = draft.ordered[position];
+      const promoted = draft.ordered[selectedIndex];
+      if (displaced === undefined || promoted === undefined) {
+        throw new Error(
+          "The initiative shuffle references an absent roster entry.",
         );
       }
-    },
-  );
+      draft.ordered[position] = promoted;
+      draft.ordered[selectedIndex] = displaced;
+      draft.steps.push(
+        castDraft({ position, upperExclusive, attempts, selectedIndex }),
+      );
+    }
+  });
   return { ordered: shuffled.ordered, steps: shuffled.steps };
 }

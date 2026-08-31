@@ -1,5 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
+type TeamName = "Drow" | "Duergar";
+type CharacterName = keyof typeof CHARACTER_BY_NAME;
+
 const TEAM_CHARACTERS = {
   Drow: [
     "drow-rogue",
@@ -48,7 +51,7 @@ async function eliminateOpposingTeam(page: Page): Promise<{
   const activeCard = page.locator("[data-active-character]");
   const sourceTeam = (await activeCard
     .getByText(/Drow|Duergar/, { exact: true })
-    .textContent()) as "Drow" | "Duergar";
+    .textContent()) as TeamName;
   const eliminatedTeam: keyof typeof TEAM_CHARACTERS =
     sourceTeam === "Drow" ? "Duergar" : "Drow";
   const targets = TEAM_CHARACTERS[eliminatedTeam];
@@ -115,8 +118,7 @@ async function eliminateBothTeams(page: Page) {
       await expect(activeHeading).not.toHaveText(previousName);
     activeName = await activeHeading.textContent();
   }
-  const source =
-    CHARACTER_BY_NAME[activeName as keyof typeof CHARACTER_BY_NAME];
+  const source = CHARACTER_BY_NAME[activeName as CharacterName];
   const opponent = Object.values(CHARACTER_BY_NAME).find(
     (character) => character.team !== source.team && character.hp === source.hp,
   );

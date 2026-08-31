@@ -63,7 +63,7 @@
     >
       {state.current.saving ? "Saving…" : "Create Match"}
     </button>
-    {#if readiness.canonicalStorage === "failed"}
+    {#if readiness.validatedStorage === "failed"}
       <button
         id="retry-storage"
         class="secondary-action"

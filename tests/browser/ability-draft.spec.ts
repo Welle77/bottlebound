@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+type RosterKey = keyof typeof ROSTER;
+
 const CHECK_LABELS = [
   "Range is legal",
   "Line of Sight is legal",
@@ -118,7 +120,9 @@ test("self ability confirms in one step, spends, persists, and undoes exactly", 
 
   await page.getByRole("button", { name: "Back" }).click();
   await page.getByRole("button", { name: "Undo" }).click();
-  await expect(page.getByText(/Are you sure you want to undo this action/)).toBeVisible();
+  await expect(
+    page.getByText(/Are you sure you want to undo this action/),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Confirm Undo" }).click();
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Fighter" }),
@@ -345,7 +349,7 @@ test("a Downed Active Character cannot open the ability list and Basic Attack is
   await startMatch(page);
   const heading = page.locator("[data-active-character] h3");
   const activeName = ((await heading.textContent()) ?? "").trim();
-  const character = ROSTER[activeName as keyof typeof ROSTER];
+  const character = ROSTER[activeName as RosterKey];
   if (!character) throw new Error(`Unknown Active Character ${activeName}.`);
   const row = page.locator("[data-active-order-row]", { hasText: activeName });
 

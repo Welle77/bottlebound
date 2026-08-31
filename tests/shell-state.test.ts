@@ -22,7 +22,7 @@ function baselineSnapshot(overrides: Partial<ShellState> = {}): ShellState {
     network: "online",
     serviceWorker: "unsupported",
     appShellCache: "checking",
-    canonicalStorage: "checking",
+    validatedStorage: "checking",
     storageDetail: "Running a write and removal safety check.",
     match: null,
     events: [],

@@ -1,6 +1,6 @@
 import { createIndexedDbMatchStore } from "../storage/match-store";
 
-// Application singletons that outlive every surface: the canonical Match
+// Application singletons that outlive every surface: the validated Match
 // store and the mounted application root element. Reactive Console state
 // lives in src/ui/shell-state.svelte.ts; this module only holds the
 // non-reactive wiring the command layer and entry point share.

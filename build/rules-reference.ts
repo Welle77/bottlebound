@@ -52,13 +52,20 @@ function anchorSlug(value: string, index: number): string {
 }
 
 function parseHeadings(source: string): readonly HeadingMatch[] {
-  return [...source.matchAll(/^[ \t]{0,3}(#{1,6})[ \t]+(.+?)[ \t]*$/gmu)].map(
-    (match) => ({
-      title: headingTitle(match[2] as string),
-      level: (match[1] as string).length,
-      start: match.index ?? 0,
-    }),
-  );
+  return [
+    ...source.matchAll(/^[ \t]{0,3}(#{1,6})[ \t]+(.+?)[ \t]*$/gmu),
+  ].flatMap((match) => {
+    const [, headingLevel, title] = match;
+    return headingLevel !== undefined && title !== undefined
+      ? [
+          {
+            title: headingTitle(title),
+            level: headingLevel.length,
+            start: match.index ?? 0,
+          },
+        ]
+      : [];
+  });
 }
 
 function uniqueAnchor(title: string, index: number, used: ReadonlySet<string>) {

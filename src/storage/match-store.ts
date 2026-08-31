@@ -1,18 +1,24 @@
 import {
   MATCH_SCHEMA_VERSION,
-  assertMatchSummaryStructure,
-  canonicalMatchRecordsEqual,
+  validatedMatchRecordsEqual,
   getUndoPreview,
   restoreStateFromEvents,
   toMatchSummary,
   type MatchEvent,
+  type EndedMatchState,
   type MatchState,
   type MatchSummary,
 } from "../domain/match";
 import {
   assertCommit,
   assertRestoredMatch,
-} from "./match-store-canonical-commit";
+} from "./match-store-validated-commit";
+import * as z from "zod";
+import {
+  matchEventSchema,
+  matchStateSchema,
+  matchSummarySchema,
+} from "./match-store-schemas";
 
 const DEFAULT_DATABASE_NAME = "bottlebound-match";
 const DATABASE_VERSION = 2;
@@ -29,6 +35,13 @@ type CurrentMatchMetadata = {
   readonly schemaVersion: number;
   readonly configurationVersion: string;
 };
+
+const currentMatchMetadataSchema: z.ZodType<CurrentMatchMetadata> = z.object({
+  matchId: z.string(),
+  sequence: z.number().int(),
+  schemaVersion: z.number().int(),
+  configurationVersion: z.string(),
+});
 
 type CommitContext = {
   readonly transaction: IDBTransaction;
@@ -80,16 +93,35 @@ function requestResult<T>(request: IDBRequest<T>): Promise<T> {
 function getRecord<T>(
   store: IDBObjectStore,
   key: IDBValidKey,
+  schema: z.ZodType<T>,
 ): Promise<T | undefined> {
-  return requestResult(store.get(key) as IDBRequest<T | undefined>);
+  return requestResult(store.get(key)).then((value) => {
+    if (value === undefined) return undefined;
+    try {
+      return schema.parse(value);
+    } catch (error) {
+      throw new Error("Saved validated data is structurally invalid.", {
+        cause: error,
+      });
+    }
+  });
 }
 
 function getAllRecords<T>(
   source: IDBObjectStore | IDBIndex,
+  schema: z.ZodType<T>,
   key?: IDBValidKey,
 ): Promise<readonly T[]> {
   const request = key === undefined ? source.getAll() : source.getAll(key);
-  return requestResult(request) as Promise<readonly T[]>;
+  return requestResult(request).then((value) => {
+    try {
+      return schema.array().parse(value);
+    } catch (error) {
+      throw new Error("Saved validated data is structurally invalid.", {
+        cause: error,
+      });
+    }
+  });
 }
 
 function transactionComplete(transaction: IDBTransaction): Promise<void> {
@@ -147,15 +179,17 @@ async function getCommittedHistory(
   readonly state: MatchState | undefined;
   readonly events: readonly MatchEvent[];
 }> {
-  const previousState = await getRecord<MatchState>(
+  const previousStateRaw = await getRecord(
     transaction.objectStore(SNAPSHOT_STORE),
     matchId,
+    matchStateSchema,
   );
-  const previousEvents = await getAllRecords<MatchEvent>(
+  const previousEvents = await getAllRecords(
     transaction.objectStore(EVENT_STORE).index("matchId"),
+    matchEventSchema,
     matchId,
   );
-  return { state: previousState, events: previousEvents };
+  return { state: previousStateRaw, events: previousEvents };
 }
 
 async function validateUndoCommit(
@@ -175,7 +209,7 @@ async function validateUndoCommit(
     preview === null ||
     preview.target.sequence !== context.event.targetSequence ||
     preview.target.type !== context.event.targetType ||
-    !canonicalMatchRecordsEqual(preview.restoredState, context.state)
+    !validatedMatchRecordsEqual(preview.restoredState, context.state)
   ) {
     await abortCommit(
       context,
@@ -199,7 +233,7 @@ async function validateDerivedCommit(
   );
   if (
     history.state === undefined ||
-    !canonicalMatchRecordsEqual(
+    !validatedMatchRecordsEqual(
       restoreStateFromEvents([...history.events, context.event]),
       context.state,
     )
@@ -233,11 +267,9 @@ async function validateExistingCommit(
 
 function writeEndedSummary(
   transaction: IDBTransaction,
-  state: MatchState,
+  state: EndedMatchState,
 ): void {
-  const endedState = state as Extract<MatchState, { readonly phase: "ended" }>;
-  const summary = toMatchSummary(endedState);
-  assertMatchSummaryStructure(summary);
+  const summary = toMatchSummary(state);
   transaction.objectStore(SUMMARY_STORE).put(summary, LATEST_SUMMARY_KEY);
 }
 
@@ -254,7 +286,10 @@ async function writeCommit(context: ReadonlyDeepCommitContext): Promise<void> {
       } satisfies CurrentMatchMetadata,
       CURRENT_MATCH_KEY,
     );
-    if (context.event.type === "MatchEnded") {
+    if (
+      context.event.type === "MatchEnded" &&
+      context.state.phase === "ended"
+    ) {
       writeEndedSummary(context.transaction, context.state);
     }
   } catch (error) {
@@ -338,6 +373,7 @@ export function createIndexedDbMatchStore(
     const current = await getRecord<CurrentMatchMetadata>(
       metadataStore,
       CURRENT_MATCH_KEY,
+      currentMatchMetadataSchema,
     );
     const savedSnapshotKeys = await requestResult(
       transaction.objectStore(SNAPSHOT_STORE).getAllKeys(),
@@ -374,32 +410,35 @@ export function createIndexedDbMatchStore(
       "readwrite",
     );
     const completion = transactionComplete(transaction);
-    const metadata = await getRecord<unknown>(
+    const metadata = await getRecord(
       transaction.objectStore(METADATA_STORE),
       CURRENT_MATCH_KEY,
+      currentMatchMetadataSchema,
     );
-    const allSnapshots = await getAllRecords<unknown>(
+    const allSnapshots = await getAllRecords(
       transaction.objectStore(SNAPSHOT_STORE),
+      matchStateSchema,
+      undefined,
     );
-    const allEvents = await getAllRecords<unknown>(
+    const allEvents = await getAllRecords(
       transaction.objectStore(EVENT_STORE),
+      matchEventSchema,
+      undefined,
     );
-    const summaryRaw = await getRecord<unknown>(
+    const summary = await getRecord(
       transaction.objectStore(SUMMARY_STORE),
       LATEST_SUMMARY_KEY,
+      matchSummarySchema,
     );
-    const summary: MatchSummary | null =
-      summaryRaw === undefined
-        ? null
-        : (assertMatchSummaryStructure(summaryRaw), summaryRaw);
+    const restoredSummary: MatchSummary | null = summary ?? null;
     if (metadata === undefined) {
       if (allSnapshots.length > 0 || allEvents.length > 0) {
         transaction.abort();
         await completion.catch(() => undefined);
-        throw new Error("Saved canonical data is incomplete.");
+        throw new Error("Saved validated data is incomplete.");
       }
       await completion;
-      if (summary !== null) {
+      if (restoredSummary !== null) {
         // Prior summary persists without an Active Ended snapshot
         // Expose via getSummary; restore signals no Active Match
         return null;
@@ -410,16 +449,16 @@ export function createIndexedDbMatchStore(
     if (allSnapshots.length !== 1) {
       transaction.abort();
       await completion.catch(() => undefined);
-      throw new Error("Saved canonical data has an invalid snapshot count.");
+      throw new Error("Saved validated data has an invalid snapshot count.");
     }
     // Single-schema persistence: anything that does not validate as the
     // current schema is rejected through the existing restore error path.
-    assertRestoredMatch(metadata, state, allEvents);
+    const restored = assertRestoredMatch(metadata, state, allEvents);
     await completion;
     return {
-      state: state,
-      events: allEvents as readonly MatchEvent[],
-      summary,
+      state: restored.state,
+      events: restored.events,
+      summary: restoredSummary,
     };
   }
 
@@ -427,13 +466,13 @@ export function createIndexedDbMatchStore(
     const database = await open();
     const transaction = database.transaction([SUMMARY_STORE], "readonly");
     const completion = transactionComplete(transaction);
-    const raw = await getRecord<unknown>(
+    const raw = await getRecord(
       transaction.objectStore(SUMMARY_STORE),
       LATEST_SUMMARY_KEY,
+      matchSummarySchema,
     );
     await completion;
     if (raw === undefined) return null;
-    assertMatchSummaryStructure(raw);
     return raw;
   }
 
@@ -461,6 +500,7 @@ export function createIndexedDbMatchStore(
     const metadata = await getRecord<CurrentMatchMetadata>(
       metadataStore,
       CURRENT_MATCH_KEY,
+      currentMatchMetadataSchema,
     );
     if (metadata !== undefined && metadata.matchId !== matchId) {
       transaction.abort();
@@ -468,11 +508,13 @@ export function createIndexedDbMatchStore(
       throw new Error("The requested Match is not the saved Match.");
     }
     metadataStore.delete(CURRENT_MATCH_KEY);
-    const snapshot = await getRecord<MatchState>(
+    const snapshot = await getRecord(
       transaction.objectStore(SNAPSHOT_STORE),
       matchId,
+      matchStateSchema,
     );
-    const shouldDeleteSummary = snapshot?.phase === "ended";
+    const shouldDeleteSummary =
+      snapshot !== undefined && snapshot.phase === "ended";
     transaction.objectStore(SNAPSHOT_STORE).delete(matchId);
     const eventStore = transaction.objectStore(EVENT_STORE);
     const eventKeys = await requestResult(

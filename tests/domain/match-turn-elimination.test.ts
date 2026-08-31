@@ -16,6 +16,8 @@ import {
   type ActiveMatchState,
   type MatchEvent,
 } from "../../src/domain/match";
+
+type CurrentState = ActiveMatchState;
 import { MATCH_CONFIGURATION } from "../../src/domain/match-configuration";
 import {
   initiativeCharacterId,
@@ -342,7 +344,7 @@ describe("Active Match commands", () => {
     ];
     expect(undoContinue.state).toEqual({ ...current, sequence: 10 });
 
-    const ended = endMatch(undoContinue.state as typeof current, {
+    const ended = endMatch(undoContinue.state as CurrentState, {
       occurredAt: "2026-08-22T14:10:00.000Z",
       confirmed: true,
     });

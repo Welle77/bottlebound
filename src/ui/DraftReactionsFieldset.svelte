@@ -110,7 +110,7 @@
           );
       const attackLegs =
         selected && deflectingPalm && currentDraft.attackLegs.length === 1
-          ? [...currentDraft.attackLegs, [] as readonly CharacterId[]]
+          ? [...currentDraft.attackLegs, []]
           : !selected && deflectingPalm && currentDraft.attackLegs.length === 2
             ? currentDraft.attackLegs.slice(0, -1)
             : currentDraft.attackLegs;

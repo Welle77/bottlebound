@@ -1,5 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 
+type OptionalRecord = Record<string, unknown> | undefined;
+type RGB = [number, number, number];
+type SnapshotProbe = Record<string, unknown> & {
+  activeSlot: number;
+  outcome: unknown;
+};
+type AddMethod = typeof IDBObjectStore.prototype.add;
+type AddParameters = Parameters<AddMethod>;
+
 async function startMatch(page: Page): Promise<void> {
   await page.goto("/");
   await page.getByRole("button", { name: "Create Match" }).click();
@@ -45,7 +54,7 @@ async function getSummary(page: Page): Promise<Record<string, unknown> | null> {
       request.addEventListener("error", () => reject(request.error));
     });
     database.close();
-    return (result as Record<string, unknown> | undefined) ?? null;
+    return (result as OptionalRecord) ?? null;
   });
 }
 
@@ -61,7 +70,7 @@ async function checkUsable(page: Page): Promise<void> {
           ?.slice(0, 3)
           .map(Number);
         if (!channels || channels.length !== 3) return [255, 248, 232];
-        return channels as [number, number, number];
+        return channels as RGB;
       };
       const luminance = ([red, green, blue]: [number, number, number]) => {
         const linear = [red, green, blue].map((channel) => {
@@ -190,17 +199,10 @@ test("preview, confirm, read-only Ended, Reopen, and restore consistency", async
       request.addEventListener("error", () => reject(request.error));
     });
     const transaction = database.transaction("snapshots", "readonly");
-    const result = await new Promise<
-      Record<string, unknown> & { activeSlot: number; outcome: unknown }
-    >((resolve, reject) => {
+    const result = await new Promise<SnapshotProbe>((resolve, reject) => {
       const request = transaction.objectStore("snapshots").getAll();
       request.addEventListener("success", () =>
-        resolve(
-          request.result[0] as Record<string, unknown> & {
-            activeSlot: number;
-            outcome: unknown;
-          },
-        ),
+        resolve(request.result[0] as SnapshotProbe),
       );
       request.addEventListener("error", () => reject(request.error));
     });
@@ -565,14 +567,11 @@ test("restore consistency after failed End Game and Reopen transactions", async 
   // inject failure on events add to simulate partial commit failure
   await page.evaluate(() => {
     const originalAdd = IDBObjectStore.prototype.add;
-    (
-      IDBObjectStore.prototype as unknown as Record<string, unknown>
-    ).__originalAdd = originalAdd;
+    Reflect.set(IDBObjectStore.prototype, "__originalAdd", originalAdd);
   });
   await page.getByRole("button", { name: "End Game" }).click();
   await page.evaluate(() => {
-    const add = IDBObjectStore.prototype
-      .add as unknown as typeof IDBObjectStore.prototype.add;
+    const add = IDBObjectStore.prototype.add as AddMethod;
     const patched = function (
       this: IDBObjectStore,
       ...args: Parameters<typeof IDBObjectStore.prototype.add>
@@ -580,11 +579,8 @@ test("restore consistency after failed End Game and Reopen transactions", async 
       if (this.name === "events") {
         throw new DOMException("Injected storage failure", "DataError");
       }
-      return (add as unknown as typeof IDBObjectStore.prototype.add).apply(
-        this,
-        args as never,
-      );
-    } as unknown as typeof IDBObjectStore.prototype.add;
+      return add.apply(this, args as AddParameters);
+    } as AddMethod;
     IDBObjectStore.prototype.add = patched;
   });
   await page.getByRole("button", { name: "Confirm End Game" }).click();
@@ -596,10 +592,8 @@ test("restore consistency after failed End Game and Reopen transactions", async 
   ).toBeVisible();
   // restore original before reload so restore can read old state
   await page.evaluate(() => {
-    const original = (
-      IDBObjectStore.prototype as unknown as Record<string, unknown>
-    ).__originalAdd as typeof IDBObjectStore.prototype.add;
-    if (original) IDBObjectStore.prototype.add = original;
+    const original = Reflect.get(IDBObjectStore.prototype, "__originalAdd");
+    if (typeof original === "function") IDBObjectStore.prototype.add = original;
   });
   await page.reload();
   await expect(
@@ -624,13 +618,10 @@ test("restore consistency after failed End Game and Reopen transactions", async 
   // failed Reopen should leave Ended intact
   await page.evaluate(() => {
     const originalAdd = IDBObjectStore.prototype.add;
-    (
-      IDBObjectStore.prototype as unknown as Record<string, unknown>
-    ).__originalAdd2 = originalAdd;
+    Reflect.set(IDBObjectStore.prototype, "__originalAdd2", originalAdd);
   });
   await page.evaluate(() => {
-    const add = IDBObjectStore.prototype
-      .add as unknown as typeof IDBObjectStore.prototype.add;
+    const add = IDBObjectStore.prototype.add as AddMethod;
     const patched = function (
       this: IDBObjectStore,
       ...args: Parameters<typeof IDBObjectStore.prototype.add>
@@ -638,11 +629,8 @@ test("restore consistency after failed End Game and Reopen transactions", async 
       if (this.name === "events") {
         throw new DOMException("Injected storage failure", "DataError");
       }
-      return (add as unknown as typeof IDBObjectStore.prototype.add).apply(
-        this,
-        args as never,
-      );
-    } as unknown as typeof IDBObjectStore.prototype.add;
+      return add.apply(this, args as AddParameters);
+    } as AddMethod;
     IDBObjectStore.prototype.add = patched;
   });
   await page.getByRole("button", { name: "Reopen Match" }).click();
@@ -651,10 +639,8 @@ test("restore consistency after failed End Game and Reopen transactions", async 
     page.getByRole("heading", { name: "Ended Match" }),
   ).toBeVisible();
   await page.evaluate(() => {
-    const original = (
-      IDBObjectStore.prototype as unknown as Record<string, unknown>
-    ).__originalAdd2 as typeof IDBObjectStore.prototype.add;
-    if (original) IDBObjectStore.prototype.add = original;
+    const original = Reflect.get(IDBObjectStore.prototype, "__originalAdd2");
+    if (typeof original === "function") IDBObjectStore.prototype.add = original;
   });
   await page.reload();
   await expect(

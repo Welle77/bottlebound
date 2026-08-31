@@ -10,15 +10,13 @@ import {
 } from "./match-types";
 import type {
   ActiveMatchState,
-  CharacterId,
-  CoinFlipTieBreakStep,
   CommandResult,
   DisplayNames,
   DisplayNamesAssignedEvent,
+  EndedMatchState,
   InitiativeEntry,
   InitiativeEvent,
   MatchStartedEvent,
-  MatchState,
   RandomSource,
   SetupCreatedEvent,
   SetupMatchState,
@@ -74,12 +72,12 @@ export function createSetup(
 }
 
 /**
- * Normalizes a requested Display Name batch into the canonical stored form:
+ * Normalizes a requested Display Name batch into the validated stored form:
  * every value is trimmed, and values that trim to empty unset the name and
  * are dropped from the map.
  */
 export function normalizeDisplayNames(
-  requested: Readonly<Partial<Record<CharacterId, string>>>,
+  requested: Readonly<Record<string, string>>,
 ): DisplayNames {
   return Object.entries(requested).reduce<DisplayNames>(
     (displayNames, [characterId, rawName]) => {
@@ -100,14 +98,11 @@ export function normalizeDisplayNames(
  * for the fixed roster. Allowed only during Setup.
  */
 export function assignDisplayNames(
-  state: SetupMatchState,
-  requested: Readonly<Partial<Record<CharacterId, string>>>,
+  state: SetupMatchState | ActiveMatchState | EndedMatchState,
+  requested: Readonly<Record<string, string>>,
   occurredAt: string,
 ): CommandResult<SetupMatchState, DisplayNamesAssignedEvent> {
-  // Runtime guard against callers bypassing the typed parameter (tests pass
-  // foreign phases through casts); compared against the full phase union so
-  // the check stays statically meaningful.
-  if ((state as MatchState).phase !== "setup") {
+  if (state.phase !== "setup") {
     throw new Error("Display Names can only be assigned during Setup.");
   }
   const displayNames = normalizeDisplayNames(requested);
@@ -153,7 +148,7 @@ function rollInitiative(
     const tieBreak =
       group.length > 1
         ? orderByCoinFlips(group, random)
-        : { ordered: group, steps: [] as readonly CoinFlipTieBreakStep[] };
+        : { ordered: group, steps: [] };
     return { total, group, tieBreak };
   });
   const ordered = grouped.flatMap(({ tieBreak }) => tieBreak.ordered);

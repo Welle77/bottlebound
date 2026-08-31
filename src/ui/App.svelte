@@ -36,7 +36,7 @@
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
     // Same bootstrap order as the pre-Svelte entry point: paint the shell,
-    // then start the canonical-storage probe and service-worker registration.
+    // then start the validated-storage probe and service-worker registration.
     // Every surface reacts to the runes store, so no render step exists.
     void runStorageProbe();
     void registerServiceWorker();

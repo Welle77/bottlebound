@@ -187,7 +187,7 @@ describe("Match command persistence contract", () => {
       generated.state,
     );
     await expect(rerollFirstStore.restore()).rejects.toThrow(
-      "Saved canonical data has a partial sequence.",
+      "Saved validated data has a partial sequence.",
     );
 
     const secondSetup = createSetup(

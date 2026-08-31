@@ -231,7 +231,9 @@ test("one named Match mixes Basic Attack, every ability interaction, undo, and E
   await expect(
     page.getByRole("heading", { name: "Undo Action Resolution?" }),
   ).toBeVisible();
-  await expect(page.getByText(/Are you sure you want to undo this action/)).toBeVisible();
+  await expect(
+    page.getByText(/Are you sure you want to undo this action/),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Confirm Undo" }).click();
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Warlock" }),

@@ -51,12 +51,7 @@ export function isAbilityName(value: string): value is AbilityName {
 export type BasicAttackType = "melee" | "ranged";
 export type BasicAttackUse = "unlimited";
 export type CharacterRole =
-  | "Striker"
-  | "Skirmisher"
-  | "Tank"
-  | "Controller"
-  | "Spellcaster"
-  | "Support";
+  "Striker" | "Skirmisher" | "Tank" | "Controller" | "Spellcaster" | "Support";
 export type AbilityActionType = "standard" | "powerful" | "reaction";
 export type AbilityAttackType = "None" | "Ability Attack" | "Melee" | "Ranged";
 export type AbilityInteraction =

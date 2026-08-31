@@ -261,7 +261,7 @@ describe("IndexedDbMatchStore combined Display Name and Ability persistence", ()
     const reopenedStore = createIndexedDbMatchStore(factory, databaseName);
     const restored = await reopenedStore.restore();
     if (!restored) throw new Error("The overridden history must restore.");
-    // Restore validates every event canonically and replays the history
+    // Restore validates every event validatedly and replays the history
     // against the snapshot, so reaching this point already proves the
     // recorded sentence survives storage and exact replay.
     expect(restored.events.at(-1)).toEqual(overridden.event);

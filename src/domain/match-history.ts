@@ -7,6 +7,7 @@ import {
   isEffectBoundaryTrigger,
   isEffectDurationKind,
   isEffectOperation,
+  isInteger,
   isDecisionBasis,
   isReactionId,
   isTeam,
@@ -36,7 +37,7 @@ function orderedJsonValue(value: unknown): unknown {
   return value;
 }
 
-export function canonicalMatchRecordsEqual(
+export function validatedMatchRecordsEqual(
   left: unknown,
   right: unknown,
 ): boolean {
@@ -57,7 +58,7 @@ function assertStringArray(
       (entry) => typeof entry === "string" && (isAllowed?.(entry) ?? true),
     )
   ) {
-    throw new Error(`The canonical ${label} is structurally invalid.`);
+    throw new Error(`The validated ${label} is structurally invalid.`);
   }
 }
 
@@ -78,8 +79,8 @@ function hasValidActiveEffectIdentity(
     isCharacterId(effect.anchorCharacterId) &&
     typeof effect.affectedCharacterId === "string" &&
     isCharacterId(effect.affectedCharacterId) &&
-    Number.isSafeInteger(effect.appliedSequence) &&
-    (effect.appliedSequence as number) >= 1
+    isInteger(effect.appliedSequence) &&
+    effect.appliedSequence >= 1
   );
 }
 
@@ -120,7 +121,7 @@ export function assertActiveEffectStructure(
   isValidAbilityId: (value: string) => boolean = isAbilityId,
 ): void {
   if (!isRecord(effect) || !isRecord(effect.duration)) {
-    throw new Error("The canonical active effects are structurally invalid.");
+    throw new Error("The validated active effects are structurally invalid.");
   }
   if (
     !hasValidActiveEffectIdentity(effect, isValidAbilityId) ||
@@ -128,11 +129,11 @@ export function assertActiveEffectStructure(
     !hasValidActiveEffectDuration(effect.duration) ||
     !hasValidActiveEffectOperations(effect.operations)
   ) {
-    throw new Error("The canonical active effects are structurally invalid.");
+    throw new Error("The validated active effects are structurally invalid.");
   }
 }
 
-/** Shared structural boundary used by domain replay and canonical storage. */
+/** Shared structural boundary used by domain replay and validated storage. */
 export function assertMatchStateStructure(
   value: unknown,
   schemaVersion: typeof MATCH_SCHEMA_VERSION = MATCH_SCHEMA_VERSION,
@@ -159,10 +160,10 @@ function assertMatchStateHeader(
     (value.phase !== "setup" &&
       value.phase !== "active" &&
       value.phase !== "ended") ||
-    !Number.isSafeInteger(value.sequence) ||
-    (value.sequence as number) < 1
+    !isInteger(value.sequence) ||
+    value.sequence < 1
   ) {
-    throw new Error("The canonical Match State is structurally invalid.");
+    throw new Error("The validated Match State is structurally invalid.");
   }
 }
 
@@ -171,7 +172,7 @@ function assertMatchStateRoster(value: MatchState): void {
     !Array.isArray(value.characters) ||
     value.characters.length !== MATCH_CONFIGURATION.characters.length
   ) {
-    throw new Error("The canonical Match State roster is invalid.");
+    throw new Error("The validated Match State roster is invalid.");
   }
   value.characters.forEach((entry, index) => {
     const rulesCharacter = MATCH_CONFIGURATION.characters[index];
@@ -179,23 +180,21 @@ function assertMatchStateRoster(value: MatchState): void {
       !rulesCharacter ||
       !isRecord(entry) ||
       entry.characterId !== rulesCharacter.id ||
-      !Number.isInteger(entry.hp) ||
-      (entry.hp as number) < 0
+      !isInteger(entry.hp) ||
+      entry.hp < 0
     ) {
-      throw new Error("The canonical Match State roster is invalid.");
+      throw new Error("The validated Match State roster is invalid.");
     }
-    const currentMaxHp = entry.currentMaxHp as number | undefined;
-    const effectiveMax = Number.isInteger(currentMaxHp)
-      ? (currentMaxHp as number)
-      : rulesCharacter.baseHp;
+    const currentMaxHp = isInteger(entry.currentMaxHp)
+      ? entry.currentMaxHp
+      : undefined;
+    const effectiveMax = currentMaxHp ?? rulesCharacter.baseHp;
     if (
-      (entry.hp as number) > effectiveMax ||
+      entry.hp > effectiveMax ||
       (currentMaxHp !== undefined &&
-        (!Number.isInteger(currentMaxHp) ||
-          currentMaxHp < 1 ||
-          currentMaxHp > 10))
+        (!isInteger(currentMaxHp) || currentMaxHp < 1 || currentMaxHp > 10))
     ) {
-      throw new Error("The canonical Match State roster is invalid.");
+      throw new Error("The validated Match State roster is invalid.");
     }
   });
 }
@@ -209,21 +208,19 @@ function assertMatchStateInitiative(value: MatchState): void {
     !Array.isArray(value.initiative) ||
     value.initiative.length !== MATCH_CONFIGURATION.characters.length
   ) {
-    throw new Error("The canonical initiative result is structurally invalid.");
+    throw new Error("The validated initiative result is structurally invalid.");
   }
 }
 
 function assertMatchStateTurn(value: MatchState): void {
-  const state = value as unknown as Record<string, unknown>;
-  const { round } = state;
-  const { activeSlot } = state;
+  if (value.phase === "setup") return;
+  const { round, activeSlot } = value;
   if (
-    (value.phase === "active" || value.phase === "ended") &&
-    (!Number.isSafeInteger(round) ||
-      (round as number) < 1 ||
-      !Number.isSafeInteger(activeSlot) ||
-      (activeSlot as number) < 1 ||
-      (activeSlot as number) > MATCH_CONFIGURATION.characters.length)
+    !isInteger(round) ||
+    round < 1 ||
+    !isInteger(activeSlot) ||
+    activeSlot < 1 ||
+    activeSlot > MATCH_CONFIGURATION.characters.length
   ) {
     throw new Error("The Active Match turn is structurally invalid.");
   }
@@ -239,17 +236,13 @@ function assertEndedMatchMetadata(value: EndedMatchState): void {
   const { endedAt } = value;
   const { endedSequence } = value;
   const { sequence } = value;
-  const { outcome }: { outcome: unknown } = value as unknown as {
-    outcome: unknown;
-  };
   if (
     typeof endedAt !== "string" ||
     endedAt.length === 0 ||
-    !Number.isSafeInteger(endedSequence) ||
+    !isInteger(endedSequence) ||
     endedSequence < 2 ||
-    !Number.isSafeInteger(sequence) ||
-    endedSequence > sequence ||
-    outcome === null
+    !isInteger(sequence) ||
+    endedSequence > sequence
   ) {
     throw new Error("The Ended Match state is structurally invalid.");
   }
@@ -290,26 +283,26 @@ function isValidCombatEconomy(state: Record<string, unknown>): boolean {
         : 0;
   return (
     typeof state.majorActionUsed === "boolean" &&
-    Number.isSafeInteger(actionsUsed) &&
+    isInteger(actionsUsed) &&
     actionsUsed >= 0 &&
     actionsUsed <= 2 &&
     state.movementPaces === 2 &&
     typeof remainingMovementPaces === "number" &&
-    Number.isSafeInteger(remainingMovementPaces) &&
+    isInteger(remainingMovementPaces) &&
     remainingMovementPaces >= 0 &&
     remainingMovementPaces <= state.movementPaces
   );
 }
 
 function assertMatchStatePersistence(value: MatchState): void {
-  const state = value as unknown as Record<string, unknown>;
+  const state = value;
   const isValidAbilityId =
     value.configurationVersion === MATCH_CONFIGURATION.version
       ? isAbilityId
       : isHistoricalAbilityId;
   assertStringArray(state.spentAbilityIds, "spent Abilities", isValidAbilityId);
   if (!Array.isArray(state.activeEffects)) {
-    throw new Error("The canonical active effects are structurally invalid.");
+    throw new Error("The validated active effects are structurally invalid.");
   }
   state.activeEffects.forEach((effect) => {
     assertActiveEffectStructure(effect, isValidAbilityId);
@@ -326,7 +319,7 @@ function assertMatchStatePersistence(value: MatchState): void {
         MATCH_CONFIGURATION.characters.some(({ id }) => id === characterId),
     )
   ) {
-    throw new Error("The canonical Match display names are invalid.");
+    throw new Error("The validated Match display names are invalid.");
   }
   assertStringArray(state.spentReactionIds, "spent Reactions", isReactionId);
   assertStringArray(state.eliminatedTeams, "Team Elimination state", isTeam);
@@ -342,7 +335,7 @@ function assertMatchStatePersistence(value: MatchState): void {
     !state.acknowledgedEliminations.every((team) => isTeam(team)) ||
     (state.outcome !== null && !isMatchOutcome(state.outcome))
   ) {
-    throw new Error("The canonical combat state is structurally invalid.");
+    throw new Error("The validated combat state is structurally invalid.");
   }
 }
 
@@ -352,10 +345,10 @@ function assertFinalTeamTallies(
 ): asserts value is FinalTeamCounts {
   if (
     !isRecord(value) ||
-    !Number.isInteger(value.Drow) ||
-    !Number.isInteger(value.Duergar) ||
-    (value.Drow as number) < 0 ||
-    (value.Duergar as number) < 0
+    !isInteger(value.Drow) ||
+    !isInteger(value.Duergar) ||
+    value.Drow < 0 ||
+    value.Duergar < 0
   ) {
     throw new Error(message);
   }

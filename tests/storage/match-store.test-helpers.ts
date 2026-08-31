@@ -1,4 +1,5 @@
 import { IDBFactory } from "fake-indexeddb";
+import * as z from "zod";
 
 import {
   createSetup,
@@ -11,6 +12,8 @@ import {
   type MatchEvent,
   type MatchState,
 } from "../../src/domain/match";
+
+const persistedRecordSchema = z.record(z.string(), z.unknown());
 
 function createQueueCursor(values: readonly number[]) {
   let position = 0;
@@ -104,10 +107,9 @@ export function rewriteStoredConfigurationVersion(
           const store = transaction.objectStore(storeName);
           const request = store.getAll();
           request.addEventListener("success", () => {
-            for (const value of request.result as readonly Record<
-              string,
-              unknown
-            >[]) {
+            for (const value of persistedRecordSchema
+              .array()
+              .parse(request.result)) {
               const rewritten = { ...value, configurationVersion };
               if (storeName === "metadata") {
                 store.put(rewritten, "current-match");
@@ -249,10 +251,9 @@ export function rewriteCurrentSnapshotAsPriorConfigurationSchema(
           const store = transaction.objectStore(storeName);
           const request = store.getAll();
           request.addEventListener("success", () => {
-            for (const value of request.result as readonly Record<
-              string,
-              unknown
-            >[]) {
+            for (const value of persistedRecordSchema
+              .array()
+              .parse(request.result)) {
               const rewritten = { ...value, schemaVersion: 3 };
               if (storeName === "metadata") {
                 store.put(rewritten, "current-match");

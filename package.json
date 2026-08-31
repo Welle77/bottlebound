@@ -11,7 +11,7 @@
     "tsc": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test:focused": "vitest run tests/shell-state.test.ts tests/readiness.test.ts tests/domain/match.test.ts tests/storage/canonical-storage-probe.test.ts tests/storage/match-store.test.ts tests/rules-reference/rules-reference.contract.test.ts",
+    "test:focused": "vitest run tests/shell-state.test.ts tests/readiness.test.ts tests/domain/match.test.ts tests/storage/validated-storage-probe.test.ts tests/storage/match-store.test.ts tests/rules-reference/rules-reference.contract.test.ts",
     "test:browser": "playwright test",
     "test": "vitest run && playwright test"
   },
@@ -40,6 +40,7 @@
     "wrangler": "4.127.0"
   },
   "dependencies": {
-    "immer": "^11.1.18"
+    "immer": "^11.1.18",
+    "zod": "^4.5.4"
   }
 }

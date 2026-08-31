@@ -9,22 +9,22 @@ import {
 } from "./match-combat";
 import { applyDownedCleanup } from "./match-turn";
 import { applyUtilityAbility } from "./match-ability-utility";
+import { nextActionCount } from "./match-types";
 import type {
   AbilityId,
   ActionEffect,
   ActionResolvedEvent,
   ActiveEffect,
   ActiveMatchState,
+  EndedMatchState,
   AttackLeg,
   CharacterId,
   CommandResult,
   MatchOutcome,
-  MatchState,
   ProtectiveReactionInput,
   ProtectiveReactionOperation,
   ProtectiveReactionResolution,
   MatchCharacter,
-  ReactionId,
   Team,
 } from "./match-types";
 
@@ -470,11 +470,11 @@ function buildAbilityAttackLegs(context: {
 }
 
 export function resolveAbility(
-  state: ActiveMatchState,
+  state: ActiveMatchState | EndedMatchState,
   input: AbilityInput,
   occurredAt: string,
 ): CommandResult<ActiveMatchState, ActionResolvedEvent> {
-  if ((state as MatchState).phase === "ended") {
+  if (state.phase === "ended") {
     throw new Error("The Ended Match is read-only.");
   }
   if (state.configurationVersion !== MATCH_CONFIGURATION_VERSION) {
@@ -583,20 +583,15 @@ export function resolveAbility(
     state: {
       ...state,
       sequence,
-      actionsUsed: Math.min(
-        2,
-        (state.actionsUsed ?? (state.majorActionUsed ? 1 : 0)) + 1,
-      ) as 1 | 2,
+      actionsUsed: nextActionCount(state.actionsUsed, state.majorActionUsed),
       majorActionUsed: true,
-      spentAbilityIds: [
-        ...new Set([...state.spentAbilityIds, ability.id]),
-      ] as readonly AbilityId[],
+      spentAbilityIds: [...new Set([...state.spentAbilityIds, ability.id])],
       spentReactionIds: [
         ...new Set([
           ...state.spentReactionIds,
           ...reactions.map(({ reactionId }) => reactionId),
         ]),
-      ] as readonly ReactionId[],
+      ],
       characters,
       eliminatedTeams,
       outcome,

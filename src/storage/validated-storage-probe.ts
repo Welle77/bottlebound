@@ -1,8 +1,8 @@
-export type CanonicalStorageProbeResult =
+export type ValidatedStorageProbeResult =
   | { readonly status: "ready" }
   | { readonly status: "failed"; readonly reason: string };
 
-const PROBE_DATABASE = "bottlebound-canonical-storage-probe";
+const PROBE_DATABASE = "bottlebound-validated-storage-probe";
 const PROBE_STORE = "probe";
 
 function waitForRequest<T>(request: IDBRequest<T>): Promise<T> {
@@ -58,7 +58,7 @@ async function deleteProbeDatabase(factory: IDBFactory): Promise<void> {
   await waitForRequest(factory.deleteDatabase(PROBE_DATABASE));
 }
 
-async function performCanonicalStorageProbe(
+async function performValidatedStorageProbe(
   factory: IDBFactory,
 ): Promise<void> {
   const openRequest = factory.open(PROBE_DATABASE, 1);
@@ -73,8 +73,8 @@ async function performCanonicalStorageProbe(
   try {
     const transaction = database.transaction(PROBE_STORE, "readwrite");
     const store = transaction.objectStore(PROBE_STORE);
-    store.put({ checkedAt: Date.now() }, "canonical-write");
-    store.delete("canonical-write");
+    store.put({ checkedAt: Date.now() }, "validated-write");
+    store.delete("validated-write");
     await waitForTransaction(transaction);
   } finally {
     database.close();
@@ -83,17 +83,17 @@ async function performCanonicalStorageProbe(
   await deleteProbeDatabase(factory);
 }
 
-export async function probeCanonicalStorage(
+export async function probeValidatedStorage(
   factory: IDBFactory = globalThis.indexedDB,
-): Promise<CanonicalStorageProbeResult> {
+): Promise<ValidatedStorageProbeResult> {
   try {
-    await performCanonicalStorageProbe(factory);
+    await performValidatedStorageProbe(factory);
     return { status: "ready" };
   } catch {
     return {
       status: "failed",
       reason:
-        "IndexedDB could not complete the canonical write and removal check.",
+        "IndexedDB could not complete the validated write and removal check.",
     };
   }
 }

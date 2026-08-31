@@ -10,10 +10,10 @@ test("the installed shell shows readiness and reloads offline", async ({
     page.getByRole("heading", { name: "Referee Console" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Canonical storage", { exact: true }),
+    page.getByText("Validated storage", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.locator('[data-status="ready"]', { hasText: "Canonical storage" }),
+    page.locator('[data-status="ready"]', { hasText: "Validated storage" }),
   ).toBeVisible();
 
   const createMatch = page.getByRole("button", { name: "Create Match" });
@@ -57,7 +57,7 @@ test("a failed storage probe keeps Match creation blocked and retryable", async 
   await page.goto("/");
 
   await expect(
-    page.locator('[data-status="failed"]', { hasText: "Canonical storage" }),
+    page.locator('[data-status="failed"]', { hasText: "Validated storage" }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Create Match" }),

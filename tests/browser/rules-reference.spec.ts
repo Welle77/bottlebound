@@ -1,7 +1,10 @@
 import { expect, test } from "@playwright/test";
+import * as z from "zod";
+
+const persistedRecordListSchema = z.array(z.record(z.string(), z.unknown()));
 
 async function persistedMatchData(page: import("@playwright/test").Page) {
-  return page.evaluate(async () => {
+  const result = await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open("bottlebound-match", 2);
       request.addEventListener("success", () => resolve(request.result));
@@ -25,6 +28,7 @@ async function persistedMatchData(page: import("@playwright/test").Page) {
     database.close();
     return result;
   });
+  return result.map((values) => persistedRecordListSchema.parse(values));
 }
 
 async function rewritePersistedConfigurationVersion(
@@ -237,7 +241,7 @@ test("restores an older Match unchanged while Rules Reference stays independent"
   const restored = await persistedMatchData(page);
   expect(restored).toEqual(
     before.map((values) =>
-      (values as Record<string, unknown>[]).map((value) => ({
+      values.map((value) => ({
         ...value,
         configurationVersion: "BB-prior-release",
       })),

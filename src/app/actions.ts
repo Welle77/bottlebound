@@ -25,7 +25,7 @@ import {
   type Team,
 } from "../domain/match";
 import { MATCH_CONFIGURATION } from "../domain/match-configuration";
-import { probeCanonicalStorage } from "../storage/canonical-storage-probe";
+import { probeValidatedStorage } from "../storage/validated-storage-probe";
 import { appRoot, matchStore } from "./runtime";
 import {
   createPhysicalConfirmations,
@@ -43,14 +43,8 @@ export async function commitResult(result: CommandResult): Promise<boolean> {
       match: result.state,
       events: [...state.current.events, result.event],
     });
-    if (
-      result.event.type === "MatchEnded" &&
-      (result.state as { readonly phase: string }).phase === "ended"
-    ) {
-      const ended = result.state as Extract<
-        MatchState,
-        { readonly phase: "ended" }
-      >;
+    if (result.event.type === "MatchEnded" && result.state.phase === "ended") {
+      const ended = result.state;
       // Post-T02 the ended-state contract fields are required, so the
       // summary is always complete once phase === "ended".
       patchShellState({
@@ -81,7 +75,7 @@ export async function commitResult(result: CommandResult): Promise<boolean> {
     return true;
   } catch {
     patchShellState({
-      matchError: "Canonical storage could not commit the command.",
+      matchError: "Validated storage could not commit the command.",
     });
     return false;
   } finally {
@@ -244,7 +238,7 @@ export function cancelAbilityDraft(): void {
 }
 
 /**
- * Confirms an ability draft through the store's canonical commit path,
+ * Confirms an ability draft through the store's validated commit path,
  * mirroring confirmBasicAttack. Domain errors that accept a recorded
  * Override surface as an explicit Override prompt instead of a dead end.
  */
@@ -372,7 +366,7 @@ async function removePriorSummary(): Promise<void> {
     patchShellState({ summary: null, matchError: null });
   } catch {
     patchShellState({
-      matchError: "Canonical storage could not remove the prior summary.",
+      matchError: "Validated storage could not remove the prior summary.",
     });
   } finally {
     patchShellState({ saving: false });
@@ -396,7 +390,7 @@ async function startNewMatch(): Promise<void> {
     }
   } catch {
     patchShellState({
-      matchError: "Canonical storage could not start a new Match.",
+      matchError: "Validated storage could not start a new Match.",
     });
   } finally {
     patchShellState({ saving: false });
@@ -444,7 +438,7 @@ async function removeEndedMatch(
     });
   } catch {
     patchShellState({
-      matchError: "Canonical storage could not remove the Ended Match.",
+      matchError: "Validated storage could not remove the Ended Match.",
     });
   } finally {
     patchShellState({ saving: false });
@@ -476,7 +470,7 @@ async function discardSetupMatch(
     }
   } catch {
     patchShellState({
-      matchError: "Canonical storage could not discard the Match.",
+      matchError: "Validated storage could not discard the Match.",
     });
   } finally {
     patchShellState({ saving: false });
@@ -542,7 +536,7 @@ export async function restoreMatch(): Promise<void> {
     if (state.current.match === null && state.current.summary === null) {
       patchShellState({
         matchError:
-          "Saved canonical data is incompatible, incomplete, or structurally invalid.",
+          "Saved validated data is incompatible, incomplete, or structurally invalid.",
       });
     } else {
       patchShellState({ matchError: null });
@@ -553,15 +547,15 @@ export async function restoreMatch(): Promise<void> {
 }
 export async function runStorageProbe(): Promise<void> {
   patchShellState({
-    canonicalStorage: "checking",
+    validatedStorage: "checking",
     storageDetail: "Running a write and removal safety check.",
   });
-  const result = await probeCanonicalStorage();
+  const result = await probeValidatedStorage();
   patchShellState({
-    canonicalStorage: result.status,
+    validatedStorage: result.status,
     storageDetail:
       result.status === "ready"
-        ? "The canonical write and removal check passed."
+        ? "The validated write and removal check passed."
         : `${result.reason} The shell remains safe. Retry this check.`,
   });
   if (result.status === "ready" && !state.current.matchLoaded)

@@ -8,7 +8,7 @@ import { assertActiveEffectStructure } from "../domain/match-history";
 import { MATCH_CONFIGURATION } from "../domain/match-configuration";
 
 const invalidActionResolution = () =>
-  new Error("The canonical Action Resolution Event is invalid.");
+  new Error("The validated Action Resolution Event is invalid.");
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
@@ -123,6 +123,6 @@ export function assertActionResolutionEffectCollections(
 
 export function assertExpiredEffectCollection(value: unknown): void {
   if (!activeEffectCollectionIsValid(value)) {
-    throw new Error("The canonical Finish Turn Event is invalid.");
+    throw new Error("The validated Finish Turn Event is invalid.");
   }
 }

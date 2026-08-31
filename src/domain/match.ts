@@ -30,9 +30,12 @@ export {
   isEffectBoundaryTrigger,
   isEffectDurationKind,
   isEffectOperation,
+  isInteger,
   isMatchEventType,
   isPhase,
+  isReactionId,
   isTeam,
+  nextActionCount,
 } from "./match-types";
 
 export { isAbilityName } from "./match-configuration";
@@ -72,7 +75,7 @@ export { resolveAbility } from "./match-abilities";
 export {
   assertMatchStateStructure,
   assertMatchSummaryStructure,
-  canonicalMatchRecordsEqual,
+  validatedMatchRecordsEqual,
   toMatchSummary,
 } from "./match-history";
 

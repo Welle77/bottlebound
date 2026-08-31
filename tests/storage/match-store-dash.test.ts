@@ -8,12 +8,12 @@ import {
   startMatch,
   undoLastEvent,
 } from "../../src/domain/match";
-import { assertCanonicalEvent } from "../../src/storage/match-store-canonical-event";
+import { assertValidatedEvent } from "../../src/storage/match-store-validated-event";
 import { createIndexedDbMatchStore } from "../../src/storage/match-store";
 import { queuedRandom } from "../domain/match-test-support";
 
 describe("IndexedDbMatchStore Dash persistence", () => {
-  it("validates, restores, and undoes a canonical Dash event", async () => {
+  it("validates, restores, and undoes a validated Dash event", async () => {
     const store = createIndexedDbMatchStore(new IDBFactory(), "dash-store");
     const setup = createSetup("dash-store", "2026-08-31T07:45:00.000Z");
     const generated = generateInitiative(
@@ -33,11 +33,11 @@ describe("IndexedDbMatchStore Dash persistence", () => {
     const events = [setup.event, generated.event, started.event, dashed.event];
 
     expect(() => {
-      assertCanonicalEvent(dashed.event);
+      assertValidatedEvent(dashed.event);
     }).not.toThrow();
     expect(() => {
-      assertCanonicalEvent({ ...dashed.event, remainingMovementPaces: 1 });
-    }).toThrow("The canonical Dash Event is invalid.");
+      assertValidatedEvent({ ...dashed.event, remainingMovementPaces: 1 });
+    }).toThrow("The validated Dash Event is invalid.");
     for (const result of [setup, generated, started, dashed]) {
       await store.commit(result.event, result.state);
     }

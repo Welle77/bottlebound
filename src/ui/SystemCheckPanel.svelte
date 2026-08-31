@@ -46,9 +46,9 @@
           : "The app shell is not ready for an offline launch yet."}
       </p>
     </div>
-    <div class="status-card" data-status={readiness.canonicalStorage}>
-      <dt>Canonical storage</dt>
-      <dd>{statusLabel(readiness.canonicalStorage)}</dd>
+    <div class="status-card" data-status={readiness.validatedStorage}>
+      <dt>Validated storage</dt>
+      <dd>{statusLabel(readiness.validatedStorage)}</dd>
       <p>{state.current.storageDetail}</p>
     </div>
   </dl>

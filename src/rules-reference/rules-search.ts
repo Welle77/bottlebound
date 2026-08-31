@@ -137,7 +137,7 @@ function matchingRanges(
             ranges: matched,
           };
         },
-        { cursor: 0, ranges: [] as readonly SourceRange[] },
+        { cursor: 0, ranges: [] },
       ).ranges;
     })
     .reduce<readonly SourceRange[]>(insertSorted, []);

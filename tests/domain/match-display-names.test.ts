@@ -81,10 +81,7 @@ describe("Display Name assignment", () => {
     expect(() =>
       assignDisplayNames(
         setup.state,
-        { "unknown-character": "Silk" } as unknown as Record<
-          import("../../src/domain/match").CharacterId,
-          string
-        >,
+        { "unknown-character": "Silk" },
         "2026-08-22T14:01:00.000Z",
       ),
     ).toThrow("The Display Name references an unknown character.");
@@ -97,7 +94,7 @@ describe("Display Name assignment", () => {
     const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
     expect(() =>
       assignDisplayNames(
-        started.state as unknown as typeof setup.state,
+        started.state,
         { "drow-rogue": "Silk" },
         "2026-08-22T14:03:00.000Z",
       ),

@@ -86,7 +86,7 @@ describe("Move", () => {
     });
   });
 
-  it("replays and undoes a Move through canonical Match history", () => {
+  it("replays and undoes a Move through validated Match history", () => {
     const setup = createSetup("dash-history", "2026-08-31T07:40:00.000Z");
     const generated = generateInitiative(
       setup.state,

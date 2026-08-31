@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+type RGB = [number, number, number];
+
 async function waitForInstalledShell(page: Page): Promise<void> {
   await page.goto("/");
   await page.evaluate(() => navigator.serviceWorker.ready);
@@ -92,14 +94,16 @@ test("invalid saved data stops recovery without creating replacement data", asyn
     page.getByRole("heading", { name: "Saved Match needs recovery" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Starting a new Match will replace the incompatible saved data."),
+    page.getByText(
+      "Starting a new Match will replace the incompatible saved data.",
+    ),
   ).toBeVisible();
   await page.getByRole("button", { name: "Create Match" }).click();
   await expect(
     page.getByRole("heading", { name: "Initiative Setup" }),
   ).toBeVisible();
   await expect(
-    page.getByText("Saved canonical data is incompatible"),
+    page.getByText("Saved validated data is incompatible"),
   ).toHaveCount(0);
 });
 
@@ -139,7 +143,7 @@ test("the Setup controls and layout meet browser usability checks", async ({
         ?.slice(0, 3)
         .map(Number);
       if (!channels || channels.length !== 3) throw new Error("Invalid color");
-      return channels as [number, number, number];
+      return channels as RGB;
     };
     const luminance = ([red, green, blue]: [number, number, number]) => {
       const linear = [red, green, blue].map((channel) => {
