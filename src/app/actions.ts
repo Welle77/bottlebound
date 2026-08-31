@@ -160,6 +160,11 @@ export function openAbilityDraft(abilityId: AbilityId): void {
   )
     return;
   const physical = ability.interaction === "physical-attack";
+  const step = (() => {
+    if (ability.interaction === "self") return "review";
+    if (physical) return "contacts";
+    return "select-target";
+  })();
   patchShellState({
     abilityPickerOpen: false,
     actionDraft: {
@@ -168,12 +173,7 @@ export function openAbilityDraft(abilityId: AbilityId): void {
       configurationVersion: match.configurationVersion,
       abilityId: ability.id,
       targets: [],
-      step:
-        ability.interaction === "self"
-          ? "review"
-          : physical
-            ? "contacts"
-            : "select-target",
+      step,
       attackLegs: physical ? [[]] : [],
       physicalConfirmations: createPhysicalConfirmations(
         state.current.requirePhysicalConfirmations,

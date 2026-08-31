@@ -447,22 +447,24 @@ function buildAbilityAttackLegs(context: {
     return [initialAbilityAttackLeg(ability, affectedCharacterIds, rangePaces)];
   }
   const mapped = (attackLegsInput ?? [{ affectedCharacterIds }]).map<AttackLeg>(
-    (leg, index) => ({
-      sequence: index + 1,
-      kind: index === 0 ? "initial" : "redirected",
-      sourceCharacterId: ability.ownerCharacterId,
-      attackId: ability.id,
-      rangePaces,
-      redirectedByReactionId:
-        index === 0 ? null : (reactions[0]?.reactionId ?? null),
-      towardCharacterId:
-        index === 0
-          ? null
-          : reactions[0]?.ownerCharacterId
-            ? ability.ownerCharacterId
-            : null,
-      affectedCharacterIds: [...leg.affectedCharacterIds],
-    }),
+    (leg, index) => {
+      const towardCharacterId = (() => {
+        if (index === 0) return null;
+        if (reactions[0]?.ownerCharacterId) return ability.ownerCharacterId;
+        return null;
+      })();
+      return {
+        sequence: index + 1,
+        kind: index === 0 ? "initial" : "redirected",
+        sourceCharacterId: ability.ownerCharacterId,
+        attackId: ability.id,
+        rangePaces,
+        redirectedByReactionId:
+          index === 0 ? null : (reactions[0]?.reactionId ?? null),
+        towardCharacterId,
+        affectedCharacterIds: [...leg.affectedCharacterIds],
+      };
+    },
   );
   return mapped.length === 0
     ? [initialAbilityAttackLeg(ability, affectedCharacterIds, rangePaces)]

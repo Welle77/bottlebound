@@ -275,12 +275,11 @@ function assertEndedMatchDecision(value: EndedMatchState): void {
 
 function isValidCombatEconomy(state: Record<string, unknown>): boolean {
   const { remainingMovementPaces } = state;
-  const actionsUsed =
-    typeof state.actionsUsed === "number"
-      ? state.actionsUsed
-      : state.majorActionUsed
-        ? 1
-        : 0;
+  const actionsUsed = (() => {
+    if (typeof state.actionsUsed === "number") return state.actionsUsed;
+    if (state.majorActionUsed) return 1;
+    return 0;
+  })();
   return (
     typeof state.majorActionUsed === "boolean" &&
     isInteger(actionsUsed) &&

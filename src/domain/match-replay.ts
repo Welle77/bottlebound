@@ -53,6 +53,10 @@ function applyHistoricalActionResolution(
   const nextActiveEffects = [...retained, ...appliedEffects].filter(
     (effect) => !expiredIds.has(effect.effectId),
   );
+  const outcome = (() => {
+    if (event.eliminatedTeams.length !== 1) return null;
+    return event.eliminatedTeams[0] === "Drow" ? "Duergar" : "Drow";
+  })();
   return {
     ...state,
     sequence: event.sequence,
@@ -67,12 +71,7 @@ function applyHistoricalActionResolution(
     spentAbilityIds: spentAbilityIds,
     characters,
     eliminatedTeams: [...event.eliminatedTeams],
-    outcome:
-      event.eliminatedTeams.length === 1
-        ? event.eliminatedTeams[0] === "Drow"
-          ? "Duergar"
-          : "Drow"
-        : null,
+    outcome,
     activeEffects: nextActiveEffects,
   };
 }
@@ -177,17 +176,17 @@ function applyHistoricalShapeshift(
   ];
   return adjustments.reduce(
     (updated, adjustment) =>
-      updated.map((character) =>
-        character.characterId === adjustment.characterId
-          ? adjustment.toMaxHp === 4
-            ? { ...character, currentMaxHp: 4 }
-            : {
-                ...character,
-                currentMaxHp: 3,
-                hp: Math.min(character.hp, 3),
-              }
-          : character,
-      ),
+      updated.map((character) => {
+        if (character.characterId !== adjustment.characterId) return character;
+        if (adjustment.toMaxHp === 4) {
+          return { ...character, currentMaxHp: 4 };
+        }
+        return {
+          ...character,
+          currentMaxHp: 3,
+          hp: Math.min(character.hp, 3),
+        };
+      }),
     characters,
   );
 }

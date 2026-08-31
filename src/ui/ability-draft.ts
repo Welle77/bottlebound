@@ -367,14 +367,17 @@ export function attackPreviewRow(
     team: character.team,
     // One composed run so regex text probes see the exact legacy cell text
     // across its interpolated halves.
-    damageText: `${String(damage)}${damage === 0 ? " (prevented)" : ""}${notes.length > 0 ? ` · ${notes.join(" · ")}` : ""}`,
+    damageText: [
+      String(damage),
+      damage === 0 ? " (prevented)" : "",
+      notes.length > 0 ? ` · ${notes.join(" · ")}` : "",
+    ].join(""),
     hpText: `${String(hp)} → ${String(after)}`,
-    lifeStateText:
-      hp === 0
-        ? "Downed → Downed"
-        : after === 0
-          ? "Active → Downed"
-          : "Active → Active",
+    lifeStateText: (() => {
+      if (hp === 0) return "Downed → Downed";
+      if (after === 0) return "Active → Downed";
+      return "Active → Active";
+    })(),
   };
 }
 
@@ -407,17 +410,20 @@ export function effectPreviewRow(
   const revives =
     (ability.name === "Lay on Hands" && hp === 0) ||
     ability.name === "Revivify";
-  const after = revives
-    ? 1
-    : heals
-      ? Math.min(
-          ability.name === "Shapeshift"
-            ? 4
-            : currentMaxHpOf(match, characterId),
-          hp + 1,
-        )
-      : hp;
-  const label = revives ? "Revived" : heals ? "+1 HP" : "No HP change";
+  const maxHp = (() => {
+    if (ability.name === "Shapeshift") return 4;
+    return currentMaxHpOf(match, characterId);
+  })();
+  const after = (() => {
+    if (revives) return 1;
+    if (heals) return Math.min(maxHp, hp + 1);
+    return hp;
+  })();
+  const label = (() => {
+    if (revives) return "Revived";
+    if (heals) return "+1 HP";
+    return "No HP change";
+  })();
   return {
     character,
     team: character.team,

@@ -57,13 +57,11 @@
       const activeLegIndex = currentDraft.attackLegs.length - 1;
       const activeLeg = currentDraft.attackLegs.at(activeLegIndex);
       if (!activeLeg) return;
-      const attackLegs = currentDraft.attackLegs.map((leg, index) =>
-        index === activeLegIndex
-          ? checked
-            ? [...activeLeg, characterId]
-            : activeLeg.filter((id) => id !== characterId)
-          : leg,
-      );
+      const attackLegs = currentDraft.attackLegs.map((leg, index) => {
+        if (index !== activeLegIndex) return leg;
+        if (checked) return [...activeLeg, characterId];
+        return activeLeg.filter((id) => id !== characterId);
+      });
       const affectedCharacterIds = draftAffectedCharacterIds({
         ...currentDraft,
         attackLegs,

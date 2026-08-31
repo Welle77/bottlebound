@@ -516,22 +516,24 @@ function buildAttackLegs(context: {
   readonly redirectReaction: ProtectiveReactionResolution | undefined;
 }): ActionResolvedEvent["attackLegs"] {
   const { inputLegs, sourceCharacterId, attack, redirectReaction } = context;
-  return inputLegs.map((leg, index) => ({
-    sequence: index + 1,
-    kind: index === 0 ? "initial" : "redirected",
-    sourceCharacterId,
-    attackId: attack.id,
-    rangePaces: attack.rangePaces,
-    redirectedByReactionId:
-      index === 0 ? null : (redirectReaction?.reactionId ?? null),
-    towardCharacterId:
-      index === 0
-        ? null
-        : redirectReaction?.ownerCharacterId
-          ? sourceCharacterId
-          : null,
-    affectedCharacterIds: [...leg.affectedCharacterIds],
-  }));
+  return inputLegs.map((leg, index) => {
+    const towardCharacterId = (() => {
+      if (index === 0) return null;
+      if (redirectReaction?.ownerCharacterId) return sourceCharacterId;
+      return null;
+    })();
+    return {
+      sequence: index + 1,
+      kind: index === 0 ? "initial" : "redirected",
+      sourceCharacterId,
+      attackId: attack.id,
+      rangePaces: attack.rangePaces,
+      redirectedByReactionId:
+        index === 0 ? null : (redirectReaction?.reactionId ?? null),
+      towardCharacterId,
+      affectedCharacterIds: [...leg.affectedCharacterIds],
+    };
+  });
 }
 
 export function resolveBasicAttack(

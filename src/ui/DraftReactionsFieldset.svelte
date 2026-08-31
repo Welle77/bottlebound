@@ -92,6 +92,9 @@
       const selected = event.currentTarget.checked;
       const { reactionId, protectedCharacterId } = row;
       const deflectingPalm = reactionId === DEFLECTING_PALM_REACTION_ID;
+      const override = row.override
+        ? MATCH_CONFIGURATION.refereeInstructions.stateInvalidReaction
+        : null;
       const reactions = selected
         ? [
             ...currentDraft.reactions.filter(
@@ -100,20 +103,21 @@
             {
               reactionId,
               protectedCharacterId,
-              override: row.override
-                ? MATCH_CONFIGURATION.refereeInstructions.stateInvalidReaction
-                : null,
+              override,
             },
           ]
         : currentDraft.reactions.filter(
             (selection) => selection.reactionId !== reactionId,
           );
-      const attackLegs =
-        selected && deflectingPalm && currentDraft.attackLegs.length === 1
-          ? [...currentDraft.attackLegs, []]
-          : !selected && deflectingPalm && currentDraft.attackLegs.length === 2
-            ? currentDraft.attackLegs.slice(0, -1)
-            : currentDraft.attackLegs;
+      const attackLegs = (() => {
+        if (selected && deflectingPalm && currentDraft.attackLegs.length === 1) {
+          return [...currentDraft.attackLegs, []];
+        }
+        if (!selected && deflectingPalm && currentDraft.attackLegs.length === 2) {
+          return currentDraft.attackLegs.slice(0, -1);
+        }
+        return currentDraft.attackLegs;
+      })();
       patchShellState({
         actionDraft: { ...currentDraft, reactions, attackLegs },
       });

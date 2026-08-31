@@ -21,12 +21,16 @@ export type ReadinessState = {
 };
 
 export function deriveReadinessState(inputs: ReadinessInputs): ReadinessState {
-  const offline =
-    inputs.serviceWorker === "controlled" && inputs.appShellCache === "ready"
-      ? "ready"
-      : inputs.serviceWorker === "failed" || inputs.appShellCache === "failed"
-        ? "unavailable"
-        : "checking";
+  const offline = (() => {
+    if (
+      inputs.serviceWorker === "controlled" &&
+      inputs.appShellCache === "ready"
+    )
+      return "ready";
+    if (inputs.serviceWorker === "failed" || inputs.appShellCache === "failed")
+      return "unavailable";
+    return "checking";
+  })();
   const storageReady = inputs.validatedStorage === "ready";
 
   return {
@@ -35,10 +39,12 @@ export function deriveReadinessState(inputs: ReadinessInputs): ReadinessState {
     validatedStorage: inputs.validatedStorage,
     offline,
     matchCreation: storageReady ? "available" : "blocked",
-    blockingReason: storageReady
-      ? null
-      : inputs.validatedStorage === "failed"
-        ? "Validated storage is unavailable. Retry the storage check before you create a Match."
-        : "Validated storage must pass its safety check before you create a Match.",
+    blockingReason: (() => {
+      if (storageReady) return null;
+      if (inputs.validatedStorage === "failed") {
+        return "Validated storage is unavailable. Retry the storage check before you create a Match.";
+      }
+      return "Validated storage must pass its safety check before you create a Match.";
+    })(),
   };
 }

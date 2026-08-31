@@ -148,8 +148,10 @@
     const attacks =
       ability.interaction === "targeted-attack" ||
       ability.interaction === "physical-attack";
-    const hitRows = attacks
-      ? (ability.interaction === "physical-attack"
+    const hitRows = (() => {
+      if (!attacks) return [];
+      const attackTargets =
+        ability.interaction === "physical-attack"
           ? draft.attackLegs.flatMap((leg, legIndex) =>
               leg.map((characterId, contactIndex) => ({
                 characterId,
@@ -159,28 +161,34 @@
           : draft.targets.map((characterId) => ({
               characterId,
               label: "1.1",
-            }))
-        )
-          .map(({ characterId, label }) =>
-            attackPreviewRow(
-              {
-                match,
-                draft,
-                baseDamage: 1,
-                physicalAttack: ability.interaction === "physical-attack",
-              },
-              characterId,
-              label,
-            ),
-          )
-      : [];
-    const changeRows =
-      attacks || (draft.targets.length === 0 && ability.interaction !== "self")
-        ? []
-        : (ability.interaction === "self"
-            ? [ability.ownerCharacterId]
-            : draft.targets
-          ).map((characterId) => effectPreviewRow(match, ability, characterId));
+            }));
+      return attackTargets.map(({ characterId, label }) =>
+        attackPreviewRow(
+          {
+            match,
+            draft,
+            baseDamage: 1,
+            physicalAttack: ability.interaction === "physical-attack",
+          },
+          characterId,
+          label,
+        ),
+      );
+    })();
+    const changeRows = (() => {
+      if (
+        attacks ||
+        (draft.targets.length === 0 && ability.interaction !== "self")
+      )
+        return [];
+      const changeTargets =
+        ability.interaction === "self"
+          ? [ability.ownerCharacterId]
+          : draft.targets;
+      return changeTargets.map((characterId) =>
+        effectPreviewRow(match, ability, characterId),
+      );
+    })();
     const legReviews: readonly LegReview[] = draft.attackLegs
       .filter((leg) => leg.length > 0 || draft.attackLegs.length > 1)
       .map((leg, index) => ({
@@ -220,12 +228,11 @@
     );
     const warnings = draftWarnings(match, draft, ability);
     const needsAbilityOverride = warnings.length > 0;
-    const backStep: DraftStep =
-      ability.interaction === "physical-attack"
-        ? "contacts"
-        : ability.interaction === "targeted-attack"
-          ? "reactions"
-          : "select-target";
+    const backStep: DraftStep = (() => {
+      if (ability.interaction === "physical-attack") return "contacts";
+      if (ability.interaction === "targeted-attack") return "reactions";
+      return "select-target";
+    })();
     return {
       hitRows,
       changeRows,
@@ -264,11 +271,11 @@
       if (!currentDraft || currentDraft.kind !== "ability" || !ability) return;
       const multi = ability.targetPolicy.cardinality === "all-in-range";
       const checked = event.currentTarget.checked;
-      const targets = checked
-        ? multi
-          ? [...currentDraft.targets, characterId]
-          : [characterId]
-        : currentDraft.targets.filter((id) => id !== characterId);
+      const targets = (() => {
+        if (!checked) return currentDraft.targets.filter((id) => id !== characterId);
+        if (multi) return [...currentDraft.targets, characterId];
+        return [characterId];
+      })();
       patchShellState({
         actionDraft: {
           ...currentDraft,

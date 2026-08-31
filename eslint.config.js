@@ -100,6 +100,10 @@ export default defineConfig(
   tseslint.configs.strict,
   tseslint.configs.stylistic,
   {
+    name: "style/no-nested-ternary",
+    rules: { "no-nested-ternary": "error" },
+  },
+  {
     name: "style/type-definitions",
     rules: {
       "@typescript-eslint/consistent-type-definitions": ["error", "type"],

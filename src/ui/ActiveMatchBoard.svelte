@@ -119,14 +119,14 @@
     return match.initiative.map((entry) => {
       const character = requireCharacter(entry.characterId);
       const hp = requireHp(hpByCharacter, entry.characterId);
-      const turnLabel =
-        entry.slot === match.activeSlot
-          ? "Active"
-          : hp === 0 || match.eliminatedTeams.includes(character.team)
-            ? "Skipped · Downed"
-            : entry.slot === nextSlot
-              ? "Next"
-              : "Waiting";
+      const turnLabel = (() => {
+        if (entry.slot === match.activeSlot) return "Active";
+        if (hp === 0 || match.eliminatedTeams.includes(character.team)) {
+          return "Skipped · Downed";
+        }
+        if (entry.slot === nextSlot) return "Next";
+        return "Waiting";
+      })();
       return {
         key: entry.characterId,
         slot: entry.slot,
@@ -148,15 +148,16 @@
       normalElimination &&
       firstEliminatedTeam !== undefined &&
       match.acknowledgedEliminations.includes(firstEliminatedTeam);
-    return normalElimination
-      ? eliminationAcknowledged
-        ? "acknowledged"
-        : "normal"
-      : match.eliminatedTeams.length === 2 && match.outcome === null
-        ? "simultaneous-open"
-        : match.eliminatedTeams.length === 2 && match.outcome !== null
-          ? "simultaneous-resolved"
-          : "none";
+    if (normalElimination) {
+      return eliminationAcknowledged ? "acknowledged" : "normal";
+    }
+    if (match.eliminatedTeams.length === 2 && match.outcome === null) {
+      return "simultaneous-open";
+    }
+    if (match.eliminatedTeams.length === 2 && match.outcome !== null) {
+      return "simultaneous-resolved";
+    }
+    return "none";
   }
 
   function buildActiveMatchView(match: ActiveMatchState) {
