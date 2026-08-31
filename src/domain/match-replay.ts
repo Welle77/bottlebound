@@ -51,6 +51,10 @@ function applyHistoricalActionResolution(
   return {
     ...state,
     sequence: event.sequence,
+    actionsUsed: Math.min(
+      2,
+      (state.actionsUsed ?? (state.majorActionUsed ? 1 : 0)) + 1,
+    ) as 1 | 2,
     majorActionUsed: true,
     spentReactionIds: [
       ...new Set([
@@ -87,8 +91,13 @@ function validateHistoricalActionResolution(
   if (event.sourceCharacterId !== activeCharacterId) {
     throw new Error("The Action Resolution source is not active.");
   }
-  if (state.majorActionUsed && event.majorActionOverride === null) {
-    throw new Error("A second Basic Attack needs a recorded referee override.");
+  if (
+    (state.actionsUsed ?? (state.majorActionUsed ? 1 : 0)) >= 2 &&
+    event.majorActionOverride === null
+  ) {
+    throw new Error(
+      "The Action Resolution needs an unused action or a recorded referee override.",
+    );
   }
   const contactIds = event.attackLegs.flatMap((leg) => [
     ...leg.affectedCharacterIds,

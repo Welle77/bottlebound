@@ -14,7 +14,7 @@
     continueMatch,
     openAbilityPicker,
     openBasicAttack,
-    recordDash,
+    recordMove,
     recordSimultaneousRuling,
   } from "../app/actions";
   import { patchShellState, state } from "./shell-state.svelte";
@@ -187,12 +187,11 @@
       activeHp,
       nextHp,
       activeDowned,
-      dashAvailable:
+      moveAvailable:
         !saving &&
         !activeDowned &&
         match.eliminatedTeams.length !== 2 &&
-        match.remainingMovementPaces === match.movementPaces &&
-        !match.majorActionUsed,
+        (match.actionsUsed ?? (match.majorActionUsed ? 1 : 0)) < 2,
       rows,
       saving,
       canUndo,
@@ -305,13 +304,13 @@
     {#if view.showCommands}
       <div class="match-actions" data-surface-order="actions">
         <button
-          id="dash"
+          id="move"
           class="secondary-action"
           type="button"
-          disabled={!view.dashAvailable}
-          onclick={() => void recordDash()}
+          disabled={!view.moveAvailable}
+          onclick={() => void recordMove()}
         >
-          Dash
+          Move
         </button>
         <button
           id="basic-attack"
@@ -320,8 +319,8 @@
           disabled={view.saving ||
             !view.combatAvailable ||
             view.activeDowned ||
-            (view.match.remainingMovementPaces === 0 &&
-              view.match.majorActionUsed) ||
+            (view.match.actionsUsed ??
+              (view.match.majorActionUsed ? 1 : 0)) >= 2 ||
             view.match.eliminatedTeams.length === 2}
           aria-describedby={view.combatAvailable
             ? undefined
@@ -337,8 +336,8 @@
           disabled={view.saving ||
             !view.combatAvailable ||
             view.activeDowned ||
-            (view.match.remainingMovementPaces === 0 &&
-              view.match.majorActionUsed) ||
+            (view.match.actionsUsed ??
+              (view.match.majorActionUsed ? 1 : 0)) >= 2 ||
             view.match.eliminatedTeams.length === 2}
           aria-describedby={view.combatAvailable
             ? undefined

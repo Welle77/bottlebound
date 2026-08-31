@@ -167,7 +167,9 @@ function validateBasicAttack(
     throw new Error("The Ended Match is read-only.");
   }
   if (state.configurationVersion !== MATCH_CONFIGURATION_VERSION) {
-    throw new Error("Basic Attack needs the exact bundled Match Configuration.");
+    throw new Error(
+      "Basic Attack needs the exact bundled Match Configuration.",
+    );
   }
   const activeCharacterId = state.initiative[state.activeSlot - 1]?.characterId;
   if (input.sourceCharacterId !== activeCharacterId) {
@@ -191,8 +193,13 @@ function validateBasicAttack(
     throw new Error("Every manual physical confirmation is required.");
   }
   const override = input.majorActionOverride?.trim() || null;
-  if (state.majorActionUsed && override === null) {
-    throw new Error("A second Basic Attack needs a recorded referee override.");
+  if (
+    (state.actionsUsed ?? (state.majorActionUsed ? 1 : 0)) >= 2 &&
+    override === null
+  ) {
+    throw new Error(
+      "Basic Attack needs an unused action or a recorded referee override.",
+    );
   }
   return { attack, inputLegs, affectedCharacterIds, override };
 }
@@ -597,6 +604,10 @@ export function resolveBasicAttack(
     state: {
       ...state,
       sequence,
+      actionsUsed: Math.min(
+        2,
+        (state.actionsUsed ?? (state.majorActionUsed ? 1 : 0)) + 1,
+      ) as 1 | 2,
       majorActionUsed: true,
       spentReactionIds: [
         ...new Set([

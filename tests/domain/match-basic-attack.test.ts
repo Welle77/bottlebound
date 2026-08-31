@@ -98,7 +98,7 @@ describe("Active Match commands", () => {
     ).toEqual(result.state);
   });
 
-  it("rejects duplicate contacts, missing checks, and a second attack without an override", () => {
+  it("rejects duplicate contacts, missing checks, and a third attack", () => {
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
     const generated = generateInitiative(
       setup.state,
@@ -148,17 +148,15 @@ describe("Active Match commands", () => {
       input,
       "2026-08-22T14:03:00.000Z",
     );
-    expect(() =>
-      resolveBasicAttack(first.state, input, "2026-08-22T14:04:00.000Z"),
-    ).toThrow("override");
     const second = resolveBasicAttack(
       first.state,
-      { ...input, majorActionOverride: "Referee confirmed a second attack." },
+      input,
       "2026-08-22T14:04:00.000Z",
     );
-    expect(second.event.majorActionOverride).toBe(
-      "Referee confirmed a second attack.",
-    );
+    expect(second.state.actionsUsed).toBe(2);
+    expect(() =>
+      resolveBasicAttack(second.state, input, "2026-08-22T14:05:00.000Z"),
+    ).toThrow("unused action");
     expect(
       finishTurn(second.state, "2026-08-22T14:05:00.000Z").state,
     ).toMatchObject({ majorActionUsed: false, activeSlot: 2 });

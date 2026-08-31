@@ -88,7 +88,7 @@ export async function commitResult(result: CommandResult): Promise<boolean> {
     patchShellState({ saving: false });
   }
 }
-export async function recordDash(): Promise<void> {
+export async function recordMove(): Promise<void> {
   const match = state.current.match;
   if (match?.phase !== "active") return;
   const sourceCharacterId = match.initiative[match.activeSlot - 1]?.characterId;

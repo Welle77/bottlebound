@@ -76,7 +76,9 @@
   <p>Phase: {match.phase === "active" ? "Active" : match.phase === "ended" ? "Ended" : "Setup"} · Sequence {match.sequence}</p>
   {#if match.phase !== "setup"}
     <p class="turn-position">Round {match.round} · Slot {match.activeSlot}</p>
-    <p>Major Action: {match.majorActionUsed ? "Used" : "Available"}</p>
+    <p>
+      Actions: {match.actionsUsed ?? (match.majorActionUsed ? 1 : 0)}/2 used
+    </p>
     <p>Spent Abilities: {spentAbilityNames}</p>
     <p>Spent Reactions: {spentReactionNames}</p>
   {:else}

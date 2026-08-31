@@ -63,7 +63,7 @@ Roles are descriptive labels only. They do not grant extra rules, bonuses, damag
 
 **Round:** A full pass through the fixed initiative order. Downed characters are skipped. A revived character returns to its original initiative position.
 
-**Major Action:** A character may take one Major Action on its turn: Basic Attack, Standard Ability, or Powerful Ability.
+**Action:** One of two things a character may do on its turn. A Basic Attack, Standard Ability, Powerful Ability, or Move uses one action.
 
 **Line of Sight: Bottle-to-bottle visibility, as judged by the referee. Partial natural cover may still allow Line of Sight; complete or insufficient visibility blocks it. There is no fixed percentage test.**
 
@@ -93,7 +93,7 @@ Active: A character that is not Downed.
 
 ## 7. Turn Structure & Movement
 
-**On each turn, a character may move up to 2 paces and take one Major Action, in either order.**
+**On each turn, a character has two actions. A Move, Basic Attack, Standard Ability, or Powerful Ability uses one action. Any two actions may be taken in either order.**
 
 - Normal movement may be 0, 1, or 2 natural walking paces and may change direction between paces.
 
@@ -101,17 +101,17 @@ Active: A character that is not Downed.
 
 Normal movement must follow a safe legal path. A bottle may not finish outside the battlefield or overlapping another bottle.
 
-- A character may move before or after its Major Action. Range and Line of Sight are checked from the bottle’s position at the exact moment an action or ability is used.
+- A Move action moves the bottle up to 2 paces. Range and Line of Sight are checked from the bottle’s position at the exact moment an action or ability is used.
 
-- A character cannot take normal movement twice in one turn.
+- A character may take Move twice in one turn.
 
-- A Standard Ability may be used on a turn with normal movement.
+- A character may use any two valid actions, including two Basic Attacks, two Abilities, two Moves, or any combination of them.
 
-- A Powerful Ability consumes the turn and permits 0 normal movement. Movement explicitly granted by the Powerful Ability itself is still allowed.
+- A Powerful Ability uses one action. It does not grant normal movement unless its card explicitly says so. Movement explicitly granted by the Powerful Ability itself is still allowed.
 
-- A character may take only movement, only a Major Action, or neither.
+- A character may take zero, one, or two actions.
 
-- Reactions happen outside the normal turn economy and do not consume the reacting character’s movement or Major Action.
+- Reactions happen outside the normal turn economy and do not consume an action.
 
 ## 8. Basic Attacks
 
@@ -358,7 +358,7 @@ HP 3 • Initiative +0 • Basic Attack: Ranged — 6 paces
 | **Range**         | 6 paces                                                                                                                                                                                                                                                    |
 | **Line of Sight** | Yes                                                                                                                                                                                                                                                        |
 | **Ball Required** | No                                                                                                                                                                                                                                                         |
-| **Effect**        | On the target’s next turn, its movement is limited to a maximum of 1 pace. This restriction also limits movement granted by abilities unless that ability explicitly overrides movement restrictions. The target may still take its Major Action normally. |
+| **Effect**        | On the target’s next turn, its movement is limited to a maximum of 1 pace. This restriction also limits movement granted by abilities unless that ability explicitly overrides movement restrictions. The target may still take its actions normally. |
 | **Duration**      | The target’s next turn.                                                                                                                                                                                                                                    |
 
 ##### \[ \] Misty Escape
@@ -426,7 +426,7 @@ HP 3 • Initiative +2 • Basic Attack: Ranged — 6 paces
 | **Range**         | 4 paces                                                                                                                                                                                                                                                                           |
 | **Line of Sight** | No                                                                                                                                                                                                                                                                                |
 | **Ball Required** | No                                                                                                                                                                                                                                                                                |
-| **Effect**        | At activation, every living Drow ally within 4 paces, including the Bard, receives the buff. Each affected character may move up to 3 paces instead of 2 on its next turn. This does not grant an extra Major Action. Characters who later enter the radius do not gain the buff. |
+| **Effect**        | At activation, every living Drow ally within 4 paces, including the Bard, receives the buff. Each affected character may move up to 3 paces with a Move action instead of 2 on its next turn. This does not grant an extra action. Characters who later enter the radius do not gain the buff. |
 | **Duration**      | Each affected character’s next turn.                                                                                                                                                                                                                                              |
 
 ### DUERGAR
@@ -584,7 +584,7 @@ HP 3 • Initiative +0 • Basic Attack: Ranged — 6 paces
 | **Range**         | 4 paces                                                                                                                                                                                                         |
 | **Line of Sight** | No                                                                                                                                                                                                              |
 | **Ball Required** | No                                                                                                                                                                                                              |
-| **Effect**        | The target may move up to 3 paces instead of 2 on its next turn. This does not grant an additional Major Action. If the target is also subject to a movement restriction, the more restrictive maximum applies. |
+| **Effect**        | The target may move up to 3 paces instead of 2 with a Move action on its next turn. This does not grant an additional action. If the target is also subject to a movement restriction, the more restrictive maximum applies. |
 | **Duration**      | The target’s next turn.                                                                                                                                                                                         |
 
 ##### \[ \] Revivify
@@ -603,9 +603,9 @@ HP 3 • Initiative +0 • Basic Attack: Ranged — 6 paces
 
 | Rule                 | Summary                                                                                                                                                              |
 |----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Turn**             | Up to 2 paces normal movement + one Major Action, in either order.                                                                                                   |
-| **Major Action**     | Basic Attack, Standard Ability, or Powerful Ability.                                                                                                                 |
-| **Powerful**         | No normal movement that turn.                                                                                                                                        |
+| **Turn**             | Two actions. Move, Basic Attack, Standard Ability, or Powerful Ability each use one action. Any two actions may be combined. |
+| **Move**             | Move up to 2 paces. A character may Move twice in one turn. |
+| **Powerful**         | Uses one action. It does not grant normal movement unless its card says so. |
 | **Basic Melee**      | Physical throw, 1 damage, hard max 2 paces.                                                                                                                          |
 | **Basic Ranged**     | Physical throw, 1 damage, hard max 6 paces.                                                                                                                          |
 | **Physical throws**  | No declared target. Every legal bottle hit takes the attack’s damage/effects; any bottle contact counts. Terrain contact or leaving the battlefield ends the attack. |

@@ -31,7 +31,7 @@ test("the referee starts, advances, wraps, and restores an Active Match", async 
   ]);
   await expect(
     page.locator('[data-surface-order="actions"] button'),
-  ).toHaveText(["Dash", "Basic Attack", "Use Ability"]);
+  ).toHaveText(["Move", "Basic Attack", "Use Ability"]);
   await expect(page.locator(".active-order thead th")).toHaveText([
     "Character",
     "Team",
@@ -113,7 +113,7 @@ test("a failed Finish Turn leaves the last committed Active Match visible", asyn
   await expect(page.getByText("Round 1 · Slot 1 of 12")).toBeVisible();
 });
 
-test("the referee records Dash once and the normal action controls become unavailable", async ({
+test("the referee can Move twice, then the normal action controls become unavailable", async ({
   page,
 }) => {
   await page.goto("/");
@@ -121,11 +121,13 @@ test("the referee records Dash once and the normal action controls become unavai
   await page.getByRole("button", { name: "Generate initiative" }).click();
   await page.getByRole("button", { name: "Start Match" }).click();
 
-  const dash = page.getByRole("button", { name: "Dash" });
-  await expect(dash).toBeEnabled();
-  await dash.click();
+  const move = page.getByRole("button", { name: "Move" });
+  await expect(move).toBeEnabled();
+  await move.click();
 
-  await expect(dash).toBeDisabled();
+  await expect(move).toBeEnabled();
+  await move.click();
+  await expect(move).toBeDisabled();
   await expect(
     page.getByRole("button", { name: "Basic Attack" }),
   ).toBeDisabled();

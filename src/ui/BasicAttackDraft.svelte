@@ -166,7 +166,7 @@
       legReviews,
       reactionReviews,
       saving: state.current.saving,
-      confirmDisabled: match.majorActionUsed && !draft.majorActionOverride,
+      confirmDisabled: false,
     };
   });
 
@@ -209,20 +209,6 @@
 
   function cancelDraft(): void {
     patchShellState({ actionDraft: null });
-  }
-
-  function handleMajorOverrideChange(event: Event): void {
-    if (
-      state.current.actionDraft === null ||
-      !(event.currentTarget instanceof HTMLInputElement)
-    )
-      return;
-    patchShellState({
-      actionDraft: {
-        ...state.current.actionDraft,
-        majorActionOverride: event.currentTarget.checked,
-      },
-    });
   }
 
 </script>
@@ -328,17 +314,6 @@
           </tbody>
         </table>
       </div>
-      {#if base.match.majorActionUsed}
-        <label class="override-control">
-          <input
-            id="major-action-override"
-            type="checkbox"
-            checked={base.draft.majorActionOverride}
-            onchange={handleMajorOverrideChange}
-          />
-          Record referee override for a second Basic Attack this turn
-        </label>
-      {/if}
       <div class="match-actions">
         <button
           id="confirm-basic-attack"
