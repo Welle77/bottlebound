@@ -14,6 +14,11 @@ test("the referee starts, advances, wraps, and restores an Active Match", async 
   ).toBeVisible();
   await expect(page.getByText("Round 1 · Slot 1 of 12")).toBeVisible();
   await expect(page.locator("[data-active-character]")).toContainText("Active");
+  const actionUsage = page.locator("[data-active-character] .action-usage");
+  await expect(actionUsage).toHaveAttribute(
+    "aria-label",
+    "0 of 2 actions used",
+  );
   await expect(page.locator("[data-next-character]")).toContainText("Next");
   await expect(page.locator("#rules-round, #rules-turn")).toHaveCount(0);
   const surfaceOrder = await page
@@ -124,9 +129,15 @@ test("the referee can Move twice, then the normal action controls become unavail
   const move = page.getByRole("button", { name: "Move" });
   await expect(move).toBeEnabled();
   await move.click();
+  await expect(
+    page.locator("[data-active-character] .action-usage"),
+  ).toHaveAttribute("aria-label", "1 of 2 actions used");
 
   await expect(move).toBeEnabled();
   await move.click();
+  await expect(
+    page.locator("[data-active-character] .action-usage"),
+  ).toHaveAttribute("aria-label", "2 of 2 actions used");
   await expect(move).toBeDisabled();
   await expect(
     page.getByRole("button", { name: "Basic Attack" }),
@@ -135,4 +146,10 @@ test("the referee can Move twice, then the normal action controls become unavail
     page.getByRole("button", { name: "Use Ability" }),
   ).toBeDisabled();
   await expect(page.getByRole("button", { name: "Finish Turn" })).toBeEnabled();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByRole("heading", { name: "Undo Move?" })).toBeVisible();
+  await page.getByRole("button", { name: "Confirm Undo" }).click();
+  await expect(
+    page.locator("[data-active-character] .action-usage"),
+  ).toHaveAttribute("aria-label", "1 of 2 actions used");
 });

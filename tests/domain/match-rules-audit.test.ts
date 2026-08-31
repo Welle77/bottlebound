@@ -412,6 +412,58 @@ describe("rules coverage audit: card life-state gates", () => {
 });
 
 describe("rules coverage audit: Powerful prohibition and expiry boundaries", () => {
+  it("blocks Powerful Abilities after Stunning Strike through the affected character's next turn", () => {
+    const run = startedAuditMatch("audit-stunning-strike-prohibit-powerful");
+    const stunning = cast(run, "duergar-monk", {
+      abilityName: "Stunning Strike",
+      input: {
+        attackLegs: [{ affectedCharacterIds: ["drow-sorcerer"] }],
+        physicalConfirmations: CONFIRMATIONS,
+      },
+      step: 1,
+    });
+    const stunningResolution = run.events.at(-1) as Extract<
+      MatchEvent,
+      { readonly type: "ActionResolved" }
+    >;
+    expect(stunningResolution.appliedEffects?.map(({ kind }) => kind)).toEqual([
+      "prohibit-powerful",
+    ]);
+    expect(stunning.activeEffects.map(({ kind }) => kind)).toEqual([
+      "prohibit-powerful",
+    ]);
+
+    const prohibited = advanceTo(run, "drow-sorcerer");
+    expect(() =>
+      resolveAbility(
+        prohibited,
+        {
+          abilityId: abilityId("drow-sorcerer", "Arcane Bolt"),
+          targetCharacterIds: ["duergar-ranger"],
+        },
+        stamp(2),
+      ),
+    ).toThrow("Powerful Ability is prohibited");
+
+    const endedProhibitedTurn = finishTurn(prohibited, stamp(3));
+    run.record(endedProhibitedTurn);
+    expect(
+      endedProhibitedTurn.event.expiredEffects.map(({ kind }) => kind),
+    ).toEqual(["prohibit-powerful"]);
+
+    const followingTurn = advanceTo(run, "drow-sorcerer");
+    expect(() =>
+      resolveAbility(
+        followingTurn,
+        {
+          abilityId: abilityId("drow-sorcerer", "Arcane Bolt"),
+          targetCharacterIds: ["duergar-ranger"],
+        },
+        stamp(4),
+      ),
+    ).not.toThrow();
+  });
+
   it("blocks a Powerful Ability during a recorded Backstab prohibition and frees it afterwards", () => {
     const run = startedAuditMatch("audit-prohibit-powerful");
     cast(run, "drow-rogue", {

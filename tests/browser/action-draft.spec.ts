@@ -44,10 +44,19 @@ test("the referee reviews, commits, restores, and undoes an ordered Basic Attack
   ).toBeVisible();
   await expect(page.getByText(/This draft stays local/)).toHaveCount(0);
   await expect(page.locator("#rules-basic-attack")).toHaveCount(0);
-  await expect(page.locator("[data-contact-team]")).toHaveText([
-    /Opposing team · Duergar/,
-    /Your team · Drow/,
-  ]);
+  await expect(
+    page.locator("[data-contact-team] h3", {
+      hasText: /Opposing team\s*·\s*Duergar/,
+    }),
+  ).toHaveCount(1);
+  await expect(
+    page.locator("[data-contact-team] h3", {
+      hasText: /Your team\s*·\s*Drow/,
+    }),
+  ).toHaveCount(1);
+  await expect(
+    page.locator("[data-contact-team] h3", { hasText: "Attacking team" }),
+  ).toHaveCount(0);
   await expect(page.locator(".attack-profile")).toContainText(/Source:/);
   await expect(page.locator(".attack-profile")).toContainText(/(Melee|Ranged)/);
   await expect(page.locator(".attack-profile")).toContainText(/Damage: 1/);
@@ -229,6 +238,79 @@ test("protective Reactions prevent only selected damage and restore after Undo",
   await page.getByLabel(/Misty Escape · Wizard protects Wizard/).check();
   await page.getByLabel(/Mirror Veil · Sorcerer protects Sorcerer/).check();
   await page.getByLabel(/Shield Wall · Fighter protects Paladin/).check();
+  const expectedReactionText = [
+    "Divine Shield · Paladin protects Ranger",
+    "Misty Escape · Wizard protects Wizard",
+    "Mirror Veil · Sorcerer protects Sorcerer",
+    "Shield Wall · Fighter protects Paladin",
+  ];
+  const reactionControls = page
+    .locator("fieldset")
+    .filter({ hasText: "Protective Reactions" })
+    .locator(".reaction-list > .reaction-control");
+  await expect(reactionControls).toHaveCount(12);
+  for (const text of expectedReactionText) {
+    const matchingControls = reactionControls.filter({ hasText: text });
+    await expect(matchingControls).toHaveCount(1);
+    await expect(matchingControls).toBeVisible();
+  }
+  for (const control of await reactionControls.all()) {
+    await expect(control).toBeVisible();
+    await expect(control).toContainText(/(Divine Shield|Misty Escape|Mirror Veil|Shield Wall) · .+ protects .+/);
+  }
+  const reactionBounds = await reactionControls.evaluateAll((controls) =>
+    controls.map((control) => {
+      const bounds = control.getBoundingClientRect();
+      return { top: bounds.top, bottom: bounds.bottom, height: bounds.height };
+    }),
+  );
+  expect(new Set(reactionBounds.map(({ top }) => top)).size).toBe(
+    reactionBounds.length,
+  );
+  for (let index = 1; index < reactionBounds.length; index += 1) {
+    const current = reactionBounds[index];
+    const previous = reactionBounds[index - 1];
+    if (!current || !previous) throw new Error("Missing reaction bounds.");
+    expect(current.height).toBeGreaterThanOrEqual(48);
+    expect(current.top).toBeGreaterThanOrEqual(previous.bottom);
+  }
+  const [firstReactionBounds] = reactionBounds;
+  if (!firstReactionBounds) throw new Error("Missing reaction bounds.");
+  expect(firstReactionBounds.height).toBeGreaterThanOrEqual(48);
+
+  // Recheck the same multi-target reaction surface at a desktop width as
+  // well as the existing mobile project viewport.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  for (const text of expectedReactionText) {
+    const matchingControls = reactionControls.filter({ hasText: text });
+    await expect(matchingControls).toHaveCount(1);
+    await expect(matchingControls).toBeVisible();
+  }
+  for (const control of await reactionControls.all()) {
+    await expect(control).toBeVisible();
+    await expect(control).toContainText(
+      /(Divine Shield|Misty Escape|Mirror Veil|Shield Wall) · .+ protects .+/
+    );
+  }
+  const desktopReactionBounds = await reactionControls.evaluateAll((controls) =>
+    controls.map((control) => {
+      const bounds = control.getBoundingClientRect();
+      return { top: bounds.top, bottom: bounds.bottom, height: bounds.height };
+    }),
+  );
+  expect(new Set(desktopReactionBounds.map(({ top }) => top)).size).toBe(
+    desktopReactionBounds.length,
+  );
+  for (let index = 0; index < desktopReactionBounds.length; index += 1) {
+    const current = desktopReactionBounds[index];
+    if (!current) throw new Error("Missing desktop reaction bounds.");
+    expect(current.height).toBeGreaterThanOrEqual(48);
+    if (index > 0) {
+      const previous = desktopReactionBounds[index - 1];
+      if (!previous) throw new Error("Missing desktop reaction bounds.");
+      expect(current.top).toBeGreaterThanOrEqual(previous.bottom);
+    }
+  }
   await completePhysicalChecks(page);
   await page.getByRole("button", { name: "Review Action Resolution" }).click();
 

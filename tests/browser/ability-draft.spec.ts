@@ -83,9 +83,9 @@ test("self ability confirms in one step, spends, persists, and undoes exactly", 
   await expect(
     page.locator("[data-ability-option]", { hasText: "Second Wind" }),
   ).toContainText("Self");
-  await expect(
-    page.getByRole("button", { name: "Second Wind rules" }),
-  ).toBeVisible();
+  await expect(page.locator(".ability-list .rules-context-link")).toHaveCount(
+    0,
+  );
   await expect(
     page.locator("[data-ability-option]", { hasText: "Shield Wall" }),
   ).toHaveCount(0);
@@ -94,6 +94,9 @@ test("self ability confirms in one step, spends, persists, and undoes exactly", 
   await expect(
     page.getByRole("heading", { name: "Review Second Wind" }),
   ).toBeVisible();
+  await expect(page.locator(".ability-draft .rules-context-link")).toHaveCount(
+    0,
+  );
   await expect(
     page.locator("[data-ability-review-change]", { hasText: "Fighter" }),
   ).toContainText("3 → 4");
