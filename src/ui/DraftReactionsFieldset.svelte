@@ -7,8 +7,8 @@
   } from "../domain/match";
   import { MATCH_CONFIGURATION } from "../domain/match-configuration";
   import { rulesCharacterOf } from "./ability-draft";
-  import { patchShellState, state } from "./shell-state.svelte";
   import CharacterName from "./CharacterName.svelte";
+  import { patchShellState, state } from "./shell-state.svelte";
 
   // Protective Reaction choices shared by the Basic Attack draft and every
   // ability draft with targets (T07) — the reactive twin of the duplicated
@@ -16,7 +16,10 @@
   // state-warned choices hide behind the Override details block, and a
   // selection records the referee Override exactly like the deleted renderer
   // wiring (including the Deflecting Palm second-leg management).
-  let { match, affectedCharacterIds }: {
+  const {
+    match,
+    affectedCharacterIds,
+  }: {
     match: Extract<MatchState, { readonly phase: "active" }>;
     affectedCharacterIds: readonly CharacterId[];
   } = $props();
@@ -33,7 +36,7 @@
     readonly warning: string;
     readonly override: boolean;
     readonly selected: boolean;
-  }
+  };
 
   const DEFLECTING_PALM_REACTION_ID = "duergar-monk-deflecting-palm";
 
@@ -110,10 +113,18 @@
             (selection) => selection.reactionId !== reactionId,
           );
       const attackLegs = (() => {
-        if (selected && deflectingPalm && currentDraft.attackLegs.length === 1) {
+        if (
+          selected &&
+          deflectingPalm &&
+          currentDraft.attackLegs.length === 1
+        ) {
           return [...currentDraft.attackLegs, []];
         }
-        if (!selected && deflectingPalm && currentDraft.attackLegs.length === 2) {
+        if (
+          !selected &&
+          deflectingPalm &&
+          currentDraft.attackLegs.length === 2
+        ) {
           return currentDraft.attackLegs.slice(0, -1);
         }
         return currentDraft.attackLegs;
@@ -126,7 +137,7 @@
 </script>
 
 {#snippet reactionControl(row: ReactionRow)}
-  <label class="reaction-control{row.override ? " reaction-override" : ""}">
+  <label class="reaction-control{row.override ? ' reaction-override' : ''}">
     <input
       type="checkbox"
       data-reaction-id={row.reactionId}
@@ -137,7 +148,17 @@
     />
     <!-- Single-line runs: getByLabel(REGEX) probes receive raw label text,
          so every spec-matched phrase stays contiguous. -->
-    <span><strong>{row.reactionName}</strong> · <CharacterName character={row.owner} displayNames={match.displayNames} /> protects <CharacterName character={row.protectedCharacter} displayNames={match.displayNames} />{#if row.warning}<small>{row.warning} Override records the referee decision.</small>{/if}</span>
+    <span
+      ><strong>{row.reactionName}</strong> · <CharacterName
+        character={row.owner}
+        displayNames={match.displayNames}
+      /> protects <CharacterName
+        character={row.protectedCharacter}
+        displayNames={match.displayNames}
+      />{#if row.warning}<small
+          >{row.warning} Override records the referee decision.</small
+        >{/if}</span
+    >
   </label>
 {/snippet}
 
@@ -157,9 +178,7 @@
     {#if model.overrides.length > 0}
       <details class="reaction-overrides">
         <summary>Override unavailable Reactions</summary>
-        <p>
-          These choices have state warnings. Selection records an Override.
-        </p>
+        <p>These choices have state warnings. Selection records an Override.</p>
         <div class="reaction-list">
           {#each model.overrides as row (row.reactionId + row.protectedCharacterId)}
             {@render reactionControl(row)}

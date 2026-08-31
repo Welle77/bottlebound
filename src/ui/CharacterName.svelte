@@ -6,7 +6,7 @@
   // Display Name it falls back to the application name alone. The sole name renderer —
   // the escaped characterNameHtml() template was deleted with the legacy
   // renderer (T10).
-  let {
+  const {
     character,
     displayNames,
   }: {

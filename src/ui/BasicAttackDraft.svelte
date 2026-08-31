@@ -1,17 +1,17 @@
 <script lang="ts">
+  import { confirmBasicAttack } from "../app/actions";
   import {
     getProtectiveReactionChoices,
     type CharacterId,
     type MatchState,
   } from "../domain/match";
   import { MATCH_CONFIGURATION } from "../domain/match-configuration";
-  import { confirmBasicAttack } from "../app/actions";
   import { attackPreviewRow } from "./ability-draft";
-  import { patchShellState, state } from "./shell-state.svelte";
   import CharacterName from "./CharacterName.svelte";
   import DraftChecksFieldset from "./DraftChecksFieldset.svelte";
   import DraftContactsFieldset from "./DraftContactsFieldset.svelte";
   import DraftReactionsFieldset from "./DraftReactionsFieldset.svelte";
+  import { patchShellState, state } from "./shell-state.svelte";
 
   // Converted Basic Attack draft (T07): the contacts step and the review step
   // react to the runes store instead of being swapped as the legacy
@@ -25,12 +25,12 @@
   type NamedCharacter = {
     readonly id: CharacterId;
     readonly name: string;
-  }
+  };
 
   type LegReview = {
     readonly names: readonly NamedCharacter[];
     readonly redirect: boolean;
-  }
+  };
 
   type ReactionReview = {
     readonly key: string;
@@ -38,7 +38,7 @@
     readonly owner: NamedCharacter;
     readonly protectedCharacter: NamedCharacter;
     readonly details: readonly string[];
-  }
+  };
 
   // Interpolated separators keep their spaces; literal whitespace at
   // control-flow block edges is trimmed by the Svelte compiler.
@@ -56,7 +56,7 @@
 
   const base = $derived.by(() => {
     const draft = state.current.actionDraft;
-    const match = state.current.match;
+    const { match } = state.current;
     if (!draft || draft.kind !== "basic" || match?.phase !== "active") {
       return null;
     }
@@ -121,7 +121,7 @@
     const choices = getProtectiveReactionChoices(match, affectedCharacterIds);
     const reactionReviews: readonly ReactionReview[] = draft.reactions.flatMap(
       (selection) => {
-      const reaction = MATCH_CONFIGURATION.reactions.find(
+        const reaction = MATCH_CONFIGURATION.reactions.find(
           ({ id }) => id === selection.reactionId,
         );
         const owner = reaction
@@ -210,15 +210,23 @@
   function cancelDraft(): void {
     patchShellState({ actionDraft: null });
   }
-
 </script>
 
 {#snippet attackProfile(b: BasicAttackDraftBase)}
   <div class="attack-profile">
     <!-- Single-line runs: specs read raw textContent() from the first
          paragraph and regex-match across these phrases. -->
-    <p><strong>Source:</strong> <CharacterName character={b.sourceCharacter} displayNames={b.match.displayNames} /></p>
-    <p><strong>Type:</strong> {b.attack.attackType === "melee" ? "Melee" : "Ranged"}</p>
+    <p>
+      <strong>Source:</strong>
+      <CharacterName
+        character={b.sourceCharacter}
+        displayNames={b.match.displayNames}
+      />
+    </p>
+    <p>
+      <strong>Type:</strong>
+      {b.attack.attackType === "melee" ? "Melee" : "Ranged"}
+    </p>
     <p><strong>Range:</strong> {b.attack.rangePaces} paces</p>
     <p><strong>Damage:</strong> {b.attack.damage}</p>
   </div>
@@ -239,12 +247,27 @@
         <div class="attack-leg-review-list">
           {#each review.legReviews as leg, index (index)}
             <article class="attack-leg-review" data-attack-leg-review>
-              <h3>Leg {index + 1} · {index === 0 ? "Initial throw" : "Deflecting Palm redirect"}</h3>
-              <p>{#each leg.names as name, nameIndex (name.id)}{#if nameIndex > 0}{LEG_NAME_SEPARATOR}{/if}<CharacterName character={name} displayNames={base.match.displayNames} />{/each}{#if leg.names.length === 0}{LEG_CONTACTS_NONE}{/if}</p>
+              <h3>
+                Leg {index + 1} · {index === 0
+                  ? "Initial throw"
+                  : "Deflecting Palm redirect"}
+              </h3>
+              <p>
+                {#each leg.names as name, nameIndex (name.id)}{#if nameIndex > 0}{LEG_NAME_SEPARATOR}{/if}<CharacterName
+                    character={name}
+                    displayNames={base.match.displayNames}
+                  />{/each}{#if leg.names.length === 0}{LEG_CONTACTS_NONE}{/if}
+              </p>
               {#if leg.redirect}
                 <!-- Single-line run: this sentence is matched by a raw-text
                      Playwright regex across its interpolations. -->
-                <p>Original source: <CharacterName character={base.sourceCharacter} displayNames={base.match.displayNames} /> · {base.attack.attackType === "melee" ? "Melee" : "Ranged"} · hard maximum range {base.attack.rangePaces} paces.</p>
+                <p>
+                  Original source: <CharacterName
+                    character={base.sourceCharacter}
+                    displayNames={base.match.displayNames}
+                  /> · {base.attack.attackType === "melee" ? "Melee" : "Ranged"} ·
+                  hard maximum range {base.attack.rangePaces} paces.
+                </p>
               {/if}
             </article>
           {/each}
@@ -348,13 +371,25 @@
       {#if contacts.closedLeg}
         <section class="closed-attack-leg" data-closed-attack-leg>
           <h3>Attack Leg 1 closed</h3>
-          <p>{#each contacts.closedLeg.names as name, nameIndex (name.id)}{#if nameIndex > 0}{LEG_NAME_SEPARATOR}{/if}<CharacterName character={name} displayNames={base.match.displayNames} />{/each}</p>
+          <p>
+            {#each contacts.closedLeg.names as name, nameIndex (name.id)}{#if nameIndex > 0}{LEG_NAME_SEPARATOR}{/if}<CharacterName
+                character={name}
+                displayNames={base.match.displayNames}
+              />{/each}
+          </p>
         </section>
         <section class="redirect-evidence" data-redirect-evidence>
           <h3>Redirected Attack Leg 2</h3>
           <!-- Single-line run: this sentence is matched by a raw-text
                Playwright regex across its interpolations. -->
-          <p>Original source: <CharacterName character={base.sourceCharacter} displayNames={base.match.displayNames} /> · {base.attack.attackType === "melee" ? "Melee" : "Ranged"} · hard maximum range {base.attack.rangePaces} paces. Record every later legal contact; earlier contacts remain unavailable.</p>
+          <p>
+            Original source: <CharacterName
+              character={base.sourceCharacter}
+              displayNames={base.match.displayNames}
+            /> · {base.attack.attackType === "melee" ? "Melee" : "Ranged"} · hard
+            maximum range {base.attack.rangePaces} paces. Record every later legal
+            contact; earlier contacts remain unavailable.
+          </p>
         </section>
       {/if}
       <DraftContactsFieldset match={base.match} />

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { MATCH_CONFIGURATION } from "../domain/match-configuration";
   import { cancelAbilityDraft, confirmAbility } from "../app/actions";
   import type { CharacterId, Team } from "../domain/match";
+  import { MATCH_CONFIGURATION } from "../domain/match-configuration";
   import {
     attackPreviewRow,
     currentMaxHpOf,
@@ -11,15 +11,15 @@
     rulesCharacterOf,
     targetCandidates,
   } from "./ability-draft";
+  import CharacterName from "./CharacterName.svelte";
+  import DraftChecksFieldset from "./DraftChecksFieldset.svelte";
+  import DraftContactsFieldset from "./DraftContactsFieldset.svelte";
+  import DraftReactionsFieldset from "./DraftReactionsFieldset.svelte";
   import {
     patchShellState,
     state,
     type ActionDraft,
   } from "./shell-state.svelte";
-  import CharacterName from "./CharacterName.svelte";
-  import DraftChecksFieldset from "./DraftChecksFieldset.svelte";
-  import DraftContactsFieldset from "./DraftContactsFieldset.svelte";
-  import DraftReactionsFieldset from "./DraftReactionsFieldset.svelte";
 
   // Converted Ability Action Draft (T07): the select-target, reactions,
   // contacts, and review steps react to the runes store instead of being
@@ -39,12 +39,12 @@
   type NamedCharacter = {
     readonly id: CharacterId;
     readonly name: string;
-  }
+  };
 
   type LegReview = {
     readonly names: readonly NamedCharacter[];
     readonly redirect: boolean;
-  }
+  };
 
   type ReactionReview = {
     readonly key: string;
@@ -52,7 +52,7 @@
     readonly owner: NamedCharacter;
     readonly protectedCharacter: NamedCharacter;
     readonly details: readonly string[];
-  }
+  };
 
   type TargetRow = {
     readonly candidate: ReturnType<typeof targetCandidates>[number];
@@ -60,11 +60,11 @@
     readonly hp: number;
     readonly maxHp: number;
     readonly selected: boolean;
-  }
+  };
 
   const base = $derived.by(() => {
     const draft = state.current.actionDraft;
-    const match = state.current.match;
+    const { match } = state.current;
     if (!draft || draft.kind !== "ability" || match?.phase !== "active") {
       return null;
     }
@@ -261,7 +261,9 @@
     );
   }
 
-  function handleTargetChange(characterId: CharacterId): (event: Event) => void {
+  function handleTargetChange(
+    characterId: CharacterId,
+  ): (event: Event) => void {
     return (event) => {
       if (!(event.currentTarget instanceof HTMLInputElement)) return;
       const currentDraft = state.current.actionDraft;
@@ -270,9 +272,10 @@
       );
       if (!currentDraft || currentDraft.kind !== "ability" || !ability) return;
       const multi = ability.targetPolicy.cardinality === "all-in-range";
-      const checked = event.currentTarget.checked;
+      const { checked } = event.currentTarget;
       const targets = (() => {
-        if (!checked) return currentDraft.targets.filter((id) => id !== characterId);
+        if (!checked)
+          return currentDraft.targets.filter((id) => id !== characterId);
         if (multi) return [...currentDraft.targets, characterId];
         return [characterId];
       })();
@@ -280,9 +283,8 @@
         actionDraft: {
           ...currentDraft,
           targets,
-          reactions: currentDraft.reactions.filter(
-            ({ protectedCharacterId }) =>
-              targets.includes(protectedCharacterId),
+          reactions: currentDraft.reactions.filter(({ protectedCharacterId }) =>
+            targets.includes(protectedCharacterId),
           ),
         },
       });
@@ -300,15 +302,25 @@
       },
     });
   }
-
 </script>
 
 {#snippet abilityProfile(b: AbilityDraftBase)}
   <div class="attack-profile">
     <!-- Single-line runs: specs regex-match across these phrases and read
          raw textContent from the source paragraph. -->
-    <p><strong>Source:</strong> <CharacterName character={b.sourceCharacter} displayNames={b.match.displayNames} /></p>
-    <p><strong>{MATCH_CONFIGURATION.labels.ability}:</strong> {b.ability.name} · {b.ability.actionType === "powerful" ? MATCH_CONFIGURATION.labels.powerfulAbility : MATCH_CONFIGURATION.labels.standardAbility}</p>
+    <p>
+      <strong>Source:</strong>
+      <CharacterName
+        character={b.sourceCharacter}
+        displayNames={b.match.displayNames}
+      />
+    </p>
+    <p>
+      <strong>{MATCH_CONFIGURATION.labels.ability}:</strong>
+      {b.ability.name} · {b.ability.actionType === "powerful"
+        ? MATCH_CONFIGURATION.labels.powerfulAbility
+        : MATCH_CONFIGURATION.labels.standardAbility}
+    </p>
     <p><strong>Range:</strong> {b.ability.range}</p>
     <p><strong>Effect:</strong> {b.ability.rulesText}</p>
   </div>
@@ -316,11 +328,25 @@
 
 {#snippet reviewArticle(leg: LegReview, index: number, b: AbilityDraftBase)}
   <article class="attack-leg-review" data-attack-leg-review>
-    <h3>Leg {index + 1} · {index === 0 ? "Initial throw" : "Deflecting Palm redirect"}</h3>
-    <p>{#each leg.names as name, nameIndex (name.id)}{#if nameIndex > 0}{LEG_NAME_SEPARATOR}{/if}<CharacterName character={name} displayNames={b.match.displayNames} />{/each}{#if leg.names.length === 0}{LEG_CONTACTS_NONE}{/if}</p>
+    <h3>
+      Leg {index + 1} · {index === 0
+        ? "Initial throw"
+        : "Deflecting Palm redirect"}
+    </h3>
+    <p>
+      {#each leg.names as name, nameIndex (name.id)}{#if nameIndex > 0}{LEG_NAME_SEPARATOR}{/if}<CharacterName
+          character={name}
+          displayNames={b.match.displayNames}
+        />{/each}{#if leg.names.length === 0}{LEG_CONTACTS_NONE}{/if}
+    </p>
     {#if leg.redirect}
       <!-- Single-line run: matched across interpolations. -->
-      <p>Original source: <CharacterName character={b.sourceCharacter} displayNames={b.match.displayNames} /> · {b.ability.name} · hard maximum range {b.ability.range}.</p>
+      <p>
+        Original source: <CharacterName
+          character={b.sourceCharacter}
+          displayNames={b.match.displayNames}
+        /> · {b.ability.name} · hard maximum range {b.ability.range}.
+      </p>
     {/if}
   </article>
 {/snippet}
@@ -336,7 +362,14 @@
     />
     <!-- Single-line runs: getByLabel(REGEX) probes receive raw label text,
          so every spec-matched phrase stays contiguous. -->
-    <span><CharacterName character={row.character} displayNames={b.match.displayNames} /> · {row.character.team} · HP {row.hp}/{row.maxHp}{#if row.candidate.reasons.length > 0}<small>{row.candidate.reasons.join(" · ")}. Selecting records an Override.</small>{/if}</span>
+    <span
+      ><CharacterName
+        character={row.character}
+        displayNames={b.match.displayNames}
+      /> · {row.character.team} · HP {row.hp}/{row.maxHp}{#if row.candidate.reasons.length > 0}<small
+          >{row.candidate.reasons.join(" · ")}. Selecting records an Override.</small
+        >{/if}</span
+    >
   </label>
 {/snippet}
 
@@ -355,7 +388,10 @@
         </legend>
         <!-- Single-line run: matches the legacy template's single-spaced
              sentence exactly. -->
-        <p>Selections are filtered by the ability's target policy: {base.ability.targetPolicy.relation} · {base.ability.targetPolicy.lifeState}.</p>
+        <p>
+          Selections are filtered by the ability's target policy: {base.ability
+            .targetPolicy.relation} · {base.ability.targetPolicy.lifeState}.
+        </p>
         <div class="contact-list" data-eligible-targets>
           {#if targeting.eligible.length > 0}
             {#each targeting.eligible as row (row.candidate.characterId)}
@@ -382,7 +418,11 @@
       {/if}
       {#if targeting.blockedCount > 0}
         <!-- Single-line run: this sentence stays one contiguous phrase. -->
-        <p class="device-note">{targeting.blockedCount} Downed character{targeting.blockedCount === 1 ? "" : "s"} of an eliminated team cannot be revived and remain unavailable.</p>
+        <p class="device-note">
+          {targeting.blockedCount} Downed character{targeting.blockedCount === 1
+            ? ""
+            : "s"} of an eliminated team cannot be revived and remain unavailable.
+        </p>
       {/if}
       <div class="match-actions">
         <button
@@ -445,13 +485,25 @@
       {#if physicalContacts.closedLeg}
         <section class="closed-attack-leg" data-closed-attack-leg>
           <h3>Attack Leg 1 closed</h3>
-          <p>{#each physicalContacts.closedLeg.names as name, nameIndex (name.id)}{#if nameIndex > 0}{LEG_NAME_SEPARATOR}{/if}<CharacterName character={name} displayNames={base.match.displayNames} />{/each}</p>
+          <p>
+            {#each physicalContacts.closedLeg.names as name, nameIndex (name.id)}{#if nameIndex > 0}{LEG_NAME_SEPARATOR}{/if}<CharacterName
+                character={name}
+                displayNames={base.match.displayNames}
+              />{/each}
+          </p>
         </section>
         <section class="redirect-evidence" data-redirect-evidence>
           <h3>Redirected Attack Leg 2</h3>
           <!-- Single-line run: this sentence is matched by a raw-text
                Playwright regex across its interpolations. -->
-          <p>Original source: <CharacterName character={base.sourceCharacter} displayNames={base.match.displayNames} /> · {base.ability.name} · hard maximum range {base.ability.range}. Record every later legal contact; earlier contacts remain unavailable.</p>
+          <p>
+            Original source: <CharacterName
+              character={base.sourceCharacter}
+              displayNames={base.match.displayNames}
+            /> · {base.ability.name} · hard maximum range {base.ability.range}.
+            Record every later legal contact; earlier contacts remain
+            unavailable.
+          </p>
         </section>
       {/if}
       <DraftContactsFieldset match={base.match} />
@@ -597,7 +649,12 @@
             <!-- The code separator and any character-name gap ride inside
                  expressions: literal whitespace at control-flow block edges
                  is trimmed, expression output is not. -->
-            <p>{warning.code}{WARNING_CODE_SEPARATOR}{#if warning.character}<CharacterName character={warning.character} displayNames={base.match.displayNames} />{/if}{warning.rest}</p>
+            <p>
+              {warning.code}{WARNING_CODE_SEPARATOR}{#if warning.character}<CharacterName
+                  character={warning.character}
+                  displayNames={base.match.displayNames}
+                />{/if}{warning.rest}
+            </p>
           {/each}
           <label class="override-control">
             <input

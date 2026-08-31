@@ -1,10 +1,10 @@
 <script lang="ts">
-import type { MatchState } from "../domain/match";
-import {
-  MATCH_CONFIGURATION,
-  type MatchConfigurationAbility,
-  } from "../domain/match-configuration";
   import { closeAbilityPicker, openAbilityDraft } from "../app/actions";
+  import type { MatchState } from "../domain/match";
+  import {
+    MATCH_CONFIGURATION,
+    type MatchConfigurationAbility,
+  } from "../domain/match-configuration";
   import { rulesCharacterOf, unspentAbilities } from "./ability-draft";
   import CharacterName from "./CharacterName.svelte";
 
@@ -12,8 +12,9 @@ import {
   // the runes store instead of being swapped as the legacy abilityListPanel()
   // template. Rendered only while the picker is open and no draft holds the
   // surface (the App shell owns that branching).
-  let { match }: { match: Extract<MatchState, { readonly phase: "active" }> } =
-    $props();
+  const {
+    match,
+  }: { match: Extract<MatchState, { readonly phase: "active" }> } = $props();
 
   const activeRules = $derived.by(() => {
     const entry = match.initiative[match.activeSlot - 1];
@@ -25,10 +26,12 @@ import {
   function abilityMeta(ability: MatchConfigurationAbility): string {
     return `${ability.actionType === "powerful" ? MATCH_CONFIGURATION.labels.powerfulAbility : MATCH_CONFIGURATION.labels.standardAbility} · Range ${ability.range}${ability.targetPolicy.lifeState === "active" ? " · Active targets" : ""}`;
   }
-
 </script>
 
-<section class="match-panel ability-list" aria-labelledby="ability-list-heading">
+<section
+  class="match-panel ability-list"
+  aria-labelledby="ability-list-heading"
+>
   <p class="eyebrow">Use Ability</p>
   <h2 id="ability-list-heading">Choose an Ability</h2>
   <p>

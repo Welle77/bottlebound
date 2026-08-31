@@ -1,12 +1,12 @@
 <script lang="ts">
   import type { CharacterId, MatchState, Team } from "../domain/match";
   import { MATCH_CONFIGURATION } from "../domain/match-configuration";
+  import CharacterName from "./CharacterName.svelte";
   import {
     draftAffectedCharacterIds,
     patchShellState,
     state,
   } from "./shell-state.svelte";
-  import CharacterName from "./CharacterName.svelte";
 
   // Ordered bottle-contact checklist shared by the Basic Attack draft and
   // physical-attack ability drafts (T07) — the reactive twin of the contact
@@ -14,8 +14,9 @@
   // to (or removes it from) the active Attack Leg and prunes Reactions whose
   // protected character left the draft, exactly like the deleted renderer
   // wiring did.
-  let { match }: { match: Extract<MatchState, { readonly phase: "active" }> } =
-    $props();
+  const {
+    match,
+  }: { match: Extract<MatchState, { readonly phase: "active" }> } = $props();
 
   const model = $derived.by(() => {
     const draft = state.current.actionDraft;
@@ -53,7 +54,7 @@
       if (!(event.currentTarget instanceof HTMLInputElement)) return;
       const currentDraft = state.current.actionDraft;
       if (!currentDraft) return;
-      const checked = event.currentTarget.checked;
+      const { checked } = event.currentTarget;
       const activeLegIndex = currentDraft.attackLegs.length - 1;
       const activeLeg = currentDraft.attackLegs.at(activeLegIndex);
       if (!activeLeg) return;
@@ -70,9 +71,8 @@
         actionDraft: {
           ...currentDraft,
           attackLegs,
-          reactions: currentDraft.reactions.filter(
-            ({ protectedCharacterId }) =>
-              affectedCharacterIds.includes(protectedCharacterId),
+          reactions: currentDraft.reactions.filter(({ protectedCharacterId }) =>
+            affectedCharacterIds.includes(protectedCharacterId),
           ),
         },
       });
@@ -119,7 +119,12 @@
                 />
                 <!-- Single-line runs; interpolated separators keep their spaces
                      because Svelte trims whitespace at block-content edges. -->
-                <span><CharacterName character={character} displayNames={match.displayNames} /> · {character.team}{#if duplicate}{DUPLICATE_SUFFIX}{closedLegIndex}{/if}</span>
+                <span
+                  ><CharacterName
+                    {character}
+                    displayNames={match.displayNames}
+                  /> · {character.team}{#if duplicate}{DUPLICATE_SUFFIX}{closedLegIndex}{/if}</span
+                >
               </label>
             {/each}
           </div>

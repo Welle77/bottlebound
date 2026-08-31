@@ -6,7 +6,11 @@
     type EndGamePreview,
   } from "../domain/match";
   import { decisionBasisLabel } from "./format";
-  import { patchShellState, state, type Confirmation } from "./shell-state.svelte";
+  import {
+    patchShellState,
+    state,
+    type Confirmation,
+  } from "./shell-state.svelte";
 
   // Converted confirmation dialog (T08): every non-undo confirmation,
   // including the End Game preview, reacts to the runes store instead of
@@ -22,13 +26,13 @@
     readonly countsText: string;
     readonly hpTotalsText: string;
     readonly configurationVersion: string;
-  }
+  };
   type GenericView = {
     readonly kind: "generic";
     readonly heading: string;
     readonly detail: string;
     readonly confirmLabel: string;
-  }
+  };
 
   const GENERIC_CONTENT: Record<
     Exclude<Confirmation, "undo" | null>,
@@ -83,7 +87,7 @@
   }
 
   const view = $derived.by(() => {
-    const confirmation = state.current.confirmation;
+    const { confirmation } = state.current;
     if (confirmation === null || confirmation === "undo") return null;
     if (confirmation === "end" && state.current.match?.phase === "active") {
       const storedPreview = state.current.endGamePreview;
@@ -104,7 +108,12 @@
       }
     }
     const [heading, detail, confirmLabel] = GENERIC_CONTENT[confirmation];
-    const generic: GenericView = { kind: "generic", heading, detail, confirmLabel };
+    const generic: GenericView = {
+      kind: "generic",
+      heading,
+      detail,
+      confirmLabel,
+    };
     return generic;
   });
 
@@ -130,14 +139,32 @@
       <div>
         <p class="eyebrow">End Game preview</p>
         <h3 id="confirmation-heading">End this Match?</h3>
-        <p id="confirmation-detail">Review the calculated winner and Decision Basis before confirming. This becomes read-only until reopened.</p>
+        <p id="confirmation-detail">
+          Review the calculated winner and Decision Basis before confirming.
+          This becomes read-only until reopened.
+        </p>
       </div>
       <dl class="ended-result">
-        <div><dt>Winner</dt><dd>{view.result}</dd></div>
-        <div><dt>Decision Basis</dt><dd>{view.basisText}</dd></div>
-        <div><dt>Active counts</dt><dd>{view.countsText}</dd></div>
-        <div><dt>Active HP totals</dt><dd>{view.hpTotalsText}</dd></div>
-        <div><dt>Match Configuration</dt><dd>{view.configurationVersion}</dd></div>
+        <div>
+          <dt>Winner</dt>
+          <dd>{view.result}</dd>
+        </div>
+        <div>
+          <dt>Decision Basis</dt>
+          <dd>{view.basisText}</dd>
+        </div>
+        <div>
+          <dt>Active counts</dt>
+          <dd>{view.countsText}</dd>
+        </div>
+        <div>
+          <dt>Active HP totals</dt>
+          <dd>{view.hpTotalsText}</dd>
+        </div>
+        <div>
+          <dt>Match Configuration</dt>
+          <dd>{view.configurationVersion}</dd>
+        </div>
       </dl>
       <div class="button-row">
         <button

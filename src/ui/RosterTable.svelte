@@ -1,17 +1,13 @@
 <script lang="ts">
-  import type {
-    CharacterId,
-    SetupMatchState,
-    Team,
-  } from "../domain/match";
+  import type { CharacterId, SetupMatchState, Team } from "../domain/match";
   import { MATCH_CONFIGURATION } from "../domain/match-configuration";
-  import { modifierLabel } from "./format";
   import CharacterName from "./CharacterName.svelte";
+  import { modifierLabel } from "./format";
 
   // The Setup initiative table: roster rows before initiative exists,
   // committed initiative rows afterwards. Cell structure stays identical to
   // the deleted legacy template (seven cells per row).
-  let { match }: { match: SetupMatchState } = $props();
+  const { match }: { match: SetupMatchState } = $props();
 
   type InitiativeRow = {
     readonly key: CharacterId;
@@ -22,7 +18,7 @@
     readonly modifier: string;
     readonly total: number;
     readonly tieBreak: string;
-  }
+  };
   type RosterRow = {
     readonly key: CharacterId;
     readonly character: (typeof MATCH_CONFIGURATION.characters)[number];
@@ -30,10 +26,10 @@
     readonly hp: number;
     readonly baseHp: number;
     readonly modifier: string;
-  }
+  };
 
   const initiativeRows = $derived.by((): readonly InitiativeRow[] => {
-    const initiative = match.initiative;
+    const { initiative } = match;
     if (!initiative) return [];
     const totalCounts = new Map<number, number>(
       [...new Set(initiative.map(({ total }) => total))].map((total) => [

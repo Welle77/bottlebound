@@ -1,5 +1,13 @@
 <script lang="ts">
   import {
+    advanceTurn,
+    continueMatch,
+    openAbilityPicker,
+    openBasicAttack,
+    recordMove,
+    recordSimultaneousRuling,
+  } from "../app/actions";
+  import {
     cryptoRandomSource,
     getEndGamePreview,
     getUndoPreview,
@@ -9,20 +17,12 @@
     type Team,
   } from "../domain/match";
   import { MATCH_CONFIGURATION } from "../domain/match-configuration";
-  import {
-    advanceTurn,
-    continueMatch,
-    openAbilityPicker,
-    openBasicAttack,
-    recordMove,
-    recordSimultaneousRuling,
-  } from "../app/actions";
-  import { patchShellState, state } from "./shell-state.svelte";
-  import { outcomeLabel } from "./format";
-  import ConfirmationDialog from "./ConfirmationDialog.svelte";
-  import PriorSummaryCard from "./PriorSummaryCard.svelte";
-  import UndoConfirmation from "./UndoConfirmation.svelte";
   import CharacterName from "./CharacterName.svelte";
+  import ConfirmationDialog from "./ConfirmationDialog.svelte";
+  import { outcomeLabel } from "./format";
+  import PriorSummaryCard from "./PriorSummaryCard.svelte";
+  import { patchShellState, state } from "./shell-state.svelte";
+  import UndoConfirmation from "./UndoConfirmation.svelte";
 
   // Converted active-match board (T06): turn cards, complete initiative
   // order, turn/round commands, Team Elimination prompts, End Game control,
@@ -40,7 +40,7 @@
     readonly baseHp: number;
     readonly turnLabel: string;
     readonly turnKey: string;
-  }
+  };
 
   type PromptKind =
     | "none"
@@ -170,7 +170,7 @@
       match.characters.map(({ characterId, hp }) => [characterId, hp]),
     );
     const rows = buildBoardRows(match, nextSlot, hpByCharacter);
-    const saving = state.current.saving;
+    const { saving } = state.current;
     const canUndo =
       !saving && getUndoPreview(match, state.current.events) !== null;
     const combatAvailable =
@@ -179,8 +179,7 @@
     const promptKind = getPromptKind(match);
     const activeHp = requireHp(hpByCharacter, activeEntry.characterId);
     const nextHp = requireHp(hpByCharacter, nextEntry.characterId);
-    const actionsUsed =
-      match.actionsUsed ?? (match.majorActionUsed ? 1 : 0);
+    const actionsUsed = match.actionsUsed ?? (match.majorActionUsed ? 1 : 0);
     return {
       match,
       activeSlot: activeEntry.slot,
@@ -218,7 +217,7 @@
   }
 
   const view = $derived.by(() => {
-    const match = state.current.match;
+    const { match } = state.current;
     return match?.phase === "active" ? buildActiveMatchView(match) : null;
   });
 
@@ -227,7 +226,7 @@
   }
 
   function requestEndGame(): void {
-    const match = state.current.match;
+    const { match } = state.current;
     if (state.current.actionDraft !== null) return;
     if (match?.phase !== "active") return;
     try {
@@ -249,7 +248,6 @@
       return;
     void recordSimultaneousRuling(outcome);
   }
-
 </script>
 
 {#if view}
@@ -264,7 +262,10 @@
       <span class="readiness-badge" data-state="ready">Saved</span>
     </div>
     <div class="turn-position-row">
-      <p class="turn-position">Round {view.match.round} · Slot {view.match.activeSlot} of {view.match.initiative.length}</p>
+      <p class="turn-position">
+        Round {view.match.round} · Slot {view.match.activeSlot} of {view.match
+          .initiative.length}
+      </p>
       {#if view.canUndo}
         <button
           id="request-undo"
@@ -283,7 +284,11 @@
       </p>
     {/if}
     <div class="turn-cards">
-      <article class="turn-card active-character" data-active-character data-surface-order="active-player">
+      <article
+        class="turn-card active-character"
+        data-active-character
+        data-surface-order="active-player"
+      >
         <p class="eyebrow">Active{view.activeDowned ? " · Downed" : ""}</p>
         <h3>
           <CharacterName
@@ -292,11 +297,20 @@
           />
         </h3>
         <dl>
-          <div><dt>Team</dt><dd>{view.activeCharacter.team}</dd></div>
           <div>
-            <dt>HP</dt><dd class:critical-hp={view.activeHp === 1}>{view.activeHp}/{view.activeCharacter.baseHp}</dd>
+            <dt>Team</dt>
+            <dd>{view.activeCharacter.team}</dd>
           </div>
-          <div><dt>Slot</dt><dd>{view.activeSlot}</dd></div>
+          <div>
+            <dt>HP</dt>
+            <dd class:critical-hp={view.activeHp === 1}>
+              {view.activeHp}/{view.activeCharacter.baseHp}
+            </dd>
+          </div>
+          <div>
+            <dt>Slot</dt>
+            <dd>{view.activeSlot}</dd>
+          </div>
         </dl>
         <div
           class="action-usage"
@@ -339,8 +353,8 @@
           disabled={view.saving ||
             !view.combatAvailable ||
             view.activeDowned ||
-            (view.match.actionsUsed ??
-              (view.match.majorActionUsed ? 1 : 0)) >= 2 ||
+            (view.match.actionsUsed ?? (view.match.majorActionUsed ? 1 : 0)) >=
+              2 ||
             view.match.eliminatedTeams.length === 2}
           aria-describedby={view.combatAvailable
             ? undefined
@@ -356,8 +370,8 @@
           disabled={view.saving ||
             !view.combatAvailable ||
             view.activeDowned ||
-            (view.match.actionsUsed ??
-              (view.match.majorActionUsed ? 1 : 0)) >= 2 ||
+            (view.match.actionsUsed ?? (view.match.majorActionUsed ? 1 : 0)) >=
+              2 ||
             view.match.eliminatedTeams.length === 2}
           aria-describedby={view.combatAvailable
             ? undefined
@@ -369,7 +383,11 @@
       </div>
     {/if}
     <div class="turn-cards">
-      <article class="turn-card" data-next-character data-surface-order="next-player">
+      <article
+        class="turn-card"
+        data-next-character
+        data-surface-order="next-player"
+      >
         <p class="eyebrow">Next Active</p>
         <h3>
           <CharacterName
@@ -378,11 +396,20 @@
           />
         </h3>
         <dl>
-          <div><dt>Team</dt><dd>{view.nextCharacter.team}</dd></div>
           <div>
-            <dt>HP</dt><dd class:critical-hp={view.nextHp === 1}>{view.nextHp}/{view.nextCharacter.baseHp}</dd>
+            <dt>Team</dt>
+            <dd>{view.nextCharacter.team}</dd>
           </div>
-          <div><dt>Slot</dt><dd>{view.nextSlot}</dd></div>
+          <div>
+            <dt>HP</dt>
+            <dd class:critical-hp={view.nextHp === 1}>
+              {view.nextHp}/{view.nextCharacter.baseHp}
+            </dd>
+          </div>
+          <div>
+            <dt>Slot</dt>
+            <dd>{view.nextSlot}</dd>
+          </div>
         </dl>
       </article>
     </div>
@@ -408,8 +435,8 @@
         <p class="eyebrow">Team Elimination</p>
         <h3 id="elimination-heading">{view.match.outcome} wins</h3>
         <p>
-          All six {view.match.eliminatedTeams[0]} characters are Downed.
-          Choose how this Match proceeds.
+          All six {view.match.eliminatedTeams[0]} characters are Downed. Choose how
+          this Match proceeds.
         </p>
         <div class="match-actions">
           <button
@@ -442,8 +469,8 @@
       </section>
     {:else if view.promptKind === "acknowledged"}
       <p class="elimination-acknowledged" role="status">
-        {view.match.eliminatedTeams[0]} remains eliminated. Continue was acknowledged; its
-        initiative slots are skipped.
+        {view.match.eliminatedTeams[0]} remains eliminated. Continue was acknowledged;
+        its initiative slots are skipped.
       </p>
     {:else if view.promptKind === "simultaneous-open"}
       <section
@@ -452,13 +479,11 @@
         aria-labelledby="simultaneous-elimination-heading"
       >
         <p class="eyebrow">Simultaneous Team Elimination</p>
-        <h3 id="simultaneous-elimination-heading">
-          Both teams are eliminated
-        </h3>
+        <h3 id="simultaneous-elimination-heading">Both teams are eliminated</h3>
         <p>
           The authoritative rules do not define the simultaneous outcome.
-          Contact order is not a tiebreak. Record the referee's override
-          before ending the Match.
+          Contact order is not a tiebreak. Record the referee's override before
+          ending the Match.
         </p>
         <form class="simultaneous-ruling" onsubmit={handleRulingSubmit}>
           <fieldset>
@@ -513,8 +538,8 @@
         <p class="eyebrow">Simultaneous Team Elimination</p>
         <h3 id="simultaneous-result-heading">{view.outcomeText}</h3>
         <p>
-          Both Drow and Duergar are eliminated. Recorded referee override:
-          the authoritative rules do not define this simultaneous outcome.
+          Both Drow and Duergar are eliminated. Recorded referee override: the
+          authoritative rules do not define this simultaneous outcome.
         </p>
         <div class="match-actions">
           <button
@@ -558,14 +583,20 @@
                 />
               </th>
               <td data-label="Team">{row.team}</td>
-              <td data-label="HP" class:critical-hp={row.hp === 1}>{row.hp}/{row.baseHp}</td>
+              <td data-label="HP" class:critical-hp={row.hp === 1}
+                >{row.hp}/{row.baseHp}</td
+              >
             </tr>
           {/each}
         </tbody>
       </table>
     </div>
     {#if view.showEndGameControl}
-      <section class="end-game-control" aria-labelledby="end-game-heading" data-surface-order="end-game">
+      <section
+        class="end-game-control"
+        aria-labelledby="end-game-heading"
+        data-surface-order="end-game"
+      >
         <h3 id="end-game-heading">End Game</h3>
         <p>Close the Match with the calculated winner and Decision Basis.</p>
         <button

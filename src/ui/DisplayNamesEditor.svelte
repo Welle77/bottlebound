@@ -1,14 +1,14 @@
 <script lang="ts">
+  import { saveDisplayNames } from "../app/actions";
   import type { SetupMatchState } from "../domain/match";
   import { MATCH_CONFIGURATION } from "../domain/match-configuration";
-  import { saveDisplayNames } from "../app/actions";
   import CharacterName from "./CharacterName.svelte";
   import { state } from "./shell-state.svelte";
 
   // Referee-assigned Display Names for the fixed roster. Inputs keep their
   // data-display-name-for attributes so saveDisplayNames() keeps reading
   // them straight from the DOM exactly as before.
-  let { match }: { match: SetupMatchState } = $props();
+  const { match }: { match: SetupMatchState } = $props();
 
   const saving = $derived(state.current.saving);
 </script>

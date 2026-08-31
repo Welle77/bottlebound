@@ -110,7 +110,7 @@
         'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
       ),
     ).filter((control) => control.getClientRects().length > 0);
-    const first = controls[0];
+    const [first] = controls;
     const last = controls.at(-1);
     if (!first || !last) return;
     if (event.shiftKey && document.activeElement === first) {
@@ -122,7 +122,10 @@
     }
   }
 
-  function html(node: HTMLElement, value: string): { update: (value: string) => void } {
+  function html(
+    node: HTMLElement,
+    value: string,
+  ): { update: (value: string) => void } {
     node.innerHTML = value;
     return {
       update(newValue: string): void {
@@ -136,102 +139,110 @@
 
 {#if open}
   <div class="rules-backdrop">
-      <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
-      <section
-        class="rules-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="rules-heading"
-        use:captureDialog
-      >
-        <header class="rules-dialog-header">
-          <div>
-            <p class="eyebrow">Ruleset {surface.reference.version}</p>
-            <h2 id="rules-heading">BOTTLEBOUND Rules</h2>
-          </div>
-          <button
-            id="close-rules"
-            class="secondary-action"
-            type="button"
-            aria-label="Close Rules"
-            use:focusDialog
-            onclick={closeRules}
-          >
-            Close
-          </button>
-        </header>
-        <!-- Delegation transport only: routes every in-document anchor link
+    <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
+    <section
+      class="rules-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="rules-heading"
+      use:captureDialog
+    >
+      <header class="rules-dialog-header">
+        <div>
+          <p class="eyebrow">Ruleset {surface.reference.version}</p>
+          <h2 id="rules-heading">BOTTLEBOUND Rules</h2>
+        </div>
+        <button
+          id="close-rules"
+          class="secondary-action"
+          type="button"
+          aria-label="Close Rules"
+          use:focusDialog
+          onclick={closeRules}
+        >
+          Close
+        </button>
+      </header>
+      <!-- Delegation transport only: routes every in-document anchor link
              (direct links, contents entries, search results) through the
              shared selection handler below. -->
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          class="rules-scroll"
-          use:restoreReadingPosition
-          onclick={handleDelegatedClick}
-          onscroll={handleScroll}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="rules-scroll"
+        use:restoreReadingPosition
+        onclick={handleDelegatedClick}
+        onscroll={handleScroll}
+      >
+        <form class="rules-search" role="search" onsubmit={handleSubmit}>
+          <label for="rules-search">Search rules</label>
+          <input
+            id="rules-search"
+            type="search"
+            autocomplete="off"
+            spellcheck="false"
+            value={query}
+            oninput={handleSearchInput}
+          />
+        </form>
+        <section
+          class="rules-results"
+          aria-labelledby="rules-results-heading"
+          aria-live="polite"
+          data-rules-results
+          hidden={!hasQuery}
         >
-          <form class="rules-search" role="search" onsubmit={handleSubmit}>
-            <label for="rules-search">Search rules</label>
-            <input
-              id="rules-search"
-              type="search"
-              autocomplete="off"
-              spellcheck="false"
-              value={query}
-              oninput={handleSearchInput}
-            />
-          </form>
-          <section
-            class="rules-results"
-            aria-labelledby="rules-results-heading"
-            aria-live="polite"
-            data-rules-results
-            hidden={!hasQuery}
-          >
-            {#if hasQuery}
-              <h3 id="rules-results-heading">Search results</h3>
-              {#if results.length === 0}
-                <p>No rules match every search term.</p>
-              {:else}
-                <p>{`${results.length} ${results.length === 1 ? "result" : "results"}. All matches are shown.`}</p>
-                <ol>
-                  {#each results as result, resultIndex (resultIndex)}
-                    <li>
-                      <a href="#{result.anchor}" data-rules-source>
-                        <span class="rules-result-heading"><strong>{result.title}</strong><span>{searchResultKind(result.kind)}</span></span>
-                        <span
-                          class="rules-result-excerpt"
-                          use:html={highlightedExcerpt(result.excerpt, result.highlights)}
-                        ></span>
-                      </a>
-                    </li>
-                  {/each}
-                </ol>
-              {/if}
+          {#if hasQuery}
+            <h3 id="rules-results-heading">Search results</h3>
+            {#if results.length === 0}
+              <p>No rules match every search term.</p>
+            {:else}
+              <p>
+                {`${results.length} ${results.length === 1 ? "result" : "results"}. All matches are shown.`}
+              </p>
+              <ol>
+                {#each results as result, resultIndex (resultIndex)}
+                  <li>
+                    <a href="#{result.anchor}" data-rules-source>
+                      <span class="rules-result-heading"
+                        ><strong>{result.title}</strong><span
+                          >{searchResultKind(result.kind)}</span
+                        ></span
+                      >
+                      <span
+                        class="rules-result-excerpt"
+                        use:html={highlightedExcerpt(
+                          result.excerpt,
+                          result.highlights,
+                        )}
+                      ></span>
+                    </a>
+                  </li>
+                {/each}
+              </ol>
             {/if}
-          </section>
-          <nav
-            class="rules-contents"
-            aria-labelledby="rules-contents-heading"
-            data-rules-contents
-            hidden={hasQuery}
-          >
-            <h3 id="rules-contents-heading">Contents</h3>
-            <ul class="rules-direct-links">
-            </ul>
-            <ol>
-              {#each surface.reference.navigation as heading (heading.anchor)}
-                <li><a href="#{heading.anchor}">{heading.title}</a></li>
-              {/each}
-            </ol>
-          </nav>
-          <article
-            class="rules-document"
-            data-rules-document
-            use:html={surface.reference.html}
-          ></article>
-        </div>
-      </section>
+          {/if}
+        </section>
+        <nav
+          class="rules-contents"
+          aria-labelledby="rules-contents-heading"
+          data-rules-contents
+          hidden={hasQuery}
+        >
+          <h3 id="rules-contents-heading">Contents</h3>
+          <ul class="rules-direct-links"></ul>
+          <ol>
+            {#each surface.reference.navigation as heading (heading.anchor)}
+              <li><a href="#{heading.anchor}">{heading.title}</a></li>
+            {/each}
+          </ol>
+        </nav>
+        <article
+          class="rules-document"
+          data-rules-document
+          use:html={surface.reference.html}
+        ></article>
+      </div>
+    </section>
   </div>
 {/if}
