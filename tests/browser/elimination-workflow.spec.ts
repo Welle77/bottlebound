@@ -82,10 +82,7 @@ async function eliminateOpposingTeam(page: Page): Promise<{
   return { eliminatedTeam, winner: sourceTeam };
 }
 
-async function recordAttack(
-  page: Page,
-  targets: readonly string[],
-) {
+async function recordAttack(page: Page, targets: readonly string[]) {
   await page.getByRole("button", { name: "Basic Attack", exact: true }).click();
   for (const characterId of targets) {
     await page.locator(`[data-hit-character="${characterId}"]`).check();
@@ -236,10 +233,10 @@ test("Continue skips every eliminated-team slot and preserves round wrap", async
       throw new Error("The character id has no name segments.");
     }
     const row = page.locator(`[data-active-order-row]`, {
-        has: page.locator(`th`, {
-          hasText: new RegExp(familyName, "i"),
-        }),
-      });
+      has: page.locator(`th`, {
+        hasText: new RegExp(familyName, "i"),
+      }),
+    });
     await expect(row.locator('[data-label="HP"]')).toHaveText(/^0\//);
   }
   await page.getByRole("button", { name: "Finish Turn" }).click();

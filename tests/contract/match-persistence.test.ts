@@ -150,7 +150,10 @@ describe("Match command persistence contract", () => {
         step.attempts.every(
           (attempt) =>
             attempt.flips.length > 0 &&
-            attempt.flips.every((flip) => flip === "heads" || flip === "tails"),
+            attempt.flips.every((flip) => {
+              const value: string = flip;
+              return value === "heads" || value === "tails";
+            }),
         ),
       ),
     ).toBe(true);

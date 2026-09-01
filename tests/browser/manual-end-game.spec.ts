@@ -7,7 +7,6 @@ type SnapshotProbe = Record<string, unknown> & {
   outcome: unknown;
 };
 type AddMethod = typeof IDBObjectStore.prototype.add;
-type AddParameters = Parameters<AddMethod>;
 
 async function startMatch(page: Page): Promise<void> {
   await page.goto("/");
@@ -44,14 +43,22 @@ async function getSummary(page: Page): Promise<Record<string, unknown> | null> {
   return page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open("bottlebound-match", 2);
-      request.addEventListener("success", () => resolve(request.result));
-      request.addEventListener("error", () => reject(request.error));
+      request.addEventListener("success", () => {
+        resolve(request.result);
+      });
+      request.addEventListener("error", () => {
+        reject(request.error ?? new Error("IndexedDB request failed."));
+      });
     });
     const transaction = database.transaction("summaries", "readonly");
     const request = transaction.objectStore("summaries").get("latest-summary");
     const result = await new Promise<unknown>((resolve, reject) => {
-      request.addEventListener("success", () => resolve(request.result));
-      request.addEventListener("error", () => reject(request.error));
+      request.addEventListener("success", () => {
+        resolve(request.result);
+      });
+      request.addEventListener("error", () => {
+        reject(request.error ?? new Error("IndexedDB request failed."));
+      });
     });
     database.close();
     return (result as OptionalRecord) ?? null;
@@ -101,7 +108,7 @@ async function checkUsable(page: Page): Promise<void> {
         const backdrop = luminance(parseColor(background(button)));
         return {
           compact: button.classList.contains("turn-undo"),
-          label: button.textContent?.trim() || button.id || "unnamed button",
+          label: button.textContent.trim() || button.id || "unnamed button",
           width: bounds.width,
           height: bounds.height,
           contrast:
@@ -115,14 +122,12 @@ async function checkUsable(page: Page): Promise<void> {
   );
   expect(
     filtered.filter(
-      ({ compact, width, height }) =>
-        !compact && (width < 48 || height < 48),
+      ({ compact, width, height }) => !compact && (width < 48 || height < 48),
     ),
   ).toEqual([]);
   expect(
     filtered.filter(
-      ({ compact, width, height }) =>
-        compact && (width < 48 || height < 40),
+      ({ compact, width, height }) => compact && (width < 48 || height < 40),
     ),
   ).toEqual([]);
   expect(filtered.every(({ contrast }) => contrast >= 4.5)).toBe(true);
@@ -206,16 +211,22 @@ test("preview, confirm, read-only Ended, Reopen, and restore consistency", async
   const beforeReopenSlot = await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open("bottlebound-match", 2);
-      request.addEventListener("success", () => resolve(request.result));
-      request.addEventListener("error", () => reject(request.error));
+      request.addEventListener("success", () => {
+        resolve(request.result);
+      });
+      request.addEventListener("error", () => {
+        reject(request.error ?? new Error("IndexedDB request failed."));
+      });
     });
     const transaction = database.transaction("snapshots", "readonly");
     const result = await new Promise<SnapshotProbe>((resolve, reject) => {
       const request = transaction.objectStore("snapshots").getAll();
-      request.addEventListener("success", () =>
-        resolve(request.result[0] as SnapshotProbe),
-      );
-      request.addEventListener("error", () => reject(request.error));
+      request.addEventListener("success", () => {
+        resolve(request.result[0] as SnapshotProbe);
+      });
+      request.addEventListener("error", () => {
+        reject(request.error ?? new Error("IndexedDB request failed."));
+      });
     });
     database.close();
     return { activeSlot: result.activeSlot, outcome: result.outcome };
@@ -486,8 +497,12 @@ test("both removal paths require confirmation and produce distinct effects", asy
   const afterRemoveSummary = await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open("bottlebound-match", 2);
-      request.addEventListener("success", () => resolve(request.result));
-      request.addEventListener("error", () => reject(request.error));
+      request.addEventListener("success", () => {
+        resolve(request.result);
+      });
+      request.addEventListener("error", () => {
+        reject(request.error ?? new Error("IndexedDB request failed."));
+      });
     });
     const transaction = database.transaction(
       ["metadata", "snapshots", "events"],
@@ -495,18 +510,30 @@ test("both removal paths require confirmation and produce distinct effects", asy
     );
     const metadata = await new Promise<unknown>((resolve, reject) => {
       const req = transaction.objectStore("metadata").get("current-match");
-      req.addEventListener("success", () => resolve(req.result));
-      req.addEventListener("error", () => reject(req.error));
+      req.addEventListener("success", () => {
+        resolve(req.result);
+      });
+      req.addEventListener("error", () => {
+        reject(req.error ?? new Error("IndexedDB request failed."));
+      });
     });
     const snapshots = await new Promise<unknown[]>((resolve, reject) => {
       const req = transaction.objectStore("snapshots").getAll();
-      req.addEventListener("success", () => resolve(req.result));
-      req.addEventListener("error", () => reject(req.error));
+      req.addEventListener("success", () => {
+        resolve(req.result);
+      });
+      req.addEventListener("error", () => {
+        reject(req.error ?? new Error("IndexedDB request failed."));
+      });
     });
     const events = await new Promise<unknown[]>((resolve, reject) => {
       const req = transaction.objectStore("events").getAll();
-      req.addEventListener("success", () => resolve(req.result));
-      req.addEventListener("error", () => reject(req.error));
+      req.addEventListener("success", () => {
+        resolve(req.result);
+      });
+      req.addEventListener("error", () => {
+        reject(req.error ?? new Error("IndexedDB request failed."));
+      });
     });
     database.close();
     return { metadata, snapshots, events };
@@ -577,20 +604,20 @@ test("restore consistency after failed End Game and Reopen transactions", async 
   await startMatch(page);
   // inject failure on events add to simulate partial commit failure
   await page.evaluate(() => {
-    const originalAdd = IDBObjectStore.prototype.add;
+    const originalAdd = Reflect.get(IDBObjectStore.prototype, "add");
     Reflect.set(IDBObjectStore.prototype, "__originalAdd", originalAdd);
   });
   await page.getByRole("button", { name: "End Game" }).click();
   await page.evaluate(() => {
-    const add = IDBObjectStore.prototype.add as AddMethod;
-    const patched = function (
+    const add = Reflect.get(IDBObjectStore.prototype, "add");
+    const patched: AddMethod = function (
       this: IDBObjectStore,
       ...args: Parameters<typeof IDBObjectStore.prototype.add>
     ): ReturnType<typeof IDBObjectStore.prototype.add> {
       if (this.name === "events") {
         throw new DOMException("Injected storage failure", "DataError");
       }
-      return add.apply(this, args as AddParameters);
+      return Reflect.apply(add, this, args);
     } as AddMethod;
     IDBObjectStore.prototype.add = patched;
   });
@@ -603,8 +630,12 @@ test("restore consistency after failed End Game and Reopen transactions", async 
   ).toBeVisible();
   // restore original before reload so restore can read old state
   await page.evaluate(() => {
-    const original = Reflect.get(IDBObjectStore.prototype, "__originalAdd");
-    if (typeof original === "function") IDBObjectStore.prototype.add = original;
+    const original: unknown = Reflect.get(
+      IDBObjectStore.prototype,
+      "__originalAdd",
+    );
+    if (typeof original === "function")
+      IDBObjectStore.prototype.add = original as AddMethod;
   });
   await page.reload();
   await expect(
@@ -628,19 +659,19 @@ test("restore consistency after failed End Game and Reopen transactions", async 
 
   // failed Reopen should leave Ended intact
   await page.evaluate(() => {
-    const originalAdd = IDBObjectStore.prototype.add;
+    const originalAdd = Reflect.get(IDBObjectStore.prototype, "add");
     Reflect.set(IDBObjectStore.prototype, "__originalAdd2", originalAdd);
   });
   await page.evaluate(() => {
-    const add = IDBObjectStore.prototype.add as AddMethod;
-    const patched = function (
+    const add = Reflect.get(IDBObjectStore.prototype, "add");
+    const patched: AddMethod = function (
       this: IDBObjectStore,
       ...args: Parameters<typeof IDBObjectStore.prototype.add>
     ): ReturnType<typeof IDBObjectStore.prototype.add> {
       if (this.name === "events") {
         throw new DOMException("Injected storage failure", "DataError");
       }
-      return add.apply(this, args as AddParameters);
+      return Reflect.apply(add, this, args);
     } as AddMethod;
     IDBObjectStore.prototype.add = patched;
   });
@@ -650,8 +681,12 @@ test("restore consistency after failed End Game and Reopen transactions", async 
     page.getByRole("heading", { name: "Ended Match" }),
   ).toBeVisible();
   await page.evaluate(() => {
-    const original = Reflect.get(IDBObjectStore.prototype, "__originalAdd2");
-    if (typeof original === "function") IDBObjectStore.prototype.add = original;
+    const original: unknown = Reflect.get(
+      IDBObjectStore.prototype,
+      "__originalAdd2",
+    );
+    if (typeof original === "function")
+      IDBObjectStore.prototype.add = original as AddMethod;
   });
   await page.reload();
   await expect(

@@ -68,23 +68,39 @@ test("invalid saved data stops recovery without creating replacement data", asyn
   await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open("bottlebound-match", 2);
-      request.addEventListener("success", () => resolve(request.result));
-      request.addEventListener("error", () => reject(request.error));
+      request.addEventListener("success", () => {
+        resolve(request.result);
+      });
+      request.addEventListener("error", () => {
+        reject(request.error ?? new Error("IndexedDB request failed."));
+      });
     });
     const transaction = database.transaction("snapshots", "readwrite");
     const store = transaction.objectStore("snapshots");
     const snapshots = await new Promise<Record<string, unknown>[]>(
       (resolve, reject) => {
         const request = store.getAll();
-        request.addEventListener("success", () => resolve(request.result));
-        request.addEventListener("error", () => reject(request.error));
+        request.addEventListener("success", () => {
+          resolve(request.result);
+        });
+        request.addEventListener("error", () => {
+          reject(request.error ?? new Error("IndexedDB request failed."));
+        });
       },
     );
     store.put({ ...snapshots[0], configurationVersion: "incompatible" });
     await new Promise<void>((resolve, reject) => {
-      transaction.addEventListener("complete", () => resolve());
-      transaction.addEventListener("abort", () => reject(transaction.error));
-      transaction.addEventListener("error", () => reject(transaction.error));
+      transaction.addEventListener("complete", () => {
+        resolve();
+      });
+      transaction.addEventListener("abort", () => {
+        reject(
+          transaction.error ?? new Error("IndexedDB transaction aborted."),
+        );
+      });
+      transaction.addEventListener("error", () => {
+        reject(transaction.error ?? new Error("IndexedDB transaction failed."));
+      });
     });
     database.close();
   });
@@ -131,7 +147,7 @@ test("the Setup controls and layout meet browser usability checks", async ({
         rows.every(
           (row) =>
             row.children.length === 7 &&
-            [...row.children].every((cell) => cell.textContent?.trim()),
+            [...row.children].every((cell) => cell.textContent.trim()),
         ),
       ),
   ).toBe(true);

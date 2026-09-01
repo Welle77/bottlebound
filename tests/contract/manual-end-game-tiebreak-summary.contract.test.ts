@@ -19,12 +19,12 @@ import {
   type MatchState,
 } from "../../src/domain/match";
 import { MATCH_CONFIGURATION } from "../../src/domain/match-configuration";
-import { assertValidatedEvent } from "../../src/storage/match-store-validated-event";
-import { initiativeCharacterId } from "../domain/match-test-support";
 import {
   createIndexedDbMatchStore,
   type IndexedDbMatchStore,
 } from "../../src/storage/match-store";
+import { assertValidatedEvent } from "../../src/storage/match-store-validated-event";
+import { initiativeCharacterId } from "../domain/match-test-support";
 
 function queuedRandom(...values: number[]) {
   let offset = 0;
@@ -252,9 +252,7 @@ describe("Manual End Game Decision Basis contract", () => {
     expect(ended.state.outcome).not.toBeNull();
     const reopened = reopenMatch(ended.state, "2026-08-23T12:04:00.000Z");
     expect(reopened.state.outcome).toBeNull();
-    expect((reopened.state as ActiveMatchState).eliminatedTeams).toEqual(
-      ended.state.eliminatedTeams,
-    );
+    expect(reopened.state.eliminatedTeams).toEqual(ended.state.eliminatedTeams);
     expect(reopened.state.phase).toBe("active");
     expect(reopened.event.type).toBe("MatchReopened");
     expect(reopened.event.endedSequence).toBe(ended.state.endedSequence);
@@ -384,7 +382,7 @@ describe("Manual End Game Decision Basis contract", () => {
           majorActionOverride:
             i === 0 ? null : "Referee confirmed repeated attack.",
         },
-        `2026-08-23T15:0${i + 3}:00.000Z`,
+        `2026-08-23T15:0${String(i + 3)}:00.000Z`,
       );
       elimEvents.push(attack.event);
       current = attack.state;
@@ -416,9 +414,9 @@ describe("Manual End Game Decision Basis contract", () => {
     expect(() =>
       restoreStateFromEvents([...history, legacyEnded as MatchEvent]),
     ).toThrow("End Game does not follow Match State.");
-    expect(() => assertValidatedEvent(legacyEnded)).toThrow(
-      "The validated End Game Event is invalid.",
-    );
+    expect(() => {
+      assertValidatedEvent(legacyEnded);
+    }).toThrow("The validated End Game Event is invalid.");
   });
 });
 

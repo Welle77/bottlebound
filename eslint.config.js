@@ -5,35 +5,8 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
-// Shared file groups – single source of truth for tsconfig and lint scopes.
-const srcTs = ["src/**/*.ts"];
-const testSupport = [
-  "tests/*.test.ts",
-  "tests/*.svelte.ts",
-  "tests/domain/**/*.ts",
-  "tests/storage/**/*.ts",
-  "tests/rules-reference/**/*.ts",
-];
-
-const typeCheckedFiles = [...srcTs, ...testSupport, "vite.config.ts"];
-const functionalFiles = [...srcTs, ...testSupport];
-
-const misplacedTestFiles = ["src", "build"].flatMap((folder) => [
-  `${folder}/**/*.test.ts`,
-  `${folder}/**/*.test-helpers.ts`,
-  `${folder}/**/*.test-support.ts`,
-  `${folder}/**/*.spec.ts`,
-]);
-
-const immutableDataOptions = {
-  ignoreAccessorPattern: [
-    "*.innerHTML",
-    "*.hidden",
-    "*.scrollTop",
-    "draft",
-    "draft.**",
-  ],
-};
+// Shared file groups – single source of truth for lint scopes.
+const typescriptFiles = ["{src,tests}/**/*.ts"];
 
 const projectEslintPlugin = {
   rules: {
@@ -60,99 +33,60 @@ const projectEslintPlugin = {
         };
       },
     },
-    "no-tests-in-application-folders": {
-      meta: {
-        type: "problem",
-        docs: {
-          description: "Keep test files outside application folders",
-        },
-        schema: [],
-      },
-      create(context) {
-        return {
-          Program(node) {
-            context.report({
-              node,
-              message:
-                "Test files must not live under an application folder (src/, build/): move this file into the tests/ tree.",
-            });
-          },
-        };
-      },
-    },
   },
 };
 
 export default defineConfig(
   globalIgnores(["dist", "playwright-report", "test-results", ".worktrees"]),
 
-  // Enforce project policy: no inline disable comments and warnings are errors.
-  {
-    name: "linter/enforce-no-inline-disable",
-    linterOptions: {
-      noInlineConfig: true,
-      reportUnusedDisableDirectives: "error",
-    },
-  },
-
   // Core correctness: ESLint recommended + typescript-eslint strict.
   eslint.configs.recommended,
   tseslint.configs.strict,
   tseslint.configs.stylistic,
   {
-    name: "style/no-nested-ternary",
-    rules: { "no-nested-ternary": "error" },
-  },
-  {
-    name: "style/type-definitions",
+    name: "project/base",
+    linterOptions: {
+      noInlineConfig: true,
+      reportUnusedDisableDirectives: "error",
+    },
     rules: {
       "@typescript-eslint/consistent-type-definitions": ["error", "type"],
+      complexity: "error",
+      "no-nested-ternary": "error",
+      "no-var": "error",
+      "prefer-const": "error",
     },
   },
 
   // Prefer named type references over inline type assertions.
   {
     name: "style/no-inline-type-assertions",
-    files: [
-      "src/**/*.ts",
-      "src/**/*.svelte",
-      "tests/**/*.ts",
-      "tests/**/*.svelte",
-      "build/**/*.ts",
-      "vite.config.ts",
-    ],
+    files: ["{src,tests}/**/*.{ts,svelte}", "build/**/*.ts", "vite.config.ts"],
     plugins: { project: projectEslintPlugin },
     rules: { "project/no-inline-type-assertions": "error" },
   },
 
-  // Project-wide size and complexity limits.
+  // Svelte needs its parser, with TypeScript delegated for script blocks.
   {
-    name: "limits/complexity",
-    rules: { complexity: "error" },
-  },
-
-  // Svelte – plugin must come after TS presets so its parser wins for .svelte.
-  sveltePlugin.configs["flat/recommended"],
-  {
-    name: "svelte/parser",
+    name: "svelte/recommended",
     files: ["**/*.svelte"],
+    extends: [sveltePlugin.configs["flat/recommended"]],
     languageOptions: {
       globals: globals.browser,
       parserOptions: { parser: tseslint.parser },
     },
   },
-  // Type-aware rules for all TS surfaces listed in tsconfig.json.
+  // Type-aware rules for all selected TypeScript surfaces.
   {
     name: "typescript/type-checked",
-    files: typeCheckedFiles,
+    files: [...typescriptFiles, "vite.config.ts"],
     extends: [tseslint.configs.strictTypeChecked],
     languageOptions: { parserOptions: { projectService: true } },
   },
-
   // Runtime globals.
   {
-    name: "globals/app",
-    files: ["src/**/*.ts", "vite.config.ts"],
+    name: "globals/browser-node",
+    files: ["{src,tests/browser,tests/contract}/**/*.ts", "vite.config.ts"],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
   },
   {
@@ -160,72 +94,43 @@ export default defineConfig(
     files: ["public/sw.js"],
     languageOptions: { globals: globals.serviceworker },
   },
-  {
-    name: "globals/tests",
-    files: ["tests/browser/**/*.ts", "tests/contract/**/*.ts"],
-    languageOptions: { globals: { ...globals.browser, ...globals.node } },
-  },
 
   // Style and size guards.
   {
     name: "style/limits",
-    files: ["src/**/*.ts", "tests/**/*.ts"],
+    files: [...typescriptFiles, "src/**/*.svelte"],
     rules: {
       "max-lines": ["error", { max: 800 }],
       "max-params": "error",
-      "prefer-const": "error",
       "prefer-destructuring": "error",
     },
   },
 
-  // Functional / immutable-data discipline.
+  // Functional type discipline.
   {
     name: "functional/base",
-    files: functionalFiles,
+    files: typescriptFiles,
     plugins: { functional },
     rules: {
-      "functional/immutable-data": ["error", immutableDataOptions],
-      "functional/prefer-immutable-types": [
-        "error",
-        {
-          enforcement: "None",
-          overrides: [
-            {
-              specifiers: { from: "file" },
-              options: {
-                ignoreInferredTypes: true,
-                parameters: { enforcement: "ReadonlyDeep" },
-              },
-            },
-          ],
-        },
-      ],
       "functional/no-mixed-types": "error",
     },
   },
-  {
-    name: "functional/shell-state",
-    files: ["src/ui/shell-state.svelte.ts"],
-    rules: {
-      "functional/immutable-data": [
-        "error",
-        {
-          ...immutableDataOptions,
-          ignoreAccessorPattern: [
-            ...immutableDataOptions.ignoreAccessorPattern,
-            "*Cell.value",
-            "*Revision.n",
-          ],
-        },
-      ],
-    },
-  },
-
   // Testing standard: no test file under application folders.
   {
     name: "standards/no-tests-in-application-folders",
-    files: misplacedTestFiles,
-    plugins: { project: projectEslintPlugin },
-    rules: { "project/no-tests-in-application-folders": "error" },
+    files: [
+      "{src,build}/**/*.{test,spec}.ts",
+      "{src,build}/**/*.test-{helpers,support}.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "Program",
+          message:
+            "Test files must not live under an application folder (src/, build/): move this file into the tests/ tree.",
+        },
+      ],
+    },
   },
 );

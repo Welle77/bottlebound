@@ -50,12 +50,12 @@ test("a failed Undo leaves the last committed Match visible", async ({
   await page.getByRole("button", { name: "Finish Turn" }).click();
   await page.getByRole("button", { name: "Undo" }).click();
   await page.evaluate(() => {
-    const { add } = IDBObjectStore.prototype;
+    const add = Reflect.get(IDBObjectStore.prototype, "add");
     IDBObjectStore.prototype.add = function (...args) {
       if (this.name === "events") {
         throw new DOMException("Injected storage failure", "DataError");
       }
-      return add.apply(this, args);
+      return Reflect.apply(add, this, args);
     };
   });
 

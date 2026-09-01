@@ -21,9 +21,7 @@ async function completePhysicalChecks(page: Page) {
 }
 
 async function finishTurnAndWait(page: Page) {
-  const sequence = page.locator(
-    ".active-match > .section-heading .eyebrow",
-  );
+  const sequence = page.locator(".active-match > .section-heading .eyebrow");
   const previousSequence = (await sequence.textContent()) ?? "";
   await page.getByRole("button", { name: "Finish Turn" }).click();
   await expect(sequence).not.toHaveText(previousSequence);
@@ -357,7 +355,7 @@ test("downing the Active Character skips its slot and advances to usable control
     await page
       .getByRole("button", { name: "Confirm Action Resolution" })
       .click();
-    await expect(row).toContainText(`${remaining - 1}/3`);
+    await expect(row).toContainText(`${String(remaining - 1)}/3`);
   }
   await finishTurnAndWait(page);
   await activateCharacter(page, "Ranger");
@@ -415,7 +413,9 @@ test("an Arcane Bolt downs a 1 HP enemy whose initiative slot is then skipped", 
       ((await rangerHp.textContent()) ?? "").trim().split("/")[0],
     );
     if (!Number.isInteger(hpBefore) || hpBefore < 2) {
-      throw new Error(`The Ranger is at an unusable HP total ${hpBefore}.`);
+      throw new Error(
+        `The Ranger is at an unusable HP total ${String(hpBefore)}.`,
+      );
     }
     await page.getByRole("button", { name: "Basic Attack" }).click();
     await page.locator('[data-hit-character="duergar-ranger"]').check();
@@ -426,7 +426,7 @@ test("an Arcane Bolt downs a 1 HP enemy whose initiative slot is then skipped", 
     await page
       .getByRole("button", { name: "Confirm Action Resolution" })
       .click();
-    await expect(rangerHp).toHaveText(`${hpBefore - 1}/3`);
+    await expect(rangerHp).toHaveText(`${String(hpBefore - 1)}/3`);
     await page.getByRole("button", { name: "Finish Turn" }).click();
     await expect(heading).not.toHaveText(activeName);
   }
@@ -503,6 +503,10 @@ test("two Abilities use both normal actions without a referee override", async (
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Ranger" }),
   ).toContainText("2/3");
-  await expect(page.getByRole("button", { name: "Basic Attack" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Use Ability" })).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Basic Attack" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Use Ability" }),
+  ).toBeDisabled();
 });

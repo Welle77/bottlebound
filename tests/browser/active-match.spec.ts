@@ -82,7 +82,9 @@ test("the referee starts, advances, wraps, and restores an Active Match", async 
 
   for (let slot = 3; slot <= 12; slot += 1) {
     await finishTurn.click();
-    await expect(page.getByText(`Round 1 · Slot ${slot} of 12`)).toBeVisible();
+    await expect(
+      page.getByText(`Round 1 · Slot ${String(slot)} of 12`),
+    ).toBeVisible();
   }
   await finishTurn.click();
   await expect(page.getByText("Round 2 · Slot 1 of 12")).toBeVisible();
@@ -106,12 +108,12 @@ test("a failed Finish Turn leaves the last committed Active Match visible", asyn
   await expect(page.getByText("Round 1 · Slot 1 of 12")).toBeVisible();
 
   await page.evaluate(() => {
-    const { add } = IDBObjectStore.prototype;
+    const add = Reflect.get(IDBObjectStore.prototype, "add");
     IDBObjectStore.prototype.add = function (...args) {
       if (this.name === "events") {
         throw new DOMException("Injected storage failure", "DataError");
       }
-      return add.apply(this, args);
+      return Reflect.apply(add, this, args);
     };
   });
   await page.getByRole("button", { name: "Finish Turn" }).click();

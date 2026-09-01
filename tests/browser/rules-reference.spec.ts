@@ -7,8 +7,12 @@ async function persistedMatchData(page: import("@playwright/test").Page) {
   const result = await page.evaluate(async () => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open("bottlebound-match", 2);
-      request.addEventListener("success", () => resolve(request.result));
-      request.addEventListener("error", () => reject(request.error));
+      request.addEventListener("success", () => {
+        resolve(request.result);
+      });
+      request.addEventListener("error", () => {
+        reject(request.error ?? new Error("Failed to open the match database"));
+      });
     });
     const transaction = database.transaction(
       ["metadata", "snapshots", "events"],
@@ -17,8 +21,12 @@ async function persistedMatchData(page: import("@playwright/test").Page) {
     const readStore = (name: string) =>
       new Promise<unknown[]>((resolve, reject) => {
         const request = transaction.objectStore(name).getAll();
-        request.addEventListener("success", () => resolve(request.result));
-        request.addEventListener("error", () => reject(request.error));
+        request.addEventListener("success", () => {
+          resolve(request.result);
+        });
+        request.addEventListener("error", () => {
+          reject(request.error ?? new Error(`Failed to read ${name}`));
+        });
       });
     const result = await Promise.all([
       readStore("metadata"),
@@ -38,8 +46,12 @@ async function rewritePersistedConfigurationVersion(
   await page.evaluate(async (version) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open("bottlebound-match", 2);
-      request.addEventListener("success", () => resolve(request.result));
-      request.addEventListener("error", () => reject(request.error));
+      request.addEventListener("success", () => {
+        resolve(request.result);
+      });
+      request.addEventListener("error", () => {
+        reject(request.error ?? new Error("Failed to open the match database"));
+      });
     });
     const transaction = database.transaction(
       ["metadata", "snapshots", "events"],
@@ -50,8 +62,12 @@ async function rewritePersistedConfigurationVersion(
       const values = await new Promise<Record<string, unknown>[]>(
         (resolve, reject) => {
           const request = store.getAll();
-          request.addEventListener("success", () => resolve(request.result));
-          request.addEventListener("error", () => reject(request.error));
+          request.addEventListener("success", () => {
+            resolve(request.result);
+          });
+          request.addEventListener("error", () => {
+            reject(request.error ?? new Error(`Failed to read ${storeName}`));
+          });
         },
       );
       for (const value of values) {
@@ -64,9 +80,20 @@ async function rewritePersistedConfigurationVersion(
       }
     }
     await new Promise<void>((resolve, reject) => {
-      transaction.addEventListener("complete", () => resolve());
-      transaction.addEventListener("error", () => reject(transaction.error));
-      transaction.addEventListener("abort", () => reject(transaction.error));
+      transaction.addEventListener("complete", () => {
+        resolve();
+      });
+      transaction.addEventListener("error", () => {
+        reject(
+          transaction.error ?? new Error("The database transaction failed"),
+        );
+      });
+      transaction.addEventListener("abort", () => {
+        reject(
+          transaction.error ??
+            new Error("The database transaction was aborted"),
+        );
+      });
     });
     database.close();
   }, configurationVersion);
@@ -403,7 +430,9 @@ test("contextual rules preserve confirmations and committed Match progress", asy
   await page.getByRole("button", { name: "Cancel" }).click();
   await page.getByRole("button", { name: "Start Match" }).click();
   await expect(page.getByRole("button", { name: "Turn rules" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Round rules" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Round rules" })).toHaveCount(
+    0,
+  );
   await page.getByRole("button", { name: "Rules", exact: true }).click();
   await expect(
     dialog.getByRole("searchbox", { name: "Search rules" }),

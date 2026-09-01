@@ -168,11 +168,11 @@ test("cancel, reload, and a failed save discard no committed attack", async ({
   await completePhysicalChecks(page);
   await page.getByRole("button", { name: "Review Action Resolution" }).click();
   await page.evaluate(() => {
-    const { add } = IDBObjectStore.prototype;
+    const add = Reflect.get(IDBObjectStore.prototype, "add");
     IDBObjectStore.prototype.add = function (...args) {
       if (this.name === "events")
         throw new DOMException("Injected failure", "DataError");
-      return add.apply(this, args);
+      return Reflect.apply(add, this, args);
     };
   });
   await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
@@ -255,7 +255,9 @@ test("protective Reactions prevent only selected damage and restore after Undo",
   }
   for (const control of await reactionControls.all()) {
     await expect(control).toBeVisible();
-    await expect(control).toContainText(/(Divine Shield|Misty Escape|Mirror Veil|Shield Wall) · .+ protects .+/);
+    await expect(control).toContainText(
+      /(Divine Shield|Misty Escape|Mirror Veil|Shield Wall) · .+ protects .+/,
+    );
   }
   const reactionBounds = await reactionControls.evaluateAll((controls) =>
     controls.map((control) => {
@@ -288,7 +290,7 @@ test("protective Reactions prevent only selected damage and restore after Undo",
   for (const control of await reactionControls.all()) {
     await expect(control).toBeVisible();
     await expect(control).toContainText(
-      /(Divine Shield|Misty Escape|Mirror Veil|Shield Wall) · .+ protects .+/
+      /(Divine Shield|Misty Escape|Mirror Veil|Shield Wall) · .+ protects .+/,
     );
   }
   const desktopReactionBounds = await reactionControls.evaluateAll((controls) =>
@@ -407,7 +409,7 @@ test("Deflecting Palm closes the first leg and records later unique contacts", a
   await expect(page.locator("[data-closed-attack-leg]")).toContainText("Monk");
   await expect(page.locator("[data-redirect-evidence]")).toContainText(
     new RegExp(
-      `Original source: ${sourceName}.*(Melee|Ranged).*hard maximum range (2|6) paces`,
+      `Original source: ${sourceName}[\\s\\S]*(Melee|Ranged)[\\s\\S]*hard[\\s\\S]*maximum range (2|6) paces`,
     ),
   );
   await expect(page.getByLabel(/Monk · Duergar/)).toBeDisabled();
