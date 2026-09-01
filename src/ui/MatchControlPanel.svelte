@@ -1,30 +1,36 @@
 <script lang="ts">
-  import { createMatch, runStorageProbe } from "../app/actions";
-  import { deriveReadinessState } from "../readiness";
-  import { state } from "./shell-state.svelte";
+  import { useConsoleContext } from "./console-context";
 
-  // Converted pre-Match surface (T10): the error-recovery and create-Match
-  // panels react to the runes store instead of being swapped as the legacy
-  // matchPanel() template. Rendered only while no Match snapshot exists —
-  // exactly the position the legacy renderer appended it to, as main.shell's
-  // last child after the conditional system check.
-  const readiness = $derived(deriveReadinessState(state.current));
+  const { application } = useConsoleContext();
+
+  // Match creation reads application readiness and validation state. The
+  // application operation owns persistence and error transitions.
+  const readiness = $derived(application.state.readiness);
   const recovery = $derived(
-    state.current.matchError !== null && state.current.match === null,
+    application.state.validation.match === "invalid" &&
+      application.state.match === null,
   );
   const blocked = $derived(
     readiness.matchCreation === "blocked" ||
-      !state.current.matchLoaded ||
-      state.current.saving,
+      application.state.validation.match === "unknown" ||
+      application.state.saving,
   );
   // One composed run of text so matchers see exactly the legacy
   // single-spaced guidance sentence across its conditional halves.
   const guidance = $derived(
     readiness.blockingReason ??
-      (state.current.matchLoaded
+      (application.state.validation.match !== "unknown"
         ? "Create the fixed 12-character Setup at full HP."
         : "Checking for a saved Match."),
   );
+
+  async function createMatch(): Promise<void> {
+    await application.createMatch();
+  }
+
+  async function runStorageProbe(): Promise<void> {
+    await application.probeStorage();
+  }
 </script>
 
 {#if recovery}
@@ -32,7 +38,7 @@
     <div>
       <p class="eyebrow">Recovery stopped</p>
       <h2 id="recovery-heading">Saved Match needs recovery</h2>
-      <p>{state.current.matchError}</p>
+      <p>{application.state.errors.validation}</p>
       <p>Starting a new Match will replace the incompatible saved data.</p>
     </div>
     <button
@@ -43,10 +49,10 @@
       aria-describedby="recovery-heading"
       onclick={() => void createMatch()}
     >
-      {state.current.saving ? "Saving…" : "Start new Match"}
+      {application.state.saving ? "Saving…" : "Start new Match"}
     </button>
   </section>
-{:else if state.current.match === null}
+{:else if application.state.match === null}
   <section class="action-panel" aria-labelledby="match-heading">
     <div>
       <p class="eyebrow">Match control</p>
@@ -61,7 +67,7 @@
       aria-describedby="match-guidance"
       onclick={() => void createMatch()}
     >
-      {state.current.saving ? "Saving…" : "Create Match"}
+      {application.state.saving ? "Saving…" : "Create Match"}
     </button>
     {#if readiness.validatedStorage === "failed"}
       <button

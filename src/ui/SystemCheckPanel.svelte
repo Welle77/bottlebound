@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { deriveReadinessState } from "../readiness";
+  import { useConsoleContext } from "./console-context";
   import { statusLabel } from "./format";
-  import { state } from "./shell-state.svelte";
 
-  // Derived readiness recomputes whenever the shell snapshot is replaced
-  // wholesale; every status card below reacts through this single cell.
-  const readiness = $derived(deriveReadinessState(state.current));
+  const { application } = useConsoleContext();
+
+  // Readiness belongs to the application interface; every status card reacts
+  // when the application installs a new state snapshot.
+  const readiness = $derived(application.state.readiness);
   const blocked = $derived(readiness.matchCreation === "blocked");
 </script>
 
@@ -49,7 +50,7 @@
     <div class="status-card" data-status={readiness.validatedStorage}>
       <dt>Validated storage</dt>
       <dd>{statusLabel(readiness.validatedStorage)}</dd>
-      <p>{state.current.storageDetail}</p>
+      <p>{application.state.validation.storageDetail}</p>
     </div>
   </dl>
 </details>

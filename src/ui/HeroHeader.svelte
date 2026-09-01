@@ -1,36 +1,35 @@
 <script lang="ts">
   import { saveRequirePhysicalConfirmations } from "./console-settings";
+  import { useConsoleContext } from "./console-context";
   import { openRules } from "./rules-dialog";
-  import {
-    createPhysicalConfirmations,
-    patchShellState,
-    state,
-  } from "./shell-state.svelte";
+
+  const { application, uiState } = useConsoleContext();
 
   // The console-setting control belongs to the pre-Match shell; it hides as
   // soon as a Match is open, exactly like the deleted legacy template did.
-  const matchOpen = $derived(state.current.match !== null);
+  const matchOpen = $derived(application.state.match !== null);
 
   function handleOpenRules(event: MouseEvent): void {
     if (!(event.currentTarget instanceof HTMLButtonElement)) return;
-    openRules(event.currentTarget);
+    openRules(uiState, event.currentTarget);
   }
 
   function handleRequirePhysicalConfirmationsChange(event: Event): void {
     if (!(event.currentTarget instanceof HTMLInputElement)) return;
     const requireManualChecks = event.currentTarget.checked;
-    const currentDraft = state.current.actionDraft;
-    patchShellState({
-      requirePhysicalConfirmations: requireManualChecks,
-      ...(currentDraft && !requireManualChecks
-        ? {
-            actionDraft: {
-              ...currentDraft,
-              physicalConfirmations: createPhysicalConfirmations(false),
-            },
-          }
-        : {}),
-    });
+    const currentDraft = uiState.state.actionDraft;
+    uiState.setPhysicalConfirmationPreference(requireManualChecks);
+    if (currentDraft && !requireManualChecks) {
+      uiState.setActionDraft({
+        ...currentDraft,
+        physicalConfirmations: {
+          range: true,
+          "line-of-sight": true,
+          "legal-bottle-contact": true,
+          "terrain-contact": true,
+        },
+      });
+    }
     saveRequirePhysicalConfirmations(requireManualChecks);
   }
 </script>
@@ -55,7 +54,7 @@
       <input
         id="require-physical-confirmations"
         type="checkbox"
-        checked={state.current.requirePhysicalConfirmations}
+        checked={uiState.state.physicalConfirmationPreference}
         onchange={handleRequirePhysicalConfirmationsChange}
       />
       Require manual physical confirmations

@@ -48,7 +48,7 @@ function anchorSlug(value: string, index: number): string {
     .toLowerCase()
     .replaceAll(/[^a-z0-9]+/g, "-")
     .replaceAll(/^-|-$/g, "");
-  return slug || `heading-${index + 1}`;
+  return slug || `heading-${String(index + 1)}`;
 }
 
 function parseHeadings(source: string): readonly HeadingMatch[] {
@@ -61,19 +61,23 @@ function parseHeadings(source: string): readonly HeadingMatch[] {
           {
             title: headingTitle(title),
             level: headingLevel.length,
-            start: match.index ?? 0,
+            start: match.index,
           },
         ]
       : [];
   });
 }
 
-function uniqueAnchor(title: string, index: number, used: ReadonlySet<string>) {
+function uniqueAnchor(
+  title: string,
+  index: number,
+  used: ReadonlySet<string>,
+): string {
   const base = `rules-heading-${anchorSlug(title, index)}`;
   let anchor = base;
   let suffix = 2;
   while (used.has(anchor)) {
-    anchor = `${base}-${suffix}`;
+    anchor = `${base}-${String(suffix)}`;
     suffix += 1;
   }
   return anchor;
@@ -175,7 +179,7 @@ function recordsFor(
 function navigationHeadings(
   headings: readonly RulesReferenceHeading[],
 ): readonly RulesReferenceHeading[] {
-  const first = headings[0];
+  const [first] = headings;
   if (!first) return [];
   const contentHeadings = first.level === 1 ? headings.slice(1) : headings;
   const level = contentHeadings.length

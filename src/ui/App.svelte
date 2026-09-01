@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
-  import { runStorageProbe } from "../app/actions";
   import { registerServiceWorker } from "../app/service-worker";
+  import type { Application } from "../app/application";
   import AbilityPicker from "./AbilityPicker.svelte";
   import ActionDraftPanel from "./ActionDraftPanel.svelte";
   import ActiveMatchBoard from "./ActiveMatchBoard.svelte";
@@ -12,7 +12,21 @@
   import MatchSetupPanel from "./MatchSetupPanel.svelte";
   import RulesModal from "./RulesModal.svelte";
   import SystemCheckPanel from "./SystemCheckPanel.svelte";
-  import { patchShellState, state } from "./shell-state.svelte";
+  import { provideConsoleContext } from "./console-context";
+  import type { UIStateStore } from "./ui-state";
+
+  const {
+    application,
+    uiState,
+  }: { application: Application; uiState: UIStateStore } = $props();
+  provideConsoleContext({
+    get application(): Application {
+      return application;
+    },
+    get uiState(): UIStateStore {
+      return uiState;
+    },
+  });
 
   // Shell owner since T04: every Console surface is a reactive component —
   // hero header and system check panel (T04), setup-phase match panel (T05),
@@ -22,24 +36,25 @@
   // pre-Match create/error-recovery panels. main's inert flag is toggled
   // synchronously by the rules-dialog open/close transitions: dialog-close
   // refocusing depends on it landing in the same tick as the transition.
-  const match = $derived(state.current.match);
-  const draftOpen = $derived(state.current.actionDraft !== null);
-  const abilityPickerOpen = $derived(state.current.abilityPickerOpen);
+  const match = $derived(application.state.match);
+  const draftOpen = $derived(uiState.state.actionDraft !== null);
+  const abilityPickerOpen = $derived(uiState.state.pickerVisibility.ability);
 
   onMount(() => {
+    application.setNetworkState(navigator.onLine ? "online" : "offline");
     const handleOnline = (): void => {
-      patchShellState({ network: "online" });
+      application.setNetworkState("online");
     };
     const handleOffline = (): void => {
-      patchShellState({ network: "offline" });
+      application.setNetworkState("offline");
     };
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
     // Same bootstrap order as the pre-Svelte entry point: paint the shell,
     // then start the validated-storage probe and service-worker registration.
     // Every surface reacts to the runes store, so no render step exists.
-    void runStorageProbe();
-    void registerServiceWorker();
+    void application.probeStorage();
+    void registerServiceWorker(application);
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);

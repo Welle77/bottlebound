@@ -1,14 +1,15 @@
 <script lang="ts">
   import {
-    getProtectiveReactionChoices,
     type CharacterId,
     type MatchState,
     type ReactionId,
   } from "../domain/match";
-  import { MATCH_CONFIGURATION } from "../domain/match-configuration";
+  import { MATCH_CONFIGURATION } from "../domain/match";
   import { rulesCharacterOf } from "./ability-draft";
   import CharacterName from "./CharacterName.svelte";
-  import { patchShellState, state } from "./shell-state.svelte";
+  import { useConsoleContext } from "./console-context";
+
+  const { application, uiState } = useConsoleContext();
 
   // Protective Reaction choices shared by the Basic Attack draft and every
   // ability draft with targets (T07) — the reactive twin of the duplicated
@@ -41,9 +42,9 @@
   const DEFLECTING_PALM_REACTION_ID = "duergar-monk-deflecting-palm";
 
   const model = $derived.by(() => {
-    const draft = state.current.actionDraft;
+    const draft = uiState.state.actionDraft;
     if (!draft || affectedCharacterIds.length === 0) return null;
-    const choices = getProtectiveReactionChoices(match, affectedCharacterIds);
+    const choices = application.getProtectiveReactionChoices(affectedCharacterIds);
     const rowOf = (
       choice: (typeof choices)[number],
       override: boolean,
@@ -90,7 +91,7 @@
   function handleReactionChange(row: ReactionRow): (event: Event) => void {
     return (event) => {
       if (!(event.currentTarget instanceof HTMLInputElement)) return;
-      const currentDraft = state.current.actionDraft;
+      const currentDraft = uiState.state.actionDraft;
       if (!currentDraft) return;
       const selected = event.currentTarget.checked;
       const { reactionId, protectedCharacterId } = row;
@@ -129,9 +130,7 @@
         }
         return currentDraft.attackLegs;
       })();
-      patchShellState({
-        actionDraft: { ...currentDraft, reactions, attackLegs },
-      });
+      uiState.setActionDraft({ ...currentDraft, reactions, attackLegs });
     };
   }
 </script>

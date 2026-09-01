@@ -1,12 +1,13 @@
 <script lang="ts">
-  import { closeAbilityPicker, openAbilityDraft } from "../app/actions";
-  import type { MatchState } from "../domain/match";
+  import { useConsoleContext } from "./console-context";
+  import type { AbilityId, MatchState } from "../domain/match";
   import {
     MATCH_CONFIGURATION,
     type MatchConfigurationAbility,
-  } from "../domain/match-configuration";
+  } from "../domain/match";
   import { rulesCharacterOf, unspentAbilities } from "./ability-draft";
   import CharacterName from "./CharacterName.svelte";
+  import { createPhysicalConfirmations } from "./ui-state";
 
   // Converted ability picker (T07): the "Use Ability" list panel reacts to
   // the runes store instead of being swapped as the legacy abilityListPanel()
@@ -15,6 +16,7 @@
   const {
     match,
   }: { match: Extract<MatchState, { readonly phase: "active" }> } = $props();
+  const { application, uiState } = useConsoleContext();
 
   const activeRules = $derived.by(() => {
     const entry = match.initiative[match.activeSlot - 1];
@@ -25,6 +27,54 @@
 
   function abilityMeta(ability: MatchConfigurationAbility): string {
     return `${ability.actionType === "powerful" ? MATCH_CONFIGURATION.labels.powerfulAbility : MATCH_CONFIGURATION.labels.standardAbility} · Range ${ability.range}${ability.targetPolicy.lifeState === "active" ? " · Active targets" : ""}`;
+  }
+
+  function openAbilityDraft(abilityId: AbilityId): void {
+    const { match: currentMatch } = application.state;
+    if (
+      currentMatch?.phase !== "active" ||
+      currentMatch.configurationVersion !== MATCH_CONFIGURATION.version
+    )
+      return;
+    const activeCharacterId =
+      currentMatch.initiative[currentMatch.activeSlot - 1]?.characterId;
+    const ability = MATCH_CONFIGURATION.abilities.find(
+      ({ id }) => id === abilityId,
+    );
+    if (!ability || !activeCharacterId) return;
+    if (
+      ability.ownerCharacterId !== activeCharacterId ||
+      ability.actionType === "reaction" ||
+      currentMatch.spentAbilityIds.includes(ability.id)
+    )
+      return;
+    const physical = ability.interaction === "physical-attack";
+    const step = (() => {
+      if (ability.interaction === "self") return "review";
+      if (physical) return "contacts";
+      return "select-target";
+    })();
+    uiState.setPickerVisibility({ ability: false });
+    uiState.setActionDraft({
+      kind: "ability",
+      sourceCharacterId: activeCharacterId,
+      configurationVersion: currentMatch.configurationVersion,
+      abilityId: ability.id,
+      targets: [],
+      step,
+      attackLegs: physical ? [[]] : [],
+      physicalConfirmations: createPhysicalConfirmations(
+        uiState.state.physicalConfirmationPreference,
+      ),
+      reactions: [],
+      abilityOverride: false,
+      overrideRequired: null,
+      majorActionOverride: false,
+    });
+  }
+
+  function closeAbilityPicker(): void {
+    uiState.setPickerVisibility({ ability: false });
   }
 </script>
 

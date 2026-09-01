@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { CharacterId, SetupMatchState, Team } from "../domain/match";
-  import { MATCH_CONFIGURATION } from "../domain/match-configuration";
+  import { MATCH_CONFIGURATION } from "../domain/match";
   import CharacterName from "./CharacterName.svelte";
   import { modifierLabel } from "./format";
 

@@ -72,7 +72,10 @@ export {
 
 export { resolveAbility } from "./match-abilities";
 
+export { resolveAttackDamageAgainstCharacter } from "./match-ability-effects";
+
 export {
+  assertActiveEffectStructure,
   assertMatchStateStructure,
   assertMatchSummaryStructure,
   validatedMatchRecordsEqual,
@@ -146,6 +149,18 @@ export type {
 } from "./match-types";
 
 export type { AbilityName } from "./match-configuration";
-export type { MatchConfigurationVersion } from "./match-configuration";
+export type {
+  AbilityActionType,
+  AbilityInteraction,
+  AbilityTargetCardinality,
+  AbilityTargetLifeState,
+  AbilityTargetPolicy,
+  AbilityTargetRelation,
+  MatchConfiguration,
+  MatchConfigurationAbility,
+  MatchConfigurationCharacter,
+  MatchConfigurationVersion,
+  PhysicalAttackCheck,
+} from "./match-configuration";
 
 export type { AbilityInput } from "./match-abilities";

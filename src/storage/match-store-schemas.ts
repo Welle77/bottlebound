@@ -34,6 +34,12 @@ const integerSchema = z.number().int();
 const nonNegativeIntegerSchema = integerSchema.nonnegative();
 const schemaVersionSchema = z.literal(MATCH_SCHEMA_VERSION);
 
+// Zod omits absent optional keys at runtime, but its inferred object output
+// includes `undefined`; retain the domain's exact-optional contract here.
+type MatchStateSchema = z.ZodType<MatchState>;
+type MatchEventSchema = z.ZodType<MatchEvent>;
+type MatchSummarySchema = z.ZodType<MatchSummary>;
+
 const displayNamesSchema = z.partialRecord(
   characterIdSchema,
   nonEmptyStringSchema,
@@ -145,10 +151,11 @@ const endedStateSchema = activeStateSchema.extend({
   coinFlipResult: z.union([teamSchema, z.null()]),
 });
 
-export const matchStateSchema: z.ZodType<MatchState> = z.discriminatedUnion(
-  "phase",
-  [setupStateSchema, activeStateSchema, endedStateSchema],
-);
+export const matchStateSchema = z.discriminatedUnion("phase", [
+  setupStateSchema,
+  activeStateSchema,
+  endedStateSchema,
+]) as MatchStateSchema;
 
 const eventBaseSchema = z.object({
   matchId: nonEmptyStringSchema,
@@ -313,12 +320,12 @@ const eventSchemas = [
   }),
 ] as const;
 
-export const matchEventSchema: z.ZodType<MatchEvent> = z.discriminatedUnion(
+export const matchEventSchema = z.discriminatedUnion(
   "type",
   eventSchemas,
-);
+) as MatchEventSchema;
 
-export const matchSummarySchema: z.ZodType<MatchSummary> = z.object({
+export const matchSummarySchema = z.object({
   outcome: z.union([teamSchema, z.literal("draw")]),
   decisionBasis: decisionBasisSchema,
   finalCounts: finalTeamCountsSchema,
@@ -326,4 +333,4 @@ export const matchSummarySchema: z.ZodType<MatchSummary> = z.object({
   configurationVersion: nonEmptyStringSchema,
   endedAt: nonEmptyStringSchema,
   coinFlipResult: teamSchema.optional(),
-});
+}) as MatchSummarySchema;

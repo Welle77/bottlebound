@@ -178,7 +178,9 @@ export function reopenMatch(
     spentAbilityIds: state.spentAbilityIds,
     movementPaces: state.movementPaces,
     remainingMovementPaces: state.remainingMovementPaces,
-    actionsUsed: state.actionsUsed,
+    ...(state.actionsUsed === undefined
+      ? {}
+      : { actionsUsed: state.actionsUsed }),
     majorActionUsed: state.majorActionUsed,
     eliminatedTeams: state.eliminatedTeams,
     acknowledgedEliminations: state.acknowledgedEliminations,

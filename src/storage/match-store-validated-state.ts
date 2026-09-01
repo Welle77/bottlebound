@@ -10,8 +10,8 @@ import type {
   InitiativeEntry,
   MatchCharacter,
   MatchState,
-} from "../domain/match-types";
-import { MATCH_CONFIGURATION } from "../domain/match-configuration";
+} from "../domain/match";
+import { MATCH_CONFIGURATION } from "../domain/match";
 import { matchStateSchema, tieOrderSchema } from "./match-store-schemas";
 
 export function isRecord(value: unknown): value is Record<string, unknown> {

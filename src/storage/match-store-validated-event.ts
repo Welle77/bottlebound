@@ -7,8 +7,8 @@ import {
   type CharacterId,
   type InitiativeEntry,
   type MatchEvent,
+  MATCH_CONFIGURATION,
 } from "../domain/match";
-import { MATCH_CONFIGURATION } from "../domain/match-configuration";
 import {
   assertActionResolutionEffectCollections,
   assertActionResolutionMetadata,

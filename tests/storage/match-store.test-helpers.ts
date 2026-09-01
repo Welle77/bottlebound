@@ -1,4 +1,3 @@
-import { IDBFactory } from "fake-indexeddb";
 import * as z from "zod";
 
 import {
@@ -11,6 +10,7 @@ import {
   type CharacterId,
   type MatchEvent,
   type MatchState,
+  type RandomSource,
 } from "../../src/domain/match";
 
 const persistedRecordSchema = z.record(z.string(), z.unknown());
@@ -26,7 +26,7 @@ function createQueueCursor(values: readonly number[]) {
   };
 }
 
-export function randomQueue(values: readonly number[]) {
+export function randomQueue(values: readonly number[]): RandomSource {
   const cursor = createQueueCursor(values);
   return {
     nextUint32: () => {

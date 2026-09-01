@@ -1,16 +1,10 @@
 <script lang="ts">
-  import { confirmAction } from "../app/actions";
-  import {
-    cryptoRandomSource,
-    getEndGamePreview,
-    type EndGamePreview,
-  } from "../domain/match";
+  import { useConsoleContext } from "./console-context";
+  import type { EndGamePreview } from "../domain/match";
   import { decisionBasisLabel } from "./format";
-  import {
-    patchShellState,
-    state,
-    type Confirmation,
-  } from "./shell-state.svelte";
+  import type { UiConfirmation } from "./ui-state";
+
+  const { application, uiState } = useConsoleContext();
 
   // Converted confirmation dialog (T08): every non-undo confirmation,
   // including the End Game preview, reacts to the runes store instead of
@@ -35,7 +29,7 @@
   };
 
   const GENERIC_CONTENT: Record<
-    Exclude<Confirmation, "undo" | null>,
+    Exclude<UiConfirmation, "undo" | null>,
     readonly [heading: string, detail: string, confirmLabel: string]
   > = {
     reroll: [
@@ -87,24 +81,22 @@
   }
 
   const view = $derived.by(() => {
-    const { confirmation } = state.current;
+    const { confirmation } = uiState.state;
     if (confirmation === null || confirmation === "undo") return null;
-    if (confirmation === "end" && state.current.match?.phase === "active") {
-      const storedPreview = state.current.endGamePreview;
+    if (confirmation === "end" && application.state.match?.phase === "active") {
+      const storedPreview = uiState.state.endGamePresentation.preview;
       if (storedPreview) {
         return previewView(
           storedPreview,
-          state.current.match.configurationVersion,
+          application.state.match.configurationVersion,
         );
       }
-      try {
+      const preview = application.previewEndGame();
+      if (preview) {
         return previewView(
-          getEndGamePreview(state.current.match, cryptoRandomSource),
-          state.current.match.configurationVersion,
+          preview,
+          application.state.match.configurationVersion,
         );
-      } catch {
-        // Fall back to the generic end confirmation when no preview can be
-        // computed (for example an unruled simultaneous elimination).
       }
     }
     const [heading, detail, confirmLabel] = GENERIC_CONTENT[confirmation];
@@ -118,10 +110,42 @@
   });
 
   function handleCancel(): void {
-    if (state.current.confirmation === "end") {
-      patchShellState({ endGamePreview: null });
+    uiState.clearConfirmation();
+    uiState.setEndGamePresentation({ open: false, preview: null });
+  }
+
+  async function handleConfirm(): Promise<void> {
+    const { confirmation } = uiState.state;
+    if (confirmation === null || confirmation === "undo") return;
+    uiState.clearConfirmation();
+    uiState.setEndGamePresentation({ open: false, preview: null });
+    if (confirmation === "remove-summary") {
+      await application.deleteSummary();
+      return;
     }
-    patchShellState({ confirmation: null });
+    if (confirmation === "start-new") {
+      if (application.state.match?.phase === "ended")
+        await application.createMatch();
+      return;
+    }
+    if (confirmation === "end") {
+      if (application.state.match?.phase === "active")
+        await application.endMatch();
+      return;
+    }
+    const { match } = application.state;
+    if (match === null) return;
+    if (confirmation === "remove" && match.phase === "ended") {
+      await application.deleteMatch(match.matchId);
+      return;
+    }
+    if (match.phase === "setup" && confirmation === "reroll") {
+      await application.rerollInitiative();
+      return;
+    }
+    if (match.phase === "setup" && confirmation === "discard") {
+      await application.deleteMatch(match.matchId);
+    }
   }
 </script>
 
@@ -171,7 +195,7 @@
           id="confirm-action"
           class="danger-action"
           type="button"
-          onclick={() => void confirmAction()}
+          onclick={() => void handleConfirm()}
         >
           Confirm End Game
         </button>
@@ -202,7 +226,7 @@
           id="confirm-action"
           class="danger-action"
           type="button"
-          onclick={() => void confirmAction()}
+          onclick={() => void handleConfirm()}
         >
           {view.confirmLabel}
         </button>

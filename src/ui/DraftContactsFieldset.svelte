@@ -1,12 +1,11 @@
 <script lang="ts">
   import type { CharacterId, MatchState, Team } from "../domain/match";
-  import { MATCH_CONFIGURATION } from "../domain/match-configuration";
+  import { MATCH_CONFIGURATION } from "../domain/match";
   import CharacterName from "./CharacterName.svelte";
-  import {
-    draftAffectedCharacterIds,
-    patchShellState,
-    state,
-  } from "./shell-state.svelte";
+  import { useConsoleContext } from "./console-context";
+  import { draftAffectedCharacterIds } from "./ui-state";
+
+  const { uiState } = useConsoleContext();
 
   // Ordered bottle-contact checklist shared by the Basic Attack draft and
   // physical-attack ability drafts (T07) — the reactive twin of the contact
@@ -19,7 +18,7 @@
   }: { match: Extract<MatchState, { readonly phase: "active" }> } = $props();
 
   const model = $derived.by(() => {
-    const draft = state.current.actionDraft;
+    const draft = uiState.state.actionDraft;
     if (!draft) return null;
     const activeLegIndex = draft.attackLegs.length - 1;
     const activeLeg = draft.attackLegs.at(activeLegIndex);
@@ -52,7 +51,7 @@
   ): (event: Event) => void {
     return (event) => {
       if (!(event.currentTarget instanceof HTMLInputElement)) return;
-      const currentDraft = state.current.actionDraft;
+      const currentDraft = uiState.state.actionDraft;
       if (!currentDraft) return;
       const { checked } = event.currentTarget;
       const activeLegIndex = currentDraft.attackLegs.length - 1;
@@ -67,14 +66,12 @@
         ...currentDraft,
         attackLegs,
       });
-      patchShellState({
-        actionDraft: {
+      uiState.setActionDraft({
           ...currentDraft,
           attackLegs,
           reactions: currentDraft.reactions.filter(({ protectedCharacterId }) =>
             affectedCharacterIds.includes(protectedCharacterId),
           ),
-        },
       });
     };
   }

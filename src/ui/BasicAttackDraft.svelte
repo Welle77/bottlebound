@@ -1,17 +1,17 @@
 <script lang="ts">
-  import { confirmBasicAttack } from "../app/actions";
+  import { useConsoleContext } from "./console-context";
   import {
-    getProtectiveReactionChoices,
     type CharacterId,
     type MatchState,
   } from "../domain/match";
-  import { MATCH_CONFIGURATION } from "../domain/match-configuration";
+  import { MATCH_CONFIGURATION } from "../domain/match";
   import { attackPreviewRow } from "./ability-draft";
   import CharacterName from "./CharacterName.svelte";
   import DraftChecksFieldset from "./DraftChecksFieldset.svelte";
   import DraftContactsFieldset from "./DraftContactsFieldset.svelte";
   import DraftReactionsFieldset from "./DraftReactionsFieldset.svelte";
-  import { patchShellState, state } from "./shell-state.svelte";
+
+  const { application, uiState } = useConsoleContext();
 
   // Converted Basic Attack draft (T07): the contacts step and the review step
   // react to the runes store instead of being swapped as the legacy
@@ -55,8 +55,8 @@
   };
 
   const base = $derived.by(() => {
-    const draft = state.current.actionDraft;
-    const { match } = state.current;
+    const draft = uiState.state.actionDraft;
+    const { match } = application.state;
     if (!draft || draft.kind !== "basic" || match?.phase !== "active") {
       return null;
     }
@@ -118,7 +118,7 @@
         redirect: index === 1,
       }),
     );
-    const choices = getProtectiveReactionChoices(match, affectedCharacterIds);
+    const choices = application.getProtectiveReactionChoices(affectedCharacterIds);
     const reactionReviews: readonly ReactionReview[] = draft.reactions.flatMap(
       (selection) => {
         const reaction = MATCH_CONFIGURATION.reactions.find(
@@ -165,7 +165,7 @@
       hitRows,
       legReviews,
       reactionReviews,
-      saving: state.current.saving,
+      saving: application.state.saving,
       confirmDisabled: false,
     };
   });
@@ -175,7 +175,7 @@
     if (!b || b.draft.step === "review") return null;
     const activeLegIndex = b.draft.attackLegs.length - 1;
     const affectedCharacterIds = b.draft.attackLegs.flat();
-    const requireManualChecks = state.current.requirePhysicalConfirmations;
+    const requireManualChecks = uiState.state.physicalConfirmationPreference;
     const ready =
       affectedCharacterIds.length > 0 &&
       (!requireManualChecks ||
@@ -194,21 +194,43 @@
   });
 
   function goReview(): void {
-    if (state.current.actionDraft === null) return;
-    patchShellState({
-      actionDraft: { ...state.current.actionDraft, step: "review" },
-    });
+    const draft = uiState.state.actionDraft;
+    if (draft === null) return;
+    uiState.setActionDraft({ ...draft, step: "review" });
   }
 
   function backToContacts(): void {
-    if (state.current.actionDraft === null) return;
-    patchShellState({
-      actionDraft: { ...state.current.actionDraft, step: "contacts" },
+    const draft = uiState.state.actionDraft;
+    if (draft === null) return;
+    uiState.setActionDraft({ ...draft, step: "contacts" });
+  }
+
+  async function confirmBasicAttack(): Promise<void> {
+    const { match } = application.state;
+    const draft = uiState.state.actionDraft;
+    if (match?.phase !== "active" || !draft || draft.step !== "review") return;
+    await application.resolveBasicAttack({
+      sourceCharacterId: draft.sourceCharacterId,
+      attackLegs: draft.attackLegs.map((affectedCharacterIds) => ({
+        affectedCharacterIds: [...affectedCharacterIds],
+      })),
+      physicalConfirmations: {
+        range: draft.physicalConfirmations.range,
+        lineOfSight: draft.physicalConfirmations["line-of-sight"],
+        legalBottleContact:
+          draft.physicalConfirmations["legal-bottle-contact"],
+        terrainContact: draft.physicalConfirmations["terrain-contact"],
+      },
+      reactions: draft.reactions,
+      majorActionOverride: draft.majorActionOverride
+        ? MATCH_CONFIGURATION.refereeInstructions.secondMajorAction
+        : null,
     });
+    uiState.setActionDraft(null);
   }
 
   function cancelDraft(): void {
-    patchShellState({ actionDraft: null });
+    uiState.setActionDraft(null);
   }
 </script>
 

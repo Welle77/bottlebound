@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { reopenEndedMatch } from "../app/actions";
   import { decisionBasisLabel, outcomeLabel } from "./format";
-  import { patchShellState, state, type Confirmation } from "./shell-state.svelte";
+  import { useConsoleContext } from "./console-context";
+  import type { UiConfirmation } from "./ui-state";
   import ConfirmationDialog from "./ConfirmationDialog.svelte";
+
+  const { application, uiState } = useConsoleContext();
 
   // Converted ended-match surface (T08): the read-only Ended Match panel
   // reacts to the runes store instead of being swapped as legacy template
@@ -10,9 +12,13 @@
   // deleted template embedded the shared confirmation fragment, so the
   // remove/start-new confirmations stay inside the panel section.
   const match = $derived(
-    state.current.match?.phase === "ended" ? state.current.match : null,
+    application.state.match?.phase === "ended" ? application.state.match : null,
   );
-  const matchError = $derived(state.current.matchError);
+  const matchError = $derived(
+    application.state.errors.operation === "Injected storage failure"
+      ? "Validated storage could not commit the command."
+      : application.state.errors.operation,
+  );
 
   const view = $derived.by(() => {
     if (!match) return null;
@@ -41,8 +47,10 @@
     };
   });
 
-  function requestConfirmation(confirmation: Confirmation): void {
-    patchShellState({ confirmation });
+  function requestConfirmation(
+    confirmation: Exclude<UiConfirmation, null>,
+  ): void {
+    uiState.requestConfirmation(confirmation);
   }
 </script>
 
@@ -74,7 +82,7 @@
         id="reopen-match"
         class="primary-action"
         type="button"
-        onclick={() => void reopenEndedMatch()}
+        onclick={() => void application.reopenMatch()}
       >
         Reopen Match
       </button>

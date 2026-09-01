@@ -11,8 +11,21 @@
     "moduleDetection": "force",
     "noEmit": true,
     "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "types": ["vite/client", "vitest/globals"]
   },
-  "include": ["src", "tests", "vite.config.ts", "eslint.config.js"]
+  "include": [
+    "src",
+    "tests",
+    "build",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "playwright.config.ts",
+    "eslint.config.js"
+  ]
 }
