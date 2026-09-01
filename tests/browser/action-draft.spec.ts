@@ -18,6 +18,16 @@ async function completePhysicalChecks(page: import("@playwright/test").Page) {
   }
 }
 
+function reactionChoice(
+  page: import("@playwright/test").Page,
+  groupName: string,
+  characterName: string,
+) {
+  return page
+    .getByRole("group", { name: groupName })
+    .getByRole("checkbox", { name: `Protect ${characterName}` });
+}
+
 /** Finishes turns until the named class is the Active Character (max one round). */
 async function activateCharacter(
   page: import("@playwright/test").Page,
@@ -129,7 +139,7 @@ test("cancel, reload, and a failed save discard no committed attack", async ({
   await startMatch(page);
   await page.getByRole("button", { name: "Basic Attack" }).click();
   await page.getByLabel(/Ranger · Duergar/).check();
-  await page.getByLabel(/Divine Shield · Paladin protects Ranger/).check();
+  await reactionChoice(page, "Divine Shield · Paladin", "Ranger").check();
   await page.getByRole("button", { name: "Cancel draft" }).click();
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Ranger" }),
@@ -137,7 +147,7 @@ test("cancel, reload, and a failed save discard no committed attack", async ({
 
   await page.getByRole("button", { name: "Basic Attack" }).click();
   await page.getByLabel(/Ranger · Duergar/).check();
-  await page.getByLabel(/Divine Shield · Paladin protects Ranger/).check();
+  await reactionChoice(page, "Divine Shield · Paladin", "Ranger").check();
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "Active Match" }),
@@ -148,7 +158,7 @@ test("cancel, reload, and a failed save discard no committed attack", async ({
 
   await page.getByRole("button", { name: "Basic Attack" }).click();
   await page.getByLabel(/Ranger · Duergar/).check();
-  await page.getByLabel(/Divine Shield · Paladin protects Ranger/).check();
+  await reactionChoice(page, "Divine Shield · Paladin", "Ranger").check();
   await completePhysicalChecks(page);
   await page.evaluate(() => {
     const add = Reflect.get(IDBObjectStore.prototype, "add");
@@ -167,7 +177,7 @@ test("cancel, reload, and a failed save discard no committed attack", async ({
   await page.getByRole("button", { name: "Basic Attack" }).click();
   await page.getByLabel(/Ranger · Duergar/).check();
   await expect(
-    page.getByLabel(/Divine Shield · Paladin protects Ranger/),
+    reactionChoice(page, "Divine Shield · Paladin", "Ranger"),
   ).toBeVisible();
   await page.getByRole("button", { name: "Cancel draft" }).click();
 });
@@ -211,31 +221,18 @@ test("protective Reactions prevent only selected damage and restore after Undo",
   ]) {
     await page.getByLabel(character).check();
   }
-  await page.getByLabel(/Divine Shield · Paladin protects Ranger/).check();
-  await page.getByLabel(/Misty Escape · Wizard protects Wizard/).check();
-  await page.getByLabel(/Mirror Veil · Sorcerer protects Sorcerer/).check();
-  await page.getByLabel(/Shield Wall · Fighter protects Paladin/).check();
-  const expectedReactionText = [
-    "Divine Shield · Paladin protects Ranger",
-    "Misty Escape · Wizard protects Wizard",
-    "Mirror Veil · Sorcerer protects Sorcerer",
-    "Shield Wall · Fighter protects Paladin",
-  ];
+  await reactionChoice(page, "Divine Shield · Paladin", "Ranger").check();
+  await reactionChoice(page, "Misty Escape · Wizard", "Wizard").check();
+  await reactionChoice(page, "Mirror Veil · Sorcerer", "Sorcerer").check();
+  await reactionChoice(page, "Shield Wall · Fighter", "Paladin").check();
   const reactionControls = page
     .locator("fieldset")
     .filter({ hasText: "Protective Reactions" })
-    .locator(".reaction-list > .reaction-control");
+    .locator(".reaction-group .reaction-control");
   await expect(reactionControls).toHaveCount(12);
-  for (const text of expectedReactionText) {
-    const matchingControls = reactionControls.filter({ hasText: text });
-    await expect(matchingControls).toHaveCount(1);
-    await expect(matchingControls).toBeVisible();
-  }
   for (const control of await reactionControls.all()) {
     await expect(control).toBeVisible();
-    await expect(control).toContainText(
-      /(Divine Shield|Misty Escape|Mirror Veil|Shield Wall) · .+ protects .+/,
-    );
+    await expect(control).toContainText(/Protect .+/);
   }
   const reactionBounds = await reactionControls.evaluateAll((controls) =>
     controls.map((control) => {
@@ -260,16 +257,9 @@ test("protective Reactions prevent only selected damage and restore after Undo",
   // Recheck the same multi-target reaction surface at a desktop width as
   // well as the existing mobile project viewport.
   await page.setViewportSize({ width: 1280, height: 800 });
-  for (const text of expectedReactionText) {
-    const matchingControls = reactionControls.filter({ hasText: text });
-    await expect(matchingControls).toHaveCount(1);
-    await expect(matchingControls).toBeVisible();
-  }
   for (const control of await reactionControls.all()) {
     await expect(control).toBeVisible();
-    await expect(control).toContainText(
-      /(Divine Shield|Misty Escape|Mirror Veil|Shield Wall) · .+ protects .+/,
-    );
+    await expect(control).toContainText(/Protect .+/);
   }
   const desktopReactionBounds = await reactionControls.evaluateAll((controls) =>
     controls.map((control) => {
@@ -308,8 +298,46 @@ test("protective Reactions prevent only selected damage and restore after Undo",
   await page.getByRole("button", { name: "Basic Attack" }).click();
   await page.getByLabel(/Ranger · Duergar/).check();
   await expect(
-    page.getByLabel(/Divine Shield · Paladin protects Ranger/),
+    reactionChoice(page, "Divine Shield · Paladin", "Ranger"),
   ).toBeVisible();
+});
+
+test("the referee can inspect a Reaction and choose characters inside its group", async ({
+  page,
+}) => {
+  await startMatch(page);
+  await page.getByRole("button", { name: "Basic Attack" }).click();
+  await page.getByLabel(/Ranger · Duergar/).check();
+  await page.getByLabel(/Paladin · Drow/).check();
+
+  const reactions = page
+    .locator("fieldset")
+    .filter({ hasText: "Protective Reactions" });
+  const divineShield = reactions.getByRole("group", {
+    name: "Divine Shield · Paladin",
+  });
+  const guidanceButton = divineShield.getByRole("button", {
+    name: "What Divine Shield does",
+  });
+  const guidance = divineShield.getByRole("tooltip", {
+    name: "Divine Shield effect",
+  });
+
+  await expect(reactions.locator(".reaction-group")).toHaveCount(2);
+  await expect(divineShield.getByRole("checkbox")).toHaveCount(2);
+  await expect(divineShield.getByText("Protect Ranger")).toBeVisible();
+  await expect(divineShield.getByText("Protect Paladin")).toBeVisible();
+  await expect(guidanceButton).toHaveAttribute("aria-expanded", "false");
+  await expect(guidance).toBeHidden();
+
+  await guidanceButton.click();
+
+  await expect(guidanceButton).toHaveAttribute("aria-expanded", "true");
+  await expect(guidance).toContainText(
+    "prevent all damage and effects from that attack against that character",
+  );
+  await expect(guidance).toContainText("Target: Self or 1 ally");
+  await expect(guidance).toContainText("Range: 3 paces");
 });
 
 test("a spent protective Reaction needs a clear recorded Override", async ({
@@ -321,13 +349,13 @@ test("a spent protective Reaction needs a clear recorded Override", async ({
     await page.getByLabel(/Ranger · Duergar/).check();
     if (attack === 2) {
       await expect(
-        page.getByLabel(/Divine Shield · Paladin protects Ranger/),
+        reactionChoice(page, "Divine Shield · Paladin", "Ranger"),
       ).toBeHidden();
       await page
         .getByText("Override unavailable Reactions", { exact: true })
         .click();
     }
-    await page.getByLabel(/Divine Shield · Paladin protects Ranger/).check();
+    await reactionChoice(page, "Divine Shield · Paladin", "Ranger").check();
     await completePhysicalChecks(page);
     if (attack === 2) {
       await expect(page.getByLabel(/Record referee override/)).toHaveCount(0);
@@ -357,8 +385,9 @@ test("Deflecting Palm closes the first leg and records later unique contacts", a
     .replace("Source:", "")
     .trim();
   await page.getByLabel(/Monk · Duergar/).check();
-  await expect(page.getByLabel(/Deflecting Palm · Monk/)).toBeVisible();
-  await page.getByLabel(/Deflecting Palm · Monk/).check();
+  const deflectingPalm = reactionChoice(page, "Deflecting Palm · Monk", "Monk");
+  await expect(deflectingPalm).toBeVisible();
+  await deflectingPalm.check();
 
   await expect(
     page.getByRole("heading", { name: "Redirected Attack Leg 2" }),
@@ -377,8 +406,8 @@ test("Deflecting Palm closes the first leg and records later unique contacts", a
   ).toBeVisible();
   await page.getByRole("button", { name: "Basic Attack" }).click();
   await page.getByLabel(/Monk · Duergar/).check();
-  await expect(page.getByLabel(/Deflecting Palm · Monk/)).toBeVisible();
-  await page.getByLabel(/Deflecting Palm · Monk/).check();
+  await expect(deflectingPalm).toBeVisible();
+  await deflectingPalm.check();
   await page.getByLabel(new RegExp(`${sourceName} ·`)).check();
   await page.getByLabel(/Paladin · Drow/).check();
   await completePhysicalChecks(page);

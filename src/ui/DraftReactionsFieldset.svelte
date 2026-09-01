@@ -28,8 +28,6 @@
   type ReactionRow = {
     readonly reactionId: ReactionId;
     readonly protectedCharacterId: CharacterId;
-    readonly reactionName: string;
-    readonly owner: { readonly id: CharacterId; readonly name: string };
     readonly protectedCharacter: {
       readonly id: CharacterId;
       readonly name: string;
@@ -39,7 +37,19 @@
     readonly selected: boolean;
   };
 
+  type ReactionGroup = {
+    readonly reactionId: ReactionId;
+    readonly reactionName: string;
+    readonly owner: { readonly id: CharacterId; readonly name: string };
+    readonly target: string;
+    readonly range: string;
+    readonly lineOfSight: string;
+    readonly rulesText: string;
+    readonly rows: readonly ReactionRow[];
+  };
+
   const DEFLECTING_PALM_REACTION_ID = "duergar-monk-deflecting-palm";
+  let openReactionId = $state<ReactionId | null>(null);
 
   const model = $derived.by(() => {
     const draft = uiState.state.actionDraft;
@@ -52,17 +62,10 @@
       const reaction = MATCH_CONFIGURATION.reactions.find(
         ({ id }) => id === choice.reactionId,
       );
-      const owner = reaction
-        ? MATCH_CONFIGURATION.characters.find(
-            ({ id }) => id === reaction.ownerCharacterId,
-          )
-        : undefined;
-      if (!reaction || !owner) return null;
+      if (!reaction) return null;
       return {
         reactionId: choice.reactionId,
         protectedCharacterId: choice.protectedCharacterId,
-        reactionName: reaction.name,
-        owner,
         protectedCharacter: rulesCharacterOf(choice.protectedCharacterId),
         warning: choice.warnings.join(" "),
         override,
@@ -85,7 +88,30 @@
         const row = rowOf(choice, true);
         return row ? [row] : [];
       });
-    return { eligible, overrides };
+    const groupsOf = (rows: readonly ReactionRow[]): readonly ReactionGroup[] =>
+      MATCH_CONFIGURATION.reactions.flatMap((reaction) => {
+        const groupRows = rows.filter(
+          ({ reactionId }) => reactionId === reaction.id,
+        );
+        if (groupRows.length === 0) return [];
+        const owner = MATCH_CONFIGURATION.characters.find(
+          ({ id }) => id === reaction.ownerCharacterId,
+        );
+        if (!owner) return [];
+        return [
+          {
+            reactionId: reaction.id,
+            reactionName: reaction.name,
+            owner,
+            target: reaction.target,
+            range: reaction.range,
+            lineOfSight: reaction.lineOfSight,
+            rulesText: reaction.rulesText,
+            rows: groupRows,
+          },
+        ];
+      });
+    return { eligible: groupsOf(eligible), overrides: groupsOf(overrides) };
   });
 
   function handleReactionChange(row: ReactionRow): (event: Event) => void {
@@ -145,13 +171,7 @@
       checked={row.selected}
       onchange={handleReactionChange(row)}
     />
-    <!-- Single-line runs: getByLabel(REGEX) probes receive raw label text,
-         so every spec-matched phrase stays contiguous. -->
-    <span
-      ><strong>{row.reactionName}</strong> · <CharacterName
-        character={row.owner}
-        displayNames={match.displayNames}
-      /> protects <CharacterName
+    <span>Protect <CharacterName
         character={row.protectedCharacter}
         displayNames={match.displayNames}
       />{#if row.warning}<small
@@ -161,14 +181,59 @@
   </label>
 {/snippet}
 
+{#snippet reactionGroup(group: ReactionGroup)}
+  <section
+    class="reaction-group"
+    role="group"
+    aria-labelledby={`reaction-group-${group.reactionId}`}
+  >
+    <div class="reaction-group-heading">
+      <h3 id={`reaction-group-${group.reactionId}`}>
+        {group.reactionName} <small>· <CharacterName
+            character={group.owner}
+            displayNames={match.displayNames}
+          /></small>
+      </h3>
+      <button
+        type="button"
+        class="reaction-guidance-button"
+        aria-label={`What ${group.reactionName} does`}
+        aria-controls={`reaction-effect-${group.reactionId}`}
+        aria-expanded={openReactionId === group.reactionId}
+        onclick={() =>
+          (openReactionId =
+            openReactionId === group.reactionId ? null : group.reactionId)}
+      >i</button>
+    </div>
+    {#if openReactionId === group.reactionId}
+      <div
+        id={`reaction-effect-${group.reactionId}`}
+        class="reaction-guidance-tooltip"
+        role="tooltip"
+        aria-label={`${group.reactionName} effect`}
+      >
+        <p><strong>Target:</strong> {group.target}</p>
+        <p><strong>Range:</strong> {group.range}</p>
+        <p><strong>Line of Sight:</strong> {group.lineOfSight}</p>
+        <p><strong>Effect:</strong> {group.rulesText}</p>
+      </div>
+    {/if}
+    <div class="reaction-character-list">
+      {#each group.rows as row (row.protectedCharacterId)}
+        {@render reactionControl(row)}
+      {/each}
+    </div>
+  </section>
+{/snippet}
+
 {#if model}
   <fieldset>
     <legend>Protective Reactions</legend>
     <p>Select at most one protected character for each reacting character.</p>
     <div class="reaction-list">
       {#if model.eligible.length > 0}
-        {#each model.eligible as row (row.reactionId + row.protectedCharacterId)}
-          {@render reactionControl(row)}
+        {#each model.eligible as group (group.reactionId)}
+          {@render reactionGroup(group)}
         {/each}
       {:else}
         <p>No state-eligible Reactions.</p>
@@ -179,8 +244,8 @@
         <summary>Override unavailable Reactions</summary>
         <p>These choices have state warnings. Selection records an Override.</p>
         <div class="reaction-list">
-          {#each model.overrides as row (row.reactionId + row.protectedCharacterId)}
-            {@render reactionControl(row)}
+          {#each model.overrides as group (group.reactionId)}
+            {@render reactionGroup(group)}
           {/each}
         </div>
       </details>

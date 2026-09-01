@@ -598,6 +598,86 @@ dd {
   color: var(--text-muted);
 }
 
+.reaction-group {
+  display: grid;
+  gap: var(--space-2);
+  border: 0.125rem solid var(--border);
+  border-radius: 0.75rem;
+  padding: var(--space-3);
+  background: var(--surface);
+}
+
+.reaction-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.reaction-group-heading h3 {
+  margin: 0;
+  color: var(--accent);
+}
+
+.reaction-group-heading h3 small {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.reaction-character-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.reaction-guidance-button {
+  flex: 0 0 auto;
+  min-width: 3rem;
+  padding-inline: 0;
+  border-color: var(--accent);
+  border-radius: 50%;
+  color: var(--accent);
+  background: transparent;
+  font-family: Georgia, serif;
+  font-size: 1.15rem;
+}
+
+.reaction-guidance-button[aria-expanded="true"] {
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+.reaction-guidance-tooltip {
+  position: relative;
+  border: 0.125rem solid var(--accent);
+  border-radius: 0.5rem;
+  padding: var(--space-3);
+  color: #fff;
+  background: var(--surface);
+  box-shadow: 0 0.75rem 1.5rem rgb(0 0 0 / 30%);
+}
+
+.reaction-guidance-tooltip::before {
+  position: absolute;
+  top: -0.5rem;
+  right: 1rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-top: 0.125rem solid var(--accent);
+  border-left: 0.125rem solid var(--accent);
+  background: var(--surface);
+  content: "";
+  transform: rotate(45deg);
+}
+
+.reaction-guidance-tooltip p {
+  margin-bottom: var(--space-2);
+}
+
+.reaction-guidance-tooltip p:last-child {
+  margin-bottom: 0;
+}
+
 .reaction-overrides {
   margin-top: var(--space-3);
   border-top: 0.0625rem solid var(--border);

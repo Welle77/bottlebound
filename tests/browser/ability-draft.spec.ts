@@ -20,6 +20,12 @@ async function completePhysicalChecks(page: Page) {
   }
 }
 
+function reactionChoice(page: Page, groupName: string, characterName: string) {
+  return page
+    .getByRole("group", { name: groupName })
+    .getByRole("checkbox", { name: `Protect ${characterName}` });
+}
+
 async function finishTurnAndWait(page: Page) {
   const sequence = page.locator(".active-match > .section-heading .eyebrow");
   const previousSequence = (await sequence.textContent()) ?? "";
@@ -154,7 +160,7 @@ test("targeted-attack ability picks exactly one enemy and records Reactions atom
   await page.getByRole("button", { name: "Choose Reactions" }).click();
 
   await expect(page.getByText("Protective Reactions")).toBeVisible();
-  await page.getByLabel(/Divine Shield · Paladin protects Ranger/).check();
+  await reactionChoice(page, "Divine Shield · Paladin", "Ranger").check();
   await page.getByRole("button", { name: "Record Action Resolution" }).click();
   await expect(
     page.getByRole("heading", { name: "Active Match" }),
@@ -218,7 +224,7 @@ test("physical-attack ability reuses ordered contacts, Deflecting Palm redirect 
     page.getByRole("heading", { name: "Record Stunning Strike" }),
   ).toBeVisible();
   await page.getByLabel(/Monk · Duergar/).check();
-  await page.getByLabel(/Deflecting Palm · Monk/).check();
+  await reactionChoice(page, "Deflecting Palm · Monk", "Monk").check();
   await expect(
     page.getByRole("heading", { name: "Redirected Attack Leg 2" }),
   ).toBeVisible();
