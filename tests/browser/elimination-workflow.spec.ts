@@ -70,10 +70,7 @@ async function eliminateOpposingTeam(page: Page): Promise<{
       await page.getByLabel(label).check();
     }
     await page
-      .getByRole("button", { name: "Review Action Resolution" })
-      .click();
-    await page
-      .getByRole("button", { name: "Confirm Action Resolution" })
+      .getByRole("button", { name: "Record Action Resolution" })
       .click();
     if (attack < 4) {
       await page.getByRole("button", { name: "Finish Turn" }).click();
@@ -95,8 +92,7 @@ async function recordAttack(page: Page, targets: readonly string[]) {
   ]) {
     await page.getByLabel(label).check();
   }
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
 }
 
 async function eliminateBothTeams(page: Page) {

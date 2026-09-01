@@ -193,12 +193,6 @@
     return { activeLegIndex, ready, closedLeg };
   });
 
-  function goReview(): void {
-    const draft = uiState.state.actionDraft;
-    if (draft === null) return;
-    uiState.setActionDraft({ ...draft, step: "review" });
-  }
-
   function backToContacts(): void {
     const draft = uiState.state.actionDraft;
     if (draft === null) return;
@@ -208,8 +202,8 @@
   async function confirmBasicAttack(): Promise<void> {
     const { match } = application.state;
     const draft = uiState.state.actionDraft;
-    if (match?.phase !== "active" || !draft || draft.step !== "review") return;
-    await application.resolveBasicAttack({
+    if (match?.phase !== "active" || !draft || draft.kind !== "basic") return;
+    const succeeded = await application.resolveBasicAttack({
       sourceCharacterId: draft.sourceCharacterId,
       attackLegs: draft.attackLegs.map((affectedCharacterIds) => ({
         affectedCharacterIds: [...affectedCharacterIds],
@@ -226,7 +220,7 @@
         ? MATCH_CONFIGURATION.refereeInstructions.secondMajorAction
         : null,
     });
-    uiState.setActionDraft(null);
+    if (succeeded) uiState.setActionDraft(null);
   }
 
   function cancelDraft(): void {
@@ -420,15 +414,20 @@
         affectedCharacterIds={base.draft.attackLegs.flat()}
       />
       <DraftChecksFieldset />
+      {#if application.state.errors.operation}
+        <p class="blocking-error" role="alert">
+          {application.state.errors.operation}
+        </p>
+      {/if}
       <div class="match-actions">
         <button
-          id="review-basic-attack"
+          id="record-basic-attack"
           class="primary-action"
           type="button"
           disabled={!contacts.ready}
-          onclick={goReview}
+          onclick={() => void confirmBasicAttack()}
         >
-          Review Action Resolution
+          Record Action Resolution
         </button>
         <button
           id="cancel-basic-attack"

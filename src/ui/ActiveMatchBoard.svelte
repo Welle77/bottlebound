@@ -30,7 +30,7 @@
     readonly character: (typeof MATCH_CONFIGURATION.characters)[number];
     readonly team: Team;
     readonly hp: number;
-    readonly baseHp: number;
+    readonly maxHp: number;
     readonly turnLabel: string;
     readonly turnKey: string;
   };
@@ -107,11 +107,15 @@
   function buildBoardRows(
     match: ActiveMatchState,
     nextSlot: number,
-    hpByCharacter: ReadonlyMap<CharacterId, number>,
+    stateByCharacter: ReadonlyMap<CharacterId, ActiveMatchState["characters"][number]>,
   ): readonly BoardRow[] {
     return match.initiative.map((entry) => {
       const character = requireCharacter(entry.characterId);
-      const hp = requireHp(hpByCharacter, entry.characterId);
+      const characterState = stateByCharacter.get(entry.characterId);
+      if (!characterState) {
+        throw new Error("The Active Match references an unknown character.");
+      }
+      const { hp } = characterState;
       const turnLabel = (() => {
         if (entry.slot === match.activeSlot) return "Active";
         if (hp === 0 || match.eliminatedTeams.includes(character.team)) {
@@ -126,7 +130,7 @@
         character,
         team: character.team,
         hp,
-        baseHp: character.baseHp,
+        maxHp: characterState.currentMaxHp,
         turnLabel,
         turnKey: turnLabel.toLowerCase(),
       };
@@ -195,7 +199,16 @@
     const hpByCharacter = new Map<CharacterId, number>(
       match.characters.map(({ characterId, hp }) => [characterId, hp]),
     );
-    const rows = buildBoardRows(match, nextSlot, hpByCharacter);
+    const maxHpByCharacter = new Map<CharacterId, number>(
+      match.characters.map(({ characterId, currentMaxHp }) => [
+        characterId,
+        currentMaxHp,
+      ]),
+    );
+    const stateByCharacter = new Map(
+      match.characters.map((character) => [character.characterId, character]),
+    );
+    const rows = buildBoardRows(match, nextSlot, stateByCharacter);
     const { saving } = application.state;
     const canUndo =
       !saving && getUndoPreview(match, application.state.events) !== null;
@@ -213,7 +226,9 @@
       activeCharacter,
       nextCharacter,
       activeHp,
+      activeMaxHp: requireHp(maxHpByCharacter, activeEntry.characterId),
       nextHp,
+      nextMaxHp: requireHp(maxHpByCharacter, nextEntry.characterId),
       activeDowned,
       actionsUsed,
       moveAvailable: moveIsAvailable(match, saving, activeDowned),
@@ -399,7 +414,7 @@
           <div>
             <dt>HP</dt>
             <dd class:critical-hp={view.activeHp === 1}>
-              {view.activeHp}/{view.activeCharacter.baseHp}
+              {view.activeHp}/{view.activeMaxHp}
             </dd>
           </div>
           <div>
@@ -498,7 +513,7 @@
           <div>
             <dt>HP</dt>
             <dd class:critical-hp={view.nextHp === 1}>
-              {view.nextHp}/{view.nextCharacter.baseHp}
+              {view.nextHp}/{view.nextMaxHp}
             </dd>
           </div>
           <div>
@@ -679,7 +694,7 @@
               </th>
               <td data-label="Team">{row.team}</td>
               <td data-label="HP" class:critical-hp={row.hp === 1}
-                >{row.hp}/{row.baseHp}</td
+                >{row.hp}/{row.maxHp}</td
               >
             </tr>
           {/each}

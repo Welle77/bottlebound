@@ -117,10 +117,14 @@ function assertValidatedRosterEntry(
   characterId: CharacterId,
   baseHp: number,
 ): void {
+  const validCurrentMaxHp =
+    matchCharacter.currentMaxHp === baseHp ||
+    (characterId === "drow-druid" && matchCharacter.currentMaxHp === 4);
   if (
     matchCharacter.characterId !== characterId ||
     matchCharacter.hp < 0 ||
-    matchCharacter.hp > baseHp
+    matchCharacter.hp > matchCharacter.currentMaxHp ||
+    !validCurrentMaxHp
   ) {
     throw new Error("The validated snapshot roster is invalid.");
   }

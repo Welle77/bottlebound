@@ -34,7 +34,7 @@ async function activateCharacter(
   throw new Error(`${className} never became the Active Character.`);
 }
 
-test("the referee reviews, commits, restores, and undoes an ordered Basic Attack", async ({
+test("the referee records, restores, and undoes an ordered Basic Attack", async ({
   page,
 }) => {
   await startMatch(page);
@@ -67,15 +67,7 @@ test("the referee reviews, commits, restores, and undoes an ordered Basic Attack
   await expect(page.getByText("Contact 1", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Contact 2", { exact: true })).toHaveCount(0);
   await completePhysicalChecks(page);
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Review Basic Attack" }),
-  ).toBeVisible();
-  await expect(page.locator("[data-action-review-hit]")).toHaveCount(2);
-  await expect(page.locator("[data-action-review-hit]").first()).toContainText(
-    "Paladin",
-  );
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
   await expect(
     page.getByRole("heading", { name: "Active Match" }),
   ).toBeVisible();
@@ -103,7 +95,7 @@ test("the referee reviews, commits, restores, and undoes an ordered Basic Attack
   ).toContainText("3/3");
 });
 
-test("a Basic Attack review row shows a marked target's committed effect damage", async ({
+test("a Basic Attack records a marked target's effect damage", async ({
   page,
 }) => {
   await startMatch(page);
@@ -114,26 +106,18 @@ test("a Basic Attack review row shows a marked target's committed effect damage"
   await page.getByRole("button", { name: "Use Ability" }).click();
   await page.getByRole("button", { name: "Use Hunter’s Mark" }).click();
   await page.getByLabel(/Paladin · Drow/).check();
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Paladin" }),
   ).toContainText("5/5");
   await page.getByRole("button", { name: "Finish Turn" }).click();
 
-  // Whoever holds the next slot attacks the marked Paladin. Review must show
-  // the finalized 2 damage (printed 1 + Hunter's Mark) that confirming
-  // commits — not the effect-blind printed damage.
+  // Whoever holds the next slot attacks the marked Paladin. The recorded
+  // result includes the printed damage plus Hunter's Mark.
   await page.getByRole("button", { name: "Basic Attack" }).click();
   await page.getByLabel(/Paladin · Drow/).check();
   await completePhysicalChecks(page);
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
-  const paladinRow = page.locator("[data-action-review-hit]", {
-    hasText: "Paladin",
-  });
-  await expect(paladinRow).toContainText("5 → 3");
-  await expect(paladinRow).toContainText(/Mark consumed/);
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Paladin" }),
   ).toContainText("3/5");
@@ -166,7 +150,6 @@ test("cancel, reload, and a failed save discard no committed attack", async ({
   await page.getByLabel(/Ranger · Duergar/).check();
   await page.getByLabel(/Divine Shield · Paladin protects Ranger/).check();
   await completePhysicalChecks(page);
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
   await page.evaluate(() => {
     const add = Reflect.get(IDBObjectStore.prototype, "add");
     IDBObjectStore.prototype.add = function (...args) {
@@ -175,10 +158,8 @@ test("cancel, reload, and a failed save discard no committed attack", async ({
       return Reflect.apply(add, this, args);
     };
   });
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
-  await expect(
-    page.getByText(/last committed Active Match remains visible/),
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
+  await expect(page.getByText(/Injected failure/)).toBeVisible();
   await page.reload();
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Ranger" }),
@@ -199,11 +180,8 @@ test("a second Basic Attack uses the turn's second normal action", async ({
     await page.getByRole("button", { name: "Basic Attack" }).click();
     await page.getByLabel(/Ranger · Duergar/).check();
     await completePhysicalChecks(page);
-    await page
-      .getByRole("button", { name: "Review Action Resolution" })
-      .click();
     const confirm = page.getByRole("button", {
-      name: "Confirm Action Resolution",
+      name: "Record Action Resolution",
     });
     await expect(confirm).toBeEnabled();
     await expect(page.getByLabel(/Record referee override/)).toHaveCount(0);
@@ -313,19 +291,7 @@ test("protective Reactions prevent only selected damage and restore after Undo",
     }
   }
   await completePhysicalChecks(page);
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
-
-  await expect(page.locator("[data-reaction-review]")).toHaveCount(4);
-  await expect(
-    page.getByText(/Move Wizard up to 2 paces immediately/),
-  ).toBeVisible();
-  await expect(
-    page.locator("[data-action-review-hit]", { hasText: "Ranger" }),
-  ).toContainText("0 (prevented)");
-  await expect(
-    page.locator("[data-action-review-hit]", { hasText: "Warlock" }),
-  ).toContainText("1");
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Ranger" }),
   ).toContainText("3/3");
@@ -363,20 +329,11 @@ test("a spent protective Reaction needs a clear recorded Override", async ({
     }
     await page.getByLabel(/Divine Shield · Paladin protects Ranger/).check();
     await completePhysicalChecks(page);
-    await page
-      .getByRole("button", { name: "Review Action Resolution" })
-      .click();
     if (attack === 2) {
-      await expect(
-        page.getByText("Divine Shield is already spent."),
-      ).toBeVisible();
-      await expect(
-        page.getByText("Referee allowed a state-invalid Reaction."),
-      ).toBeVisible();
       await expect(page.getByLabel(/Record referee override/)).toHaveCount(0);
     }
     await page
-      .getByRole("button", { name: "Confirm Action Resolution" })
+      .getByRole("button", { name: "Record Action Resolution" })
       .click();
   }
   await expect(
@@ -425,22 +382,7 @@ test("Deflecting Palm closes the first leg and records later unique contacts", a
   await page.getByLabel(new RegExp(`${sourceName} ·`)).check();
   await page.getByLabel(/Paladin · Drow/).check();
   await completePhysicalChecks(page);
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
-
-  await expect(page.locator("[data-attack-leg-review]")).toHaveCount(2);
-  await expect(page.locator("[data-attack-leg-review]").first()).toContainText(
-    /Leg 1.*Monk/,
-  );
-  await expect(page.locator("[data-attack-leg-review]").nth(1)).toContainText(
-    new RegExp(`Leg 2.*${sourceName}.*Paladin`),
-  );
-  await expect(
-    page.locator("[data-reaction-review]", { hasText: "Deflecting Palm" }),
-  ).toContainText(new RegExp(`redirected toward ${sourceName}`));
-  await expect(
-    page.locator("[data-action-review-hit]", { hasText: "Monk" }),
-  ).toContainText("0 (prevented)");
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
   await expect(
     page.getByRole("heading", { name: "Active Match" }),
   ).toBeVisible();

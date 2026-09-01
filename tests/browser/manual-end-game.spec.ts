@@ -35,8 +35,7 @@ async function attackTargets(
     await page.locator(`[data-hit-character="${characterId}"]`).check();
   }
   await completePhysicalChecks(page);
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
 }
 
 async function getSummary(page: Page): Promise<Record<string, unknown> | null> {
@@ -290,12 +289,7 @@ test("Action Draft blocks End Game until confirmed or canceled", async ({
   await page.getByRole("button", { name: "Basic Attack" }).click();
   await page.locator('[data-hit-character="drow-paladin"]').check();
   await completePhysicalChecks(page);
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Review Basic Attack" }),
-  ).toBeVisible();
   await expect(page.getByRole("button", { name: "End Game" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Back" }).click();
   await page.getByRole("button", { name: "Cancel draft" }).click();
   await expect(page.getByRole("button", { name: "End Game" })).toBeVisible();
 });

@@ -54,15 +54,23 @@
     return { activeCharacterId, ability };
   }
 
-  function openAbilityDraft(abilityId: AbilityId): void {
+  async function openAbilityDraft(abilityId: AbilityId): Promise<void> {
     const context = findAbilityDraftContext(abilityId);
     if (!context) return;
     const { activeCharacterId, ability } = context;
     const { match: currentMatch } = application.state;
     if (currentMatch?.phase !== "active") return;
+    if (ability.interaction === "self") {
+      const succeeded = await application.resolveAbility({
+        abilityId: ability.id,
+        majorActionOverride: false,
+        abilityOverride: false,
+      });
+      if (succeeded) uiState.setPickerVisibility({ ability: false });
+      return;
+    }
     const physical = ability.interaction === "physical-attack";
     const step = (() => {
-      if (ability.interaction === "self") return "review";
       if (physical) return "contacts";
       return "select-target";
     })();
@@ -102,6 +110,11 @@
     Each Ability may be used once per Match.
   </p>
   <div class="ability-option-list">
+    {#if application.state.errors.operation}
+      <p class="blocking-error" role="alert">
+        {application.state.errors.operation}
+      </p>
+    {/if}
     {#if abilities.length > 0}
       {#each abilities as ability (ability.id)}
         <article class="ability-option" data-ability-option>
@@ -115,9 +128,10 @@
               class="secondary-action"
               type="button"
               data-open-ability={ability.id}
-              onclick={() => openAbilityDraft(ability.id)}
+              disabled={application.state.saving}
+              onclick={() => void openAbilityDraft(ability.id)}
             >
-              Use {ability.name}
+              {application.state.saving ? "Saving…" : `Use ${ability.name}`}
             </button>
           </div>
         </article>

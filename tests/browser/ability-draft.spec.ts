@@ -59,8 +59,7 @@ test("self ability confirms in one step, spends, persists, and undoes exactly", 
   await page.getByRole("button", { name: "Basic Attack" }).click();
   await page.getByLabel(/Fighter · Duergar/).check();
   await completePhysicalChecks(page);
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Fighter" }),
   ).toContainText("3/4");
@@ -82,18 +81,9 @@ test("self ability confirms in one step, spends, persists, and undoes exactly", 
 
   await page.getByRole("button", { name: "Use Second Wind" }).click();
   await expect(
-    page.getByRole("heading", { name: "Review Second Wind" }),
-  ).toBeVisible();
-  await expect(page.locator(".ability-draft .rules-context-link")).toHaveCount(
-    0,
-  );
-  await expect(
-    page.locator("[data-ability-review-change]", { hasText: "Fighter" }),
-  ).toContainText("3 → 4");
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
-  await expect(
     page.getByRole("heading", { name: "Active Match" }),
   ).toBeVisible();
+  await expect(page.getByText("Review Second Wind")).toHaveCount(0);
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Fighter" }),
   ).toContainText("4/4");
@@ -126,7 +116,24 @@ test("self ability confirms in one step, spends, persists, and undoes exactly", 
   ).toBeVisible();
 });
 
-test("targeted-attack ability picks exactly one enemy, allows Reactions, and reviews atomically", async ({
+test("Shapeshift confirmation closes the draft and applies its result", async ({
+  page,
+}) => {
+  await startMatch(page);
+  await activateCharacter(page, "Druid");
+
+  await page.getByRole("button", { name: "Use Ability" }).click();
+  await page.getByRole("button", { name: "Use Shapeshift" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Active Match" }),
+  ).toBeVisible();
+  await expect(page.getByText("Review Shapeshift")).toHaveCount(0);
+  await expect(
+    page.locator("[data-active-order-row]", { hasText: "Druid" }),
+  ).toContainText("4/4");
+});
+
+test("targeted-attack ability picks exactly one enemy and records Reactions atomically", async ({
   page,
 }) => {
   await startMatch(page);
@@ -148,16 +155,7 @@ test("targeted-attack ability picks exactly one enemy, allows Reactions, and rev
 
   await expect(page.getByText("Protective Reactions")).toBeVisible();
   await page.getByLabel(/Divine Shield · Paladin protects Ranger/).check();
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
-
-  await expect(
-    page.getByRole("heading", { name: "Review Arcane Bolt" }),
-  ).toBeVisible();
-  await expect(page.locator("[data-action-review-hit]")).toHaveCount(1);
-  await expect(
-    page.locator("[data-action-review-hit]", { hasText: "Ranger" }),
-  ).toContainText("0 (prevented)");
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
   await expect(
     page.getByRole("heading", { name: "Active Match" }),
   ).toBeVisible();
@@ -200,10 +198,9 @@ test("physical-attack ability honors the confirmation toggle and skips every man
       hasText: "Manual physical confirmations",
     }),
   ).toHaveCount(0);
-  const review = page.getByRole("button", { name: "Review Action Resolution" });
-  await expect(review).toBeEnabled();
-  await review.click();
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  const record = page.getByRole("button", { name: "Record Action Resolution" });
+  await expect(record).toBeEnabled();
+  await record.click();
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Paladin" }),
   ).toContainText("4/5");
@@ -231,21 +228,7 @@ test("physical-attack ability reuses ordered contacts, Deflecting Palm redirect 
   await page.getByLabel(/Paladin · Drow/).check();
   await completePhysicalChecks(page);
 
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Review Stunning Strike" }),
-  ).toBeVisible();
-  await expect(page.locator("[data-attack-leg-review]")).toHaveCount(2);
-  await expect(page.locator("[data-attack-leg-review]").first()).toContainText(
-    /Leg 1.*Monk/,
-  );
-  await expect(page.locator("[data-attack-leg-review]").nth(1)).toContainText(
-    /Leg 2.*Ranger.*Paladin/,
-  );
-  await expect(
-    page.locator("[data-action-review-hit]", { hasText: "Monk" }),
-  ).toContainText("0 (prevented)");
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
   await expect(
     page.getByRole("heading", { name: "Active Match" }),
   ).toBeVisible();
@@ -281,11 +264,11 @@ test("ally ability filters targets by policy and an invalid pick records an Over
     .first()
     .waitFor();
   await page.getByLabel(/Paladin · Drow/).check();
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
 
   await expect(page.getByText(/invalid-target-relation/)).toBeVisible();
   const confirm = page.getByRole("button", {
-    name: "Confirm Action Resolution",
+    name: "Record Action Resolution",
   });
   await expect(confirm).toBeDisabled();
   await page
@@ -314,15 +297,9 @@ test("utility ability resolves several policy-allowed targets in one resolution"
   ).toBeVisible();
   await page.getByLabel(/Wizard · Drow/).check();
   await page.getByLabel(/Ranger · Duergar/).check();
-  await expect(
-    page.getByRole("button", { name: "Review Action Resolution" }),
-  ).toBeEnabled();
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Review Battle Hymn" }),
-  ).toBeVisible();
-  await expect(page.locator("[data-ability-review-change]")).toHaveCount(2);
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  const record = page.getByRole("button", { name: "Record Action Resolution" });
+  await expect(record).toBeEnabled();
+  await record.click();
   await expect(
     page.getByRole("heading", { name: "Active Match" }),
   ).toBeVisible();
@@ -350,10 +327,7 @@ test("downing the Active Character skips its slot and advances to usable control
     await page.locator('[data-hit-character="duergar-ranger"]').check();
     await completePhysicalChecks(page);
     await page
-      .getByRole("button", { name: "Review Action Resolution" })
-      .click();
-    await page
-      .getByRole("button", { name: "Confirm Action Resolution" })
+      .getByRole("button", { name: "Record Action Resolution" })
       .click();
     await expect(row).toContainText(`${String(remaining - 1)}/3`);
   }
@@ -363,11 +337,7 @@ test("downing the Active Character skips its slot and advances to usable control
   await page.getByRole("button", { name: "Basic Attack" }).click();
   await page.locator('[data-hit-character="duergar-ranger"]').check();
   await completePhysicalChecks(page);
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
-  await expect(
-    page.locator("[data-action-review-hit]", { hasText: "Ranger" }),
-  ).toContainText("Active → Downed");
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
   await expect(row).toContainText("0/3");
 
   const useAbility = page.getByRole("button", { name: "Use Ability" });
@@ -421,10 +391,7 @@ test("an Arcane Bolt downs a 1 HP enemy whose initiative slot is then skipped", 
     await page.locator('[data-hit-character="duergar-ranger"]').check();
     await completePhysicalChecks(page);
     await page
-      .getByRole("button", { name: "Review Action Resolution" })
-      .click();
-    await page
-      .getByRole("button", { name: "Confirm Action Resolution" })
+      .getByRole("button", { name: "Record Action Resolution" })
       .click();
     await expect(rangerHp).toHaveText(`${String(hpBefore - 1)}/3`);
     await page.getByRole("button", { name: "Finish Turn" }).click();
@@ -443,13 +410,7 @@ test("an Arcane Bolt downs a 1 HP enemy whose initiative slot is then skipped", 
   await expect(eligibleList).toContainText("Ranger · Duergar · HP 1/3");
   await page.getByLabel(/Ranger · Duergar/).check();
   await page.getByRole("button", { name: "Choose Reactions" }).click();
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
-  const hitRow = page.locator("[data-action-review-hit]", {
-    hasText: "Ranger",
-  });
-  await expect(hitRow).toContainText("1 → 0");
-  await expect(hitRow).toContainText("Active → Downed");
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
 
   const rangerRow = page.locator("[data-active-order-row]", {
     hasText: "Ranger",
@@ -478,10 +439,6 @@ test("two Abilities use both normal actions without a referee override", async (
   await page.getByRole("button", { name: "Use Ability" }).click();
   await page.getByRole("button", { name: "Use Rage" }).click();
   await expect(
-    page.getByRole("heading", { name: "Review Rage" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
-  await expect(
     page.getByRole("heading", { name: "Active Match" }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Use Ability" })).toBeEnabled();
@@ -490,9 +447,8 @@ test("two Abilities use both normal actions without a referee override", async (
   await page.getByRole("button", { name: "Use Brutal Shove" }).click();
   await page.getByLabel(/Ranger · Duergar/).check();
   await completePhysicalChecks(page);
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
   const confirm = page.getByRole("button", {
-    name: "Confirm Action Resolution",
+    name: "Record Action Resolution",
   });
   await expect(confirm).toBeEnabled();
   await expect(page.getByLabel(/Record referee override/)).toHaveCount(0);

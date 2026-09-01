@@ -59,17 +59,13 @@ test("with the setting ON a Basic Attack still requires every manual physical ch
   for (const label of CHECK_LABELS) {
     await expect(page.getByLabel(label)).toBeVisible();
   }
-  const review = page.getByRole("button", {
-    name: "Review Action Resolution",
+  const record = page.getByRole("button", {
+    name: "Record Action Resolution",
   });
-  await expect(review).toBeDisabled();
+  await expect(record).toBeDisabled();
 
   await completePhysicalChecks(page);
-  await review.click();
-  await expect(
-    page.getByRole("heading", { name: "Review Basic Attack" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  await record.click();
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Ranger" }),
   ).toContainText("2/3");
@@ -85,11 +81,7 @@ test("with the setting OFF a Basic Attack commits with zero manual check taps", 
   await page.getByLabel(/Ranger · Duergar/).check();
 
   await expect(page.getByLabel(CHECK_LABELS[2])).toBeHidden();
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Review Basic Attack" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Ranger" }),
   ).toContainText("2/3");

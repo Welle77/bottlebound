@@ -25,8 +25,37 @@ import { createIndexedDbMatchStore } from "../../src/storage/match-store";
  * persist through the same seam.
  */
 const UNIQUE_TOTAL_ROLLS = [19, 17, 15, 13, 12, 9, 14, 6, 5, 4, 3, 1];
+const DRUID_FIRST_ROLLS = [10, 19, 11, 8, 7, 14, 11, 12, 10, 9, 6, 5];
 
 describe("IndexedDbMatchStore combined Display Name and Ability persistence", () => {
+  it("commits and restores Shapeshift above the Druid's base HP", async () => {
+    const factory = new IDBFactory();
+    const store = createIndexedDbMatchStore(factory, "shapeshift-roundtrip");
+    const setup = createSetup("shapeshift-match", "2026-09-01T12:00:00.000Z");
+    const generated = generateInitiative(
+      setup.state,
+      randomQueue(DRUID_FIRST_ROLLS),
+      "2026-09-01T12:01:00.000Z",
+    );
+    const started = startMatch(generated.state, "2026-09-01T12:02:00.000Z");
+    const shifted = resolveAbility(
+      started.state,
+      { abilityId: "drow-druid-shapeshift" },
+      "2026-09-01T12:03:00.000Z",
+    );
+
+    for (const result of [setup, generated, started, shifted]) {
+      await store.commit(result.event, result.state);
+    }
+
+    const restored = await store.restore();
+    expect(
+      restored?.state.characters.find(
+        ({ characterId }) => characterId === "drow-druid",
+      ),
+    ).toMatchObject({ hp: 4, currentMaxHp: 4 });
+  });
+
   it("restores names, spent abilities, and effect ledgers across a store reopen", async () => {
     const factory = new IDBFactory();
     const databaseName = "completeness-roundtrip";

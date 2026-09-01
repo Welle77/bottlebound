@@ -140,7 +140,7 @@
       continueLabel:
         b.ability.interaction === "targeted-attack"
           ? "Choose Reactions"
-          : "Review Action Resolution",
+          : "Record Action Resolution",
       ready: single
         ? b.draft.targets.length === 1
         : b.draft.targets.length >= 1,
@@ -283,9 +283,21 @@
   }
 
   function continueTargets(): void {
-    setStep(
-      base?.ability.interaction === "targeted-attack" ? "reactions" : "review",
-    );
+    if (base?.ability.interaction === "targeted-attack") {
+      setStep("reactions");
+      return;
+    }
+    finishAbility();
+  }
+
+  function finishAbility(): void {
+    const b = base;
+    if (!b) return;
+    if (draftWarnings(b.match, b.draft, b.ability).length > 0) {
+      setStep("review");
+      return;
+    }
+    void confirmAbility();
   }
 
   function handleTargetChange(
@@ -339,7 +351,6 @@
     if (
       match?.phase !== "active" ||
       draft?.kind !== "ability" ||
-      draft.step !== "review" ||
       draft.abilityId === null
     )
       return;
@@ -432,6 +443,11 @@
     class="match-panel action-draft ability-draft"
     aria-labelledby="ability-draft-heading"
   >
+    {#if application.state.errors.operation}
+      <p class="blocking-error" role="alert">
+        {application.state.errors.operation}
+      </p>
+    {/if}
     {#if targeting}
       <p class="eyebrow">Use Ability · Choose target</p>
       <h2 id="ability-draft-heading">{base.ability.name}</h2>
@@ -510,9 +526,9 @@
           id="review-ability"
           class="primary-action"
           type="button"
-          onclick={() => setStep("review")}
+          onclick={finishAbility}
         >
-          Review Action Resolution
+          Record Action Resolution
         </button>
         <button
           id="back-to-ability-targets"
@@ -572,9 +588,9 @@
           class="primary-action"
           type="button"
           disabled={!physicalContacts.ready}
-          onclick={() => setStep("review")}
+          onclick={finishAbility}
         >
-          Review Action Resolution
+          Record Action Resolution
         </button>
         <button
           id="cancel-ability"
@@ -586,8 +602,8 @@
         </button>
       </div>
     {:else if review}
-      <p class="eyebrow">Use Ability · Review</p>
-      <h2 id="ability-draft-heading">Review {base.ability.name}</h2>
+      <p class="eyebrow">Use Ability · Override</p>
+      <h2 id="ability-draft-heading">Override {base.ability.name}</h2>
       {@render abilityProfile(base)}
       {#if review.legReviews.length > 0}
         <section aria-labelledby="ability-legs-heading">
@@ -729,7 +745,7 @@
           disabled={review.confirmDisabled}
           onclick={() => void confirmAbility()}
         >
-          {review.saving ? "Saving…" : "Confirm Action Resolution"}
+          {review.saving ? "Saving…" : "Record Action Resolution"}
         </button>
         {#if review.backStep === "contacts"}
           <button

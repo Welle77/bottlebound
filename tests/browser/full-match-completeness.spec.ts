@@ -78,13 +78,7 @@ test("one named Match mixes Basic Attack, every ability interaction, undo, and E
     // Toggle OFF: no manual physical confirmation fieldset appears.
     await expect(workingPage.getByLabel("Range is legal")).toBeHidden();
     await workingPage
-      .getByRole("button", { name: "Review Action Resolution" })
-      .click();
-    await expect(
-      workingPage.getByRole("heading", { name: "Review Backstab" }),
-    ).toBeVisible();
-    await workingPage
-      .getByRole("button", { name: "Confirm Action Resolution" })
+      .getByRole("button", { name: "Record Action Resolution" })
       .click();
     await expect(
       workingPage.locator("[data-active-order-row]", { hasText: "Wizard" }),
@@ -101,18 +95,7 @@ test("one named Match mixes Basic Attack, every ability interaction, undo, and E
     await expect(eligibleList).not.toContainText("Paladin · Drow");
     await workingPage.getByLabel(/Barbarian · Duergar/).check();
     await workingPage
-      .getByRole("button", { name: "Review Action Resolution" })
-      .click();
-    await expect(
-      workingPage.getByRole("heading", { name: "Review Blessing of Battle" }),
-    ).toBeVisible();
-    await expect(
-      workingPage.locator("[data-ability-review-change]", {
-        hasText: "Barbarian",
-      }),
-    ).toContainText("No HP change");
-    await workingPage
-      .getByRole("button", { name: "Confirm Action Resolution" })
+      .getByRole("button", { name: "Record Action Resolution" })
       .click();
     await expect(
       workingPage.locator("[data-active-order-row]", { hasText: "Barbarian" }),
@@ -127,10 +110,7 @@ test("one named Match mixes Basic Attack, every ability interaction, undo, and E
     await workingPage.getByLabel(/Druid · Drow/).check();
     await expect(workingPage.getByLabel("Range is legal")).toBeHidden();
     await workingPage
-      .getByRole("button", { name: "Review Action Resolution" })
-      .click();
-    await workingPage
-      .getByRole("button", { name: "Confirm Action Resolution" })
+      .getByRole("button", { name: "Record Action Resolution" })
       .click();
     await expect(
       workingPage.locator("[data-active-order-row]", { hasText: "Druid" }),
@@ -140,18 +120,7 @@ test("one named Match mixes Basic Attack, every ability interaction, undo, and E
   const rageSelfAbility: Script = async (workingPage) => {
     await workingPage.getByRole("button", { name: "Use Ability" }).click();
     await workingPage.getByRole("button", { name: "Use Rage" }).click();
-    // Self abilities confirm in one step from the picker.
-    await expect(
-      workingPage.getByRole("heading", { name: "Review Rage" }),
-    ).toBeVisible();
-    await expect(
-      workingPage.locator("[data-ability-review-change]", {
-        hasText: "Barbarian",
-      }),
-    ).toContainText("No HP change");
-    await workingPage
-      .getByRole("button", { name: "Confirm Action Resolution" })
-      .click();
+    // Self abilities record in one step from the picker.
     await expect(
       workingPage.locator("[data-active-order-row]", { hasText: "Barbarian" }),
     ).toContainText("5/5");
@@ -214,14 +183,7 @@ test("one named Match mixes Basic Attack, every ability interaction, undo, and E
   await page.getByLabel(/Warlock · Duergar/).check();
   await page.getByRole("button", { name: "Choose Reactions" }).click();
   await expect(page.getByText("Protective Reactions")).toBeVisible();
-  await page.getByRole("button", { name: "Review Action Resolution" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Review Arcane Bolt" }),
-  ).toBeVisible();
-  await expect(
-    page.locator("[data-action-review-hit]", { hasText: "Warlock" }),
-  ).toContainText("3 → 2");
-  await page.getByRole("button", { name: "Confirm Action Resolution" }).click();
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Warlock" }),
   ).toContainText("2/3");
