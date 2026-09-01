@@ -6,16 +6,18 @@
   } from "../rules-reference/rules-search";
   import { highlightedExcerpt, searchResultKind } from "./format";
   import { closeRules } from "./rules-dialog";
-  import { rulesUi } from "./shell-state.svelte";
+  import { useConsoleContext } from "./console-context";
+
+  const { uiState } = useConsoleContext();
 
   // Converted Rules reference modal (T09): open/search/close and focus
   // containment react to the runes-backed rules UI state instead of being
   // swapped as legacy template HTML. The component mounts beside main.shell
   // as the last child of the app root, exactly where the legacy renderer
   // appended the swapped modal, so no wrapper nodes appear in the DOM.
-  const open = $derived(rulesUi.current.open);
+  const open = $derived(uiState.state.rulesReferenceInteraction.open);
   const surface = $derived(resolveRulesSurface());
-  const query = $derived(rulesUi.current.query);
+  const query = $derived(uiState.state.rulesReferenceInteraction.query);
   const hasQuery = $derived(normalizeRulesQuery(query).length > 0);
   const results = $derived(
     hasQuery ? searchRules(surface.reference.records, query) : [],
@@ -42,23 +44,26 @@
    * input/scroll handlers, so no extra capture step exists.
    */
   function restoreReadingPosition(node: HTMLElement): void {
-    if (rulesUi.current.selectedAnchor) {
+    if (uiState.state.rulesReferenceInteraction.selectedAnchor) {
       document
-        .getElementById(rulesUi.current.selectedAnchor)
+        .getElementById(uiState.state.rulesReferenceInteraction.selectedAnchor)
         ?.setAttribute("data-rules-selected", "");
     }
-    node.scrollTop = rulesUi.current.scrollTop;
+    node.scrollTop = uiState.state.rulesReferenceInteraction.scrollTop;
   }
 
   function handleSearchInput(event: Event): void {
     if (!(event.currentTarget instanceof HTMLInputElement)) return;
-    rulesUi.set({ ...rulesUi.current, query: event.currentTarget.value });
+    uiState.setRulesReferenceInteraction({
+      ...uiState.state.rulesReferenceInteraction,
+      query: event.currentTarget.value,
+    });
   }
 
   function handleScroll(event: Event): void {
     if (!(event.currentTarget instanceof HTMLElement)) return;
-    rulesUi.set({
-      ...rulesUi.current,
+    uiState.setRulesReferenceInteraction({
+      ...uiState.state.rulesReferenceInteraction,
       scrollTop: event.currentTarget.scrollTop,
     });
   }
@@ -85,26 +90,15 @@
     document
       .querySelector("[data-rules-selected]")
       ?.removeAttribute("data-rules-selected");
-    rulesUi.set({ ...rulesUi.current, selectedAnchor: anchor });
+    uiState.setRulesReferenceInteraction({
+      ...uiState.state.rulesReferenceInteraction,
+      selectedAnchor: anchor,
+    });
     source.setAttribute("data-rules-selected", "");
     source.scrollIntoView({ block: "start" });
   }
 
-  /**
-   * Focus-trap and dismissal key handling, owned by this dialog component
-   * since T09 (previously a document-level listener wired by App). The open
-   * guard keeps the window-level listener inert while no dialog exists.
-   */
-  function handleKeydown(event: KeyboardEvent): void {
-    if (!rulesUi.current.open) return;
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeRules();
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const dialog = dialogElement;
-    if (!dialog) return;
+  function trapDialogFocus(event: KeyboardEvent, dialog: HTMLElement): void {
     const controls = Array.from(
       dialog.querySelectorAll<HTMLElement>(
         'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
@@ -120,6 +114,24 @@
       event.preventDefault();
       first.focus();
     }
+  }
+
+  /**
+   * Focus-trap and dismissal key handling, owned by this dialog component
+   * since T09 (previously a document-level listener wired by App). The open
+   * guard keeps the window-level listener inert while no dialog exists.
+   */
+  function handleKeydown(event: KeyboardEvent): void {
+    if (!uiState.state.rulesReferenceInteraction.open) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeRules(uiState);
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const dialog = dialogElement;
+    if (!dialog) return;
+    trapDialogFocus(event, dialog);
   }
 
   function html(
@@ -158,7 +170,7 @@
           type="button"
           aria-label="Close Rules"
           use:focusDialog
-          onclick={closeRules}
+          onclick={() => closeRules(uiState)}
         >
           Close
         </button>

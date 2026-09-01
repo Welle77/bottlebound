@@ -4,16 +4,27 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": "26.x"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "26.x",
+      "onFail": "error"
+    }
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && svelte-check --tsconfig ./tsconfig.json && vite build",
-    "lint": "eslint . --max-warnings=0",
+    "lint": "eslint . --max-warnings=0 && depcruise --config .dependency-cruiser.mts --ts-config tsconfig.json .",
     "tsc": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "check": "pnpm run tsc && pnpm run format:check && pnpm run lint && pnpm run test",
     "test:focused": "vitest run tests/shell-state.test.ts tests/readiness.test.ts tests/domain/match.test.ts tests/storage/validated-storage-probe.test.ts tests/storage/match-store.test.ts tests/rules-reference/rules-reference.contract.test.ts",
-    "test:browser": "playwright test",
-    "test": "vitest run && playwright test"
+    "test:browser": "playwright test --retries=0",
+    "test": "vitest run && pnpm run test:browser"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -23,8 +34,8 @@
     "@types/node": "26.4.0",
     "@types/sanitize-html": "2.16.1",
     "@typescript/native": "npm:typescript@7.0.2",
+    "dependency-cruiser": "18.2.0",
     "eslint": "10.9.1",
-    "eslint-plugin-functional": "^10.0.0",
     "eslint-plugin-svelte": "3.23.0",
     "fake-indexeddb": "6.2.5",
     "globals": "17.11.0",

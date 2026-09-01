@@ -1,16 +1,14 @@
 import {
-  type AbilityInput,
+  resolveAttackDamageAgainstCharacter,
   type CharacterId,
+  type MatchConfigurationAbility,
+  type MatchConfigurationCharacter,
   type MatchState,
+  type PhysicalAttackCheck,
   type Team,
 } from "../domain/match";
-import { resolveAttackDamageAgainstCharacter } from "../domain/match-ability-effects";
-import {
-  MATCH_CONFIGURATION,
-  type MatchConfigurationAbility,
-  type PhysicalAttackCheck,
-} from "../domain/match-configuration";
-import type { ActionDraft } from "./shell-state.svelte";
+import { MATCH_CONFIGURATION } from "../domain/match";
+import type { ActionDraft } from "./ui-state";
 
 type ActiveView = Extract<MatchState, { readonly phase: "active" }>;
 
@@ -20,7 +18,9 @@ export function activeCharacterIdOf(
   return match.initiative[match.activeSlot - 1]?.characterId;
 }
 
-export function rulesCharacterOf(characterId: CharacterId) {
+export function rulesCharacterOf(
+  characterId: CharacterId,
+): MatchConfigurationCharacter {
   const character = MATCH_CONFIGURATION.characters.find(
     ({ id }) => id === characterId,
   );
@@ -55,62 +55,6 @@ export function unspentAbilities(
       ability.actionType !== "reaction" &&
       !match.spentAbilityIds.includes(ability.id),
   );
-}
-
-function abilityOf(draft: ActionDraft): MatchConfigurationAbility {
-  const ability = MATCH_CONFIGURATION.abilities.find(
-    ({ id }) => id === draft.abilityId,
-  );
-  if (!ability)
-    throw new Error("The Action Draft references an unknown ability.");
-  return ability;
-}
-
-/**
- * Maps an Ability Action Draft onto the single mutation path's input shape.
- * Physical confirmations reuse the T02 toggle-aware draft values; Reactions
- * and overrides pass through unchanged.
- */
-export function buildAbilityInput(draft: ActionDraft): AbilityInput {
-  const ability = abilityOf(draft);
-  const toDomain = (key: PhysicalAttackCheck): boolean =>
-    draft.physicalConfirmations[key];
-  return {
-    abilityId: ability.id,
-    targetCharacterIds:
-      ability.interaction === "self" ? undefined : [...draft.targets],
-    attackLegs:
-      ability.interaction === "physical-attack"
-        ? draft.attackLegs.map((affectedCharacterIds) => ({
-            affectedCharacterIds: [...affectedCharacterIds],
-          }))
-        : undefined,
-    physicalConfirmations:
-      ability.interaction === "physical-attack"
-        ? {
-            range: toDomain("range"),
-            lineOfSight: toDomain("line-of-sight"),
-            legalBottleContact: toDomain("legal-bottle-contact"),
-            terrainContact: toDomain("terrain-contact"),
-          }
-        : undefined,
-    reactions:
-      draft.reactions.length > 0
-        ? draft.reactions.map(
-            ({ reactionId, protectedCharacterId, override }) => ({
-              reactionId,
-              protectedCharacterId,
-              override,
-            }),
-          )
-        : undefined,
-    majorActionOverride: draft.majorActionOverride
-      ? MATCH_CONFIGURATION.refereeInstructions.secondMajorAction
-      : null,
-    abilityOverride: draft.abilityOverride
-      ? MATCH_CONFIGURATION.refereeInstructions.stateInvalidAbility
-      : null,
-  };
 }
 
 export const CHECK_LABELS: readonly (readonly [PhysicalAttackCheck, string])[] =

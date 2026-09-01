@@ -32,5 +32,8 @@
 
 ## Tooling
 
-- This repository currently has no configured build, lint, format, focused-test, or full-suite command.
-- Do not invent or assume executable repository commands. Update `.codebox/constitution.md` when durable tooling is added.
+- `.codebox/constitution.md` is the canonical owner of executable repository
+  commands. Do not duplicate its command list here.
+- Run `pnpm run check` as the canonical repository gate. It covers formatting,
+  linting, unit tests, and the browser checks; the browser server provides the
+  production build path.

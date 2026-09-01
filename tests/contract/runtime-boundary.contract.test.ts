@@ -9,7 +9,6 @@ const RULES_REFERENCE_UI_FILES = new Set([
   "src/ui/RulesModal.svelte",
   "src/ui/format.ts",
   "src/ui/rules-dialog.ts",
-  "src/ui/shell-state.svelte.ts",
 ]);
 
 function sourceFilesIn(directory: string): readonly string[] {

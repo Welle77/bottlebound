@@ -51,124 +51,148 @@ function buildAbilityEffects(
     readonly anchorId: CharacterId;
   },
 ): readonly ActiveEffect[] {
+  if (isAbilityNamed(ability, "Hunter’s Mark") || ability.name === "Hex") {
+    return buildMarkEffects(ability, context);
+  }
+  return buildNamedAbilityEffects(ability, context);
+}
+
+function buildNamedAbilityEffects(
+  ability: MatchConfigurationAbility,
+  context: {
+    readonly affectedIds: readonly CharacterId[];
+    readonly sequence: number;
+    readonly anchorId: CharacterId;
+  },
+): readonly ActiveEffect[] {
   const { affectedIds, sequence, anchorId } = context;
   const { name } = ability;
-  // Hunter's Mark / Hex (add-damage until the end of the source's next
-  // scheduled initiative position; rules §15 card durations)
-  if (isAbilityNamed(ability, "Hunter’s Mark") || name === "Hex") {
-    return affectedIds.map((targetId) => ({
-      effectId: `${ability.id}-${targetId}-${String(sequence)}`,
-      abilityId: ability.id,
-      kind: isAbilityNamed(ability, "Hunter’s Mark") ? "hunters-mark" : "hex",
-      anchorCharacterId: anchorId,
-      affectedCharacterId: targetId,
-      duration: {
-        kind: "until-trigger-or-boundary",
-        boundaryTrigger: "end-of-next-scheduled-slot",
-        anchor: "source",
-        removeWhenAffectedDowned: true,
-      },
-      operations: ["add-damage"],
-      appliedSequence: sequence,
-    }));
-  }
-  if (name === "Rage") {
-    return [
-      {
-        effectId: `${ability.id}-${anchorId}-${String(sequence)}`,
-        abilityId: ability.id,
-        kind: "rage",
-        anchorCharacterId: anchorId,
-        affectedCharacterId: anchorId,
-        duration: {
-          kind: "until-trigger-or-boundary",
-          boundaryTrigger: "beginning-of-next-turn",
-          anchor: "affected",
-          removeWhenAffectedDowned: true,
+  const abilityName: string = name;
+  switch (abilityName) {
+    case "Rage": {
+      return [
+        {
+          effectId: `${ability.id}-${anchorId}-${String(sequence)}`,
+          abilityId: ability.id,
+          kind: "rage",
+          anchorCharacterId: anchorId,
+          affectedCharacterId: anchorId,
+          duration: {
+            kind: "until-trigger-or-boundary",
+            boundaryTrigger: "beginning-of-next-turn",
+            anchor: "affected",
+            removeWhenAffectedDowned: true,
+          },
+          operations: ["reduce-remaining-damage"],
+          appliedSequence: sequence,
         },
-        operations: ["reduce-remaining-damage"],
-        appliedSequence: sequence,
-      },
-    ];
-  }
-  if (name === "Vanish") {
-    return [
-      {
-        effectId: `${ability.id}-${anchorId}-${String(sequence)}`,
+      ];
+    }
+    case "Vanish": {
+      return [
+        {
+          effectId: `${ability.id}-${anchorId}-${String(sequence)}`,
+          abilityId: ability.id,
+          kind: "vanish",
+          anchorCharacterId: anchorId,
+          affectedCharacterId: anchorId,
+          duration: {
+            kind: "until-boundary",
+            boundaryTrigger: "beginning-of-next-turn",
+            anchor: "affected",
+            removeWhenAffectedDowned: true,
+          },
+          operations: ["ignore-physical-attack"],
+          appliedSequence: sequence,
+        },
+      ];
+    }
+    case "Shapeshift": {
+      return [
+        {
+          effectId: `${ability.id}-${anchorId}-${String(sequence)}`,
+          abilityId: ability.id,
+          kind: "shapeshift",
+          anchorCharacterId: anchorId,
+          affectedCharacterId: anchorId,
+          duration: {
+            kind: "while-condition",
+            anchor: "affected",
+            removeWhenAffectedDowned: true,
+          },
+          operations: ["change-max-hp"],
+          appliedSequence: sequence,
+        },
+      ];
+    }
+    // Physical prohibit effects
+    case "Backstab":
+    case "Stunning Strike": {
+      return affectedIds.map((targetId) => ({
+        effectId: `${ability.id}-${targetId}-${String(sequence)}`,
         abilityId: ability.id,
-        kind: "vanish",
+        kind: "prohibit-powerful",
         anchorCharacterId: anchorId,
-        affectedCharacterId: anchorId,
+        affectedCharacterId: targetId,
         duration: {
           kind: "until-boundary",
-          boundaryTrigger: "beginning-of-next-turn",
+          boundaryTrigger: "end-of-next-turn",
           anchor: "affected",
           removeWhenAffectedDowned: true,
         },
-        operations: ["ignore-physical-attack"],
+        operations: ["prohibit-action-type"],
         appliedSequence: sequence,
-      },
-    ];
-  }
-  if (name === "Shapeshift") {
-    return [
-      {
-        effectId: `${ability.id}-${anchorId}-${String(sequence)}`,
+      }));
+    }
+    // Movement caps
+    case "Frostbind":
+    case "Battle Hymn":
+    case "Blessing of Battle": {
+      return affectedIds.map((targetId) => ({
+        effectId: `${ability.id}-${targetId}-${String(sequence)}`,
         abilityId: ability.id,
-        kind: "shapeshift",
+        kind: "movement-cap",
         anchorCharacterId: anchorId,
-        affectedCharacterId: anchorId,
+        affectedCharacterId: targetId,
         duration: {
-          kind: "while-condition",
+          kind: "until-boundary",
+          boundaryTrigger: "end-of-next-turn",
           anchor: "affected",
           removeWhenAffectedDowned: true,
         },
-        operations: ["change-max-hp"],
+        operations: ["set-movement-cap"],
         appliedSequence: sequence,
-      },
-    ];
+      }));
+    }
+    default:
+      return [];
   }
-  // Physical prohibit effects
-  if (name === "Backstab" || name === "Stunning Strike") {
-    return affectedIds.map((targetId) => ({
-      effectId: `${ability.id}-${targetId}-${String(sequence)}`,
-      abilityId: ability.id,
-      kind: "prohibit-powerful",
-      anchorCharacterId: anchorId,
-      affectedCharacterId: targetId,
-      duration: {
-        kind: "until-boundary",
-        boundaryTrigger: "end-of-next-turn",
-        anchor: "affected",
-        removeWhenAffectedDowned: true,
-      },
-      operations: ["prohibit-action-type"],
-      appliedSequence: sequence,
-    }));
-  }
-  // Movement caps
-  if (
-    name === "Frostbind" ||
-    name === "Battle Hymn" ||
-    name === "Blessing of Battle"
-  ) {
-    return affectedIds.map((targetId) => ({
-      effectId: `${ability.id}-${targetId}-${String(sequence)}`,
-      abilityId: ability.id,
-      kind: "movement-cap",
-      anchorCharacterId: anchorId,
-      affectedCharacterId: targetId,
-      duration: {
-        kind: "until-boundary",
-        boundaryTrigger: "end-of-next-turn",
-        anchor: "affected",
-        removeWhenAffectedDowned: true,
-      },
-      operations: ["set-movement-cap"],
-      appliedSequence: sequence,
-    }));
-  }
-  return [];
+}
+
+function buildMarkEffects(
+  ability: MatchConfigurationAbility,
+  context: {
+    readonly affectedIds: readonly CharacterId[];
+    readonly sequence: number;
+    readonly anchorId: CharacterId;
+  },
+): readonly ActiveEffect[] {
+  const { affectedIds, sequence, anchorId } = context;
+  return affectedIds.map((targetId) => ({
+    effectId: `${ability.id}-${targetId}-${String(sequence)}`,
+    abilityId: ability.id,
+    kind: isAbilityNamed(ability, "Hunter’s Mark") ? "hunters-mark" : "hex",
+    anchorCharacterId: anchorId,
+    affectedCharacterId: targetId,
+    duration: {
+      kind: "until-trigger-or-boundary",
+      boundaryTrigger: "end-of-next-scheduled-slot",
+      anchor: "source",
+      removeWhenAffectedDowned: true,
+    },
+    operations: ["add-damage"],
+    appliedSequence: sequence,
+  }));
 }
 
 type AbilityTargetInput = {
@@ -207,22 +231,38 @@ function resolveTargetedAttackTargetIds(
   if (!targetCharacter) {
     throw new Error("The ability references an unknown target.");
   }
+  assertTargetRelation(ability, targetId, abilityOverride);
+  assertTargetLifeState(ability, targetCharacter.hp, abilityOverride);
+  return [targetId];
+}
+
+function assertTargetRelation(
+  ability: MatchConfigurationAbility,
+  targetId: CharacterId,
+  abilityOverride: string | null,
+): void {
   const sourceTeam = teamOfCharacter(ability.ownerCharacterId);
   const targetTeam = teamOfCharacter(targetId);
   if (targetTeam === sourceTeam && abilityOverride === null) {
     throw new Error("invalid-target-relation");
   }
-  if (targetCharacter.hp === 0 && abilityOverride === null) {
+}
+
+function assertTargetLifeState(
+  ability: MatchConfigurationAbility,
+  targetHp: number,
+  abilityOverride: string | null,
+): void {
+  if (targetHp === 0 && abilityOverride === null) {
     throw new Error("invalid-target-life-state");
   }
   if (
     ability.targetPolicy.lifeState === "active" &&
-    targetCharacter.hp === 0 &&
+    targetHp === 0 &&
     abilityOverride === null
   ) {
     throw new Error("invalid-target-life-state");
   }
-  return [targetId];
 }
 
 function hasDeflectingPalm(
@@ -345,6 +385,15 @@ function validateUtilityTarget(context: {
   if (!targetCharacter) {
     throw new Error("Utility ability references unknown target.");
   }
+  assertUtilityTargetRelation(ability, targetId, abilityOverride);
+  assertUtilityTargetLifeState(ability, targetCharacter.hp, abilityOverride);
+}
+
+function assertUtilityTargetRelation(
+  ability: MatchConfigurationAbility,
+  targetId: CharacterId,
+  abilityOverride: string | null,
+): void {
   const sourceTeam = teamOfCharacter(ability.ownerCharacterId);
   const targetTeam = teamOfCharacter(targetId);
   const { relation } = ability.targetPolicy;
@@ -355,10 +404,17 @@ function validateUtilityTarget(context: {
   ) {
     throw new Error("invalid-target-relation");
   }
+}
+
+function assertUtilityTargetLifeState(
+  ability: MatchConfigurationAbility,
+  targetHp: number,
+  abilityOverride: string | null,
+): void {
   const { lifeState } = ability.targetPolicy;
   if (
-    ((lifeState === "active" && targetCharacter.hp === 0) ||
-      (lifeState === "downed" && targetCharacter.hp !== 0)) &&
+    ((lifeState === "active" && targetHp === 0) ||
+      (lifeState === "downed" && targetHp !== 0)) &&
     abilityOverride === null
   ) {
     throw new Error("invalid-target-life-state");

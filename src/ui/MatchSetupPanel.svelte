@@ -1,35 +1,43 @@
 <script lang="ts">
   import { getUndoPreview } from "../domain/match";
-  import { generate, start } from "../app/actions";
+  import { useConsoleContext } from "./console-context";
   import { openRules } from "./rules-dialog";
-  import {
-    patchShellState,
-    state,
-    type Confirmation,
-  } from "./shell-state.svelte";
+  import type { UiConfirmation } from "./ui-state";
   import ConfirmationDialog from "./ConfirmationDialog.svelte";
   import DisplayNamesEditor from "./DisplayNamesEditor.svelte";
   import PriorSummaryCard from "./PriorSummaryCard.svelte";
   import RosterTable from "./RosterTable.svelte";
   import UndoConfirmation from "./UndoConfirmation.svelte";
 
+  const { application, uiState } = useConsoleContext();
+
   // Converted setup surface (T05): the whole Initiative Setup panel reacts
   // to the runes store instead of being swapped as legacy template HTML.
   // Rendered only while the shell snapshot holds a setup-phase Match.
   const match = $derived(
-    state.current.match?.phase === "setup" ? state.current.match : null,
+    application.state.match?.phase === "setup" ? application.state.match : null,
   );
-  const saving = $derived(state.current.saving);
-  const matchError = $derived(state.current.matchError);
-  const summary = $derived(state.current.summary);
+  const saving = $derived(application.state.saving);
+  const matchError = $derived(application.state.errors.operation);
+  const summary = $derived(application.state.summary);
   const canUndo = $derived(
     match !== null &&
       !saving &&
-      getUndoPreview(match, state.current.events) !== null,
+      getUndoPreview(match, application.state.events) !== null,
   );
 
-  function requestConfirmation(confirmation: Confirmation): void {
-    patchShellState({ confirmation });
+  function requestConfirmation(
+    confirmation: Exclude<UiConfirmation, null>,
+  ): void {
+    uiState.requestConfirmation(confirmation);
+  }
+
+  async function generate(): Promise<void> {
+    await application.generateInitiative();
+  }
+
+  async function start(): Promise<void> {
+    await application.startMatch();
   }
 
   function handleDelegatedClick(event: MouseEvent): void {
@@ -42,7 +50,7 @@
       "[data-open-rules-query]",
     );
     if (anchorButton) {
-      openRules(anchorButton, anchorButton.dataset.openRulesQuery);
+      openRules(uiState, anchorButton, anchorButton.dataset.openRulesQuery);
     }
   }
 </script>
@@ -149,7 +157,7 @@
     {#if summary}
       <PriorSummaryCard />
     {/if}
-    {#if state.current.confirmation === "undo"}
+    {#if uiState.state.confirmation === "undo"}
       <!-- Compact Undo confirmation modal. -->
       <UndoConfirmation />
     {:else}

@@ -1,7 +1,11 @@
 <script lang="ts">
-  import { cancelAbilityDraft, confirmAbility } from "../app/actions";
-  import type { CharacterId, Team } from "../domain/match";
-  import { MATCH_CONFIGURATION } from "../domain/match-configuration";
+  import { useConsoleContext } from "./console-context";
+  import {
+    MATCH_CONFIGURATION,
+    type AbilityId,
+    type CharacterId,
+    type Team,
+  } from "../domain/match";
   import {
     attackPreviewRow,
     currentMaxHpOf,
@@ -15,11 +19,15 @@
   import DraftChecksFieldset from "./DraftChecksFieldset.svelte";
   import DraftContactsFieldset from "./DraftContactsFieldset.svelte";
   import DraftReactionsFieldset from "./DraftReactionsFieldset.svelte";
-  import {
-    patchShellState,
-    state,
-    type ActionDraft,
-  } from "./shell-state.svelte";
+  import type { ActionDraft } from "./ui-state";
+
+  const { application, uiState } = useConsoleContext();
+  const OVERRIDEABLE_DOMAIN_ERRORS = new Set([
+    "wrong-active-character",
+    "ability-already-spent",
+    "invalid-target-relation",
+    "invalid-target-life-state",
+  ]);
 
   // Converted Ability Action Draft (T07): the select-target, reactions,
   // contacts, and review steps react to the runes store instead of being
@@ -29,6 +37,25 @@
   // exactly the finalized damage and effect consumption that confirming
   // records; since T10 they render as real markup through CharacterName.
   type DraftStep = ActionDraft["step"];
+  function abilityCommandInput(abilityId: AbilityId, draft: ActionDraft) {
+    return {
+      abilityId,
+      ...(draft.targets.length > 0
+        ? { targetCharacterIds: [...draft.targets] }
+        : {}),
+      ...(draft.attackLegs.length > 0
+        ? {
+            attackLegs: draft.attackLegs.map((affectedCharacterIds) => ({
+              affectedCharacterIds: [...affectedCharacterIds],
+            })),
+          }
+        : {}),
+      physicalConfirmations: draft.physicalConfirmations,
+      ...(draft.reactions.length > 0 ? { reactions: draft.reactions } : {}),
+      majorActionOverride: draft.majorActionOverride,
+      abilityOverride: draft.abilityOverride,
+    };
+  }
 
   // Interpolated separators keep their spaces; literal whitespace at
   // control-flow block edges is trimmed by the Svelte compiler.
@@ -63,8 +90,8 @@
   };
 
   const base = $derived.by(() => {
-    const draft = state.current.actionDraft;
-    const { match } = state.current;
+    const draft = uiState.state.actionDraft;
+    const { match } = application.state;
     if (!draft || draft.kind !== "ability" || match?.phase !== "active") {
       return null;
     }
@@ -136,7 +163,7 @@
           : null,
       ready:
         activeLeg.length > 0 &&
-        (!state.current.requirePhysicalConfirmations ||
+        (!uiState.state.physicalConfirmationPreference ||
           Object.values(b.draft.physicalConfirmations).every(Boolean)),
     };
   });
@@ -245,14 +272,14 @@
         // Ability Override.
         needsAbilityOverride && !draft.abilityOverride,
       backStep,
-      saving: state.current.saving,
+      saving: application.state.saving,
     };
   });
 
   function setStep(step: DraftStep): void {
-    const draft = state.current.actionDraft;
+    const draft = uiState.state.actionDraft;
     if (!draft || draft.kind !== "ability") return;
-    patchShellState({ actionDraft: { ...draft, step } });
+    uiState.setActionDraft({ ...draft, step });
   }
 
   function continueTargets(): void {
@@ -266,7 +293,7 @@
   ): (event: Event) => void {
     return (event) => {
       if (!(event.currentTarget instanceof HTMLInputElement)) return;
-      const currentDraft = state.current.actionDraft;
+      const currentDraft = uiState.state.actionDraft;
       const ability = MATCH_CONFIGURATION.abilities.find(
         ({ id }) => id === currentDraft?.abilityId,
       );
@@ -279,28 +306,55 @@
         if (multi) return [...currentDraft.targets, characterId];
         return [characterId];
       })();
-      patchShellState({
-        actionDraft: {
+      uiState.setActionDraft({
           ...currentDraft,
           targets,
           reactions: currentDraft.reactions.filter(({ protectedCharacterId }) =>
             targets.includes(protectedCharacterId),
           ),
-        },
       });
     };
   }
 
   function handleAbilityOverrideChange(event: Event): void {
     if (!(event.currentTarget instanceof HTMLInputElement)) return;
-    const currentDraft = state.current.actionDraft;
+    const currentDraft = uiState.state.actionDraft;
     if (!currentDraft || currentDraft.kind !== "ability") return;
-    patchShellState({
-      actionDraft: {
+    uiState.setActionDraft({
         ...currentDraft,
         abilityOverride: event.currentTarget.checked,
-      },
     });
+  }
+
+  function cancelAbilityDraft(): void {
+    const draft = uiState.state.actionDraft;
+    if (!draft || draft.kind !== "ability") return;
+    uiState.setActionDraft(null);
+    uiState.setPickerVisibility({ ability: false });
+  }
+
+  async function confirmAbility(): Promise<void> {
+    const { match } = application.state;
+    const draft = uiState.state.actionDraft;
+    if (
+      match?.phase !== "active" ||
+      draft?.kind !== "ability" ||
+      draft.step !== "review" ||
+      draft.abilityId === null
+    )
+      return;
+    const succeeded = await application.resolveAbility(
+      abilityCommandInput(draft.abilityId, draft),
+    );
+    if (!succeeded) {
+      const message = application.state.errors.operation;
+      if (message && OVERRIDEABLE_DOMAIN_ERRORS.has(message)) {
+        uiState.setActionDraft({ ...draft, overrideRequired: message });
+      }
+      return;
+    }
+    uiState.setActionDraft(null);
+    uiState.setPickerVisibility({ ability: false });
   }
 </script>
 

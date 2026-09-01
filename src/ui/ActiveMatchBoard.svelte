@@ -1,28 +1,21 @@
 <script lang="ts">
+  import { useConsoleContext } from "./console-context";
   import {
-    advanceTurn,
-    continueMatch,
-    openAbilityPicker,
-    openBasicAttack,
-    recordMove,
-    recordSimultaneousRuling,
-  } from "../app/actions";
-  import {
-    cryptoRandomSource,
-    getEndGamePreview,
     getUndoPreview,
     type ActiveMatchState,
     type CharacterId,
     type InitiativeEntry,
     type Team,
   } from "../domain/match";
-  import { MATCH_CONFIGURATION } from "../domain/match-configuration";
+  import { MATCH_CONFIGURATION } from "../domain/match";
   import CharacterName from "./CharacterName.svelte";
   import ConfirmationDialog from "./ConfirmationDialog.svelte";
   import { outcomeLabel } from "./format";
   import PriorSummaryCard from "./PriorSummaryCard.svelte";
-  import { patchShellState, state } from "./shell-state.svelte";
   import UndoConfirmation from "./UndoConfirmation.svelte";
+  import { createPhysicalConfirmations } from "./ui-state";
+
+  const { application, uiState } = useConsoleContext();
 
   // Converted active-match board (T06): turn cards, complete initiative
   // order, turn/round commands, Team Elimination prompts, End Game control,
@@ -160,6 +153,39 @@
     return "none";
   }
 
+  function moveIsAvailable(
+    match: ActiveMatchState,
+    saving: boolean,
+    activeDowned: boolean,
+  ): boolean {
+    return (
+      !saving &&
+      !activeDowned &&
+      match.eliminatedTeams.length !== 2 &&
+      (match.actionsUsed ?? (match.majorActionUsed ? 1 : 0)) < 2
+    );
+  }
+
+  function outcomeText(match: ActiveMatchState): string {
+    return match.eliminatedTeams.length === 2 && match.outcome !== null
+      ? outcomeLabel(match.outcome)
+      : "";
+  }
+
+  function commandsAreVisible(promptKind: PromptKind): boolean {
+    return promptKind === "none" || promptKind === "acknowledged";
+  }
+
+  function endGameControlIsVisible(
+    match: ActiveMatchState,
+    promptKind: PromptKind,
+  ): boolean {
+    return (
+      commandsAreVisible(promptKind) &&
+      !(match.eliminatedTeams.length === 2 && match.outcome === null)
+    );
+  }
+
   function buildActiveMatchView(match: ActiveMatchState) {
     const activeEntry = requireInitiativeEntry(match, match.activeSlot);
     const nextSlot = findNextActiveSlot(match);
@@ -170,9 +196,9 @@
       match.characters.map(({ characterId, hp }) => [characterId, hp]),
     );
     const rows = buildBoardRows(match, nextSlot, hpByCharacter);
-    const { saving } = state.current;
+    const { saving } = application.state;
     const canUndo =
-      !saving && getUndoPreview(match, state.current.events) !== null;
+      !saving && getUndoPreview(match, application.state.events) !== null;
     const combatAvailable =
       match.configurationVersion === MATCH_CONFIGURATION.version;
     const activeDowned = hpByCharacter.get(activeEntry.characterId) === 0;
@@ -190,11 +216,7 @@
       nextHp,
       activeDowned,
       actionsUsed,
-      moveAvailable:
-        !saving &&
-        !activeDowned &&
-        match.eliminatedTeams.length !== 2 &&
-        (match.actionsUsed ?? (match.majorActionUsed ? 1 : 0)) < 2,
+      moveAvailable: moveIsAvailable(match, saving, activeDowned),
       rows,
       saving,
       canUndo,
@@ -203,40 +225,113 @@
       // single-spaced sentence across the version interpolation.
       combatStatusText: `Basic Attack is unavailable because combat data for Match Configuration ${match.configurationVersion} is not bundled. Finish Turn and Undo remain available.`,
       promptKind,
-      outcomeText:
-        match.eliminatedTeams.length === 2 && match.outcome !== null
-          ? outcomeLabel(match.outcome)
-          : "",
-      showCommands: promptKind === "none" || promptKind === "acknowledged",
-      showEndGameControl:
-        (promptKind === "none" || promptKind === "acknowledged") &&
-        !(match.eliminatedTeams.length === 2 && match.outcome === null),
-      matchError: state.current.matchError,
-      summary: state.current.summary,
+      outcomeText: outcomeText(match),
+      showCommands: commandsAreVisible(promptKind),
+      showEndGameControl: endGameControlIsVisible(match, promptKind),
+      matchError: application.state.errors.operation,
+      summary: application.state.summary,
     };
   }
 
   const view = $derived.by(() => {
-    const { match } = state.current;
+    const { match } = application.state;
     return match?.phase === "active" ? buildActiveMatchView(match) : null;
   });
 
+  async function recordMove(): Promise<void> {
+    await application.recordMove();
+  }
+
+  function openBasicAttack(): void {
+    const { match } = application.state;
+    if (
+      match?.phase !== "active" ||
+      match.configurationVersion !== MATCH_CONFIGURATION.version
+    )
+      return;
+    const sourceCharacterId =
+      match.initiative[match.activeSlot - 1]?.characterId;
+    if (!sourceCharacterId) return;
+    uiState.setPickerVisibility({ ability: false });
+    uiState.setActionDraft({
+      kind: "basic",
+      sourceCharacterId,
+      configurationVersion: match.configurationVersion,
+      abilityId: null,
+      targets: [],
+      step: "contacts",
+      attackLegs: [[]],
+      physicalConfirmations: createPhysicalConfirmations(
+        uiState.state.physicalConfirmationPreference,
+      ),
+      reactions: [],
+      abilityOverride: false,
+      overrideRequired: null,
+      majorActionOverride: false,
+    });
+  }
+
+  function openAbilityPicker(): void {
+    const { match } = application.state;
+    if (
+      match?.phase !== "active" ||
+      match.configurationVersion !== MATCH_CONFIGURATION.version ||
+      uiState.state.actionDraft
+    )
+      return;
+    const activeCharacterId =
+      match.initiative[match.activeSlot - 1]?.characterId;
+    const activeHp =
+      match.characters.find(
+        ({ characterId }) => characterId === activeCharacterId,
+      )?.hp ?? 0;
+    if (activeHp === 0 || match.eliminatedTeams.length === 2) return;
+    uiState.setPickerVisibility({ ability: true });
+  }
+
+  async function continueMatch(): Promise<void> {
+    const { match } = application.state;
+    if (match?.phase !== "active" || match.eliminatedTeams.length !== 1)
+      return;
+    const [eliminatedTeam] = match.eliminatedTeams;
+    if (eliminatedTeam === undefined) return;
+    await application.acknowledgeElimination(eliminatedTeam);
+  }
+
+  async function recordSimultaneousRuling(
+    outcome: Team | "draw",
+  ): Promise<void> {
+    const { match } = application.state;
+    if (
+      match?.phase !== "active" ||
+      match.eliminatedTeams.length !== 2 ||
+      match.outcome !== null
+    )
+      return;
+    await application.ruleSimultaneousElimination(outcome);
+  }
+
+  async function advanceTurn(): Promise<void> {
+    await application.finishTurn();
+  }
+
   function requestUndo(): void {
-    patchShellState({ confirmation: "undo" });
+    uiState.requestConfirmation("undo");
   }
 
   function requestEndGame(): void {
-    const { match } = state.current;
-    if (state.current.actionDraft !== null) return;
+    const { match } = application.state;
+    if (uiState.state.actionDraft !== null) return;
     if (match?.phase !== "active") return;
     try {
-      patchShellState({
-        endGamePreview: getEndGamePreview(match, cryptoRandomSource),
+      uiState.setEndGamePresentation({
+        open: true,
+        preview: application.previewEndGame(),
       });
     } catch {
-      patchShellState({ endGamePreview: null });
+      uiState.setEndGamePresentation({ open: true, preview: null });
     }
-    patchShellState({ confirmation: "end" });
+    uiState.requestConfirmation("end");
   }
 
   function handleRulingSubmit(event: SubmitEvent): void {
@@ -612,7 +707,7 @@
     {#if view.summary}
       <PriorSummaryCard />
     {/if}
-    {#if state.current.confirmation === "undo"}
+    {#if uiState.state.confirmation === "undo"}
       <UndoConfirmation />
     {:else}
       <!-- Converted confirmations (T08): the End Game preview and generic

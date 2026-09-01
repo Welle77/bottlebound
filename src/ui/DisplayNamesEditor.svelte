@@ -1,16 +1,44 @@
 <script lang="ts">
-  import { saveDisplayNames } from "../app/actions";
-  import type { SetupMatchState } from "../domain/match";
-  import { MATCH_CONFIGURATION } from "../domain/match-configuration";
+  import { useConsoleContext } from "./console-context";
+  import {
+    CHARACTER_IDS,
+    isCharacterId,
+    normalizeDisplayNames,
+    type CharacterId,
+    type SetupMatchState,
+  } from "../domain/match";
+  import { MATCH_CONFIGURATION } from "../domain/match";
   import CharacterName from "./CharacterName.svelte";
-  import { state } from "./shell-state.svelte";
+
+  const { application } = useConsoleContext();
 
   // Referee-assigned Display Names for the fixed roster. Inputs keep their
   // data-display-name-for attributes so saveDisplayNames() keeps reading
   // them straight from the DOM exactly as before.
   const { match }: { match: SetupMatchState } = $props();
 
-  const saving = $derived(state.current.saving);
+  const saving = $derived(application.state.saving);
+
+  let editorElement: HTMLDivElement;
+
+  async function saveDisplayNames(): Promise<void> {
+    const requested = Array.from(
+      editorElement.querySelectorAll<HTMLInputElement>(
+        "[data-display-name-for]",
+      ),
+    ).reduce<Partial<Record<CharacterId, string>>>((displayNames, input) => {
+      const characterId = input.dataset.displayNameFor;
+      return characterId && isCharacterId(characterId)
+        ? { ...displayNames, [characterId]: input.value }
+        : displayNames;
+    }, {});
+    const normalized = normalizeDisplayNames(requested);
+    const unchanged = CHARACTER_IDS.every(
+      (characterId) => normalized[characterId] === match.displayNames[characterId],
+    );
+    if (unchanged) return;
+    await application.assignDisplayNames(requested);
+  }
 </script>
 
 <details class="display-names-panel" data-display-names>
@@ -19,7 +47,7 @@
     Optionally name each character to match the miniatures on the table. An
     empty field keeps the configured name. Saving records one reversible event.
   </p>
-  <div class="display-name-list">
+<div class="display-name-list" bind:this={editorElement}>
     {#each MATCH_CONFIGURATION.characters as character (character.id)}
       <label class="display-name-control">
         <span>

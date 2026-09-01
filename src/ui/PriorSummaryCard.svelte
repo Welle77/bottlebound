@@ -1,13 +1,15 @@
 <script lang="ts">
   import { decisionBasisLabel, outcomeLabel } from "./format";
-  import { patchShellState, state } from "./shell-state.svelte";
+  import { useConsoleContext } from "./console-context";
+
+  const { application, uiState } = useConsoleContext();
 
   // Converted prior-Match-Summary card (T10): real reactive markup replacing
   // the shared priorSummaryCard() template string. The card reacts to the
   // runes store: assigning a fresh shell snapshot with a new summary
   // re-renders it; removing the summary unmounts it. Its remove control is
   // wired directly — no delegated transport remains.
-  const summary = $derived(state.current.summary);
+  const summary = $derived(application.state.summary);
   const result = $derived(summary ? outcomeLabel(summary.outcome) : "");
   const basisText = $derived(
     summary
@@ -16,7 +18,7 @@
   );
 
   function requestRemoveSummary(): void {
-    patchShellState({ confirmation: "remove-summary" });
+    uiState.requestConfirmation("remove-summary");
   }
 </script>
 

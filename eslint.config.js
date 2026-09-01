@@ -1,12 +1,11 @@
 import eslint from "@eslint/js";
-import functional from "eslint-plugin-functional";
 import sveltePlugin from "eslint-plugin-svelte";
 import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
 // Shared file groups – single source of truth for lint scopes.
-const typescriptFiles = ["{src,tests}/**/*.ts"];
+const typescriptFiles = ["{src,tests,build}/**/*.ts", "*.config.ts"];
 
 const projectEslintPlugin = {
   rules: {
@@ -51,7 +50,6 @@ export default defineConfig(
     },
     rules: {
       "@typescript-eslint/consistent-type-definitions": ["error", "type"],
-      complexity: "error",
       "no-nested-ternary": "error",
       "no-var": "error",
       "prefer-const": "error",
@@ -61,7 +59,7 @@ export default defineConfig(
   // Prefer named type references over inline type assertions.
   {
     name: "style/no-inline-type-assertions",
-    files: ["{src,tests}/**/*.{ts,svelte}", "build/**/*.ts", "vite.config.ts"],
+    files: ["{src,tests,build}/**/*.{ts,svelte}", "*.config.ts"],
     plugins: { project: projectEslintPlugin },
     rules: { "project/no-inline-type-assertions": "error" },
   },
@@ -76,17 +74,49 @@ export default defineConfig(
       parserOptions: { parser: tseslint.parser },
     },
   },
-  // Type-aware rules for all selected TypeScript surfaces.
+  // Type-aware rules cover source, tests, build tooling, and TS config files.
   {
     name: "typescript/type-checked",
-    files: [...typescriptFiles, "vite.config.ts"],
+    files: typescriptFiles,
     extends: [tseslint.configs.strictTypeChecked],
     languageOptions: { parserOptions: { projectService: true } },
+  },
+  {
+    name: "typescript/contracts",
+    files: typescriptFiles,
+    rules: {
+      "@typescript-eslint/explicit-module-boundary-types": "error",
+      "@typescript-eslint/switch-exhaustiveness-check": "error",
+      complexity: ["error", 20],
+      "max-depth": ["error", 4],
+      "max-params": ["error", 3],
+      "max-lines": ["error", { max: 800 }],
+      "max-statements": ["error", 40],
+    },
+  },
+  {
+    name: "application/contracts",
+    files: ["src/app/**/*.ts"],
+    rules: {
+      complexity: ["error", 10],
+      "max-statements": ["error", 40],
+    },
+  },
+  {
+    name: "svelte/contracts",
+    files: ["src/**/*.svelte"],
+    rules: {
+      complexity: ["error", 10],
+      "max-depth": ["error", 4],
+      "max-params": ["error", 3],
+      "max-lines": ["error", { max: 800 }],
+      "max-statements": ["error", 40],
+    },
   },
   // Runtime globals.
   {
     name: "globals/browser-node",
-    files: ["{src,tests/browser,tests/contract}/**/*.ts", "vite.config.ts"],
+    files: ["{src,tests/browser,tests/contract}/**/*.ts", "*.config.ts"],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
   },
   {
@@ -94,25 +124,26 @@ export default defineConfig(
     files: ["public/sw.js"],
     languageOptions: { globals: globals.serviceworker },
   },
+  {
+    name: "globals/commonjs-configuration",
+    files: [".dependency-cruiser.cjs"],
+    languageOptions: { globals: globals.node },
+  },
 
-  // Style and size guards.
+  // Style guards apply to maintained source, tests, build tooling, and TS configs.
   {
     name: "style/limits",
     files: [...typescriptFiles, "src/**/*.svelte"],
     rules: {
-      "max-lines": ["error", { max: 800 }],
-      "max-params": "error",
       "prefer-destructuring": "error",
     },
   },
-
-  // Functional type discipline.
   {
-    name: "functional/base",
-    files: typescriptFiles,
-    plugins: { functional },
+    name: "style/test-statement-limit",
+    files: ["tests/**/*.ts"],
     rules: {
-      "functional/no-mixed-types": "error",
+      complexity: ["error", 70],
+      "max-statements": ["error", 70],
     },
   },
   // Testing standard: no test file under application folders.

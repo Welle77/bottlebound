@@ -164,11 +164,31 @@ function validateBasicAttack(
   state: ActiveMatchState,
   input: BasicAttackInput,
 ): ValidatedBasicAttack {
+  assertBasicAttackConfiguration(state);
+  assertBasicAttackSourceIsActive(state, input);
+  const attack = findBasicAttack(input.sourceCharacterId);
+  const { inputLegs, affectedCharacterIds } = resolveAttackContacts(
+    state,
+    input,
+  );
+  assertPhysicalConfirmations(input);
+  const override = input.majorActionOverride?.trim() || null;
+  assertBasicAttackActionAvailable(state, override);
+  return { attack, inputLegs, affectedCharacterIds, override };
+}
+
+function assertBasicAttackConfiguration(state: ActiveMatchState): void {
   if (state.configurationVersion !== MATCH_CONFIGURATION_VERSION) {
     throw new Error(
       "Basic Attack needs the exact bundled Match Configuration.",
     );
   }
+}
+
+function assertBasicAttackSourceIsActive(
+  state: ActiveMatchState,
+  input: BasicAttackInput,
+): void {
   const activeCharacterId = state.initiative[state.activeSlot - 1]?.characterId;
   if (input.sourceCharacterId !== activeCharacterId) {
     throw new Error("Basic Attack needs the active character as its source.");
@@ -179,18 +199,26 @@ function validateBasicAttack(
   if (!activeCharacter || activeCharacter.hp === 0) {
     throw new Error("A Downed character cannot use Basic Attack.");
   }
+}
+
+function findBasicAttack(sourceCharacterId: CharacterId): BasicAttack {
   const attack = MATCH_CONFIGURATION.basicAttacks.find(
-    ({ characterId }) => characterId === input.sourceCharacterId,
+    ({ characterId }) => characterId === sourceCharacterId,
   );
   if (!attack) throw new Error("The active character has no Basic Attack.");
-  const { inputLegs, affectedCharacterIds } = resolveAttackContacts(
-    state,
-    input,
-  );
+  return attack;
+}
+
+function assertPhysicalConfirmations(input: BasicAttackInput): void {
   if (Object.values(input.physicalConfirmations).some((value) => !value)) {
     throw new Error("Every manual physical confirmation is required.");
   }
-  const override = input.majorActionOverride?.trim() || null;
+}
+
+function assertBasicAttackActionAvailable(
+  state: ActiveMatchState,
+  override: string | null,
+): void {
   if (
     (state.actionsUsed ?? (state.majorActionUsed ? 1 : 0)) >= 2 &&
     override === null
@@ -199,7 +227,6 @@ function validateBasicAttack(
       "Basic Attack needs an unused action or a recorded referee override.",
     );
   }
-  return { attack, inputLegs, affectedCharacterIds, override };
 }
 
 function resolveReactionOperations(context: {

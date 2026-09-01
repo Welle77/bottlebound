@@ -1,8 +1,9 @@
 <script lang="ts">
 import { getUndoPreview } from "../domain/match";
 import type { ReversibleMatchEvent } from "../domain/match";
-import { confirmAction } from "../app/actions";
-import { patchShellState, state } from "./shell-state.svelte";
+import { useConsoleContext } from "./console-context";
+
+  const { application, uiState } = useConsoleContext();
 
   // Undo uses a compact modal because the referee only needs to confirm the
   // destructive history change. The complete restored state remains owned by
@@ -21,15 +22,23 @@ import { patchShellState, state } from "./shell-state.svelte";
   };
 
   const preview = $derived.by(() => {
-    if (state.current.confirmation !== "undo") return null;
-    if (state.current.match === null) return null;
-    return getUndoPreview(state.current.match, state.current.events);
+    const { confirmation } = uiState.state;
+    if (confirmation !== "undo") return null;
+    const { match } = application.state;
+    if (match === null) return null;
+    return getUndoPreview(match, application.state.events);
   });
   const targetLabel = $derived(
     preview ? TARGET_LABELS[preview.target.type] : "",
   );
   function handleCancel(): void {
-    patchShellState({ confirmation: null });
+    uiState.clearConfirmation();
+  }
+
+  function handleConfirm(): void {
+    if (uiState.state.confirmation !== "undo") return;
+    uiState.clearConfirmation();
+    void application.undoLastEvent();
   }
 </script>
 
@@ -60,7 +69,7 @@ import { patchShellState, state } from "./shell-state.svelte";
         id="confirm-action"
         class="danger-action"
         type="button"
-        onclick={() => void confirmAction()}
+        onclick={handleConfirm}
       >
         Confirm Undo
       </button>

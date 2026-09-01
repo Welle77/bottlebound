@@ -4,8 +4,10 @@ import {
   isAttackKind,
   isCharacterId,
 } from "../domain/match";
-import { assertActiveEffectStructure } from "../domain/match-history";
-import { MATCH_CONFIGURATION } from "../domain/match-configuration";
+import {
+  assertActiveEffectStructure,
+  MATCH_CONFIGURATION,
+} from "../domain/match";
 
 const invalidActionResolution = () =>
   new Error("The validated Action Resolution Event is invalid.");

@@ -1,7 +1,4 @@
-import type {
-  MatchConfigurationAbility,
-  PhysicalAttackCheck,
-} from "../match-configuration";
+import type { MatchConfigurationAbility, PhysicalAttackCheck } from "./types";
 
 const physicalChecks: readonly PhysicalAttackCheck[] = [
   "range",

@@ -1,5 +1,5 @@
 import { openRulesWithQuery } from "../rules-reference/rules-ui-state";
-import { rulesUi } from "./shell-state.svelte";
+import type { UIStateStore } from "./ui-state";
 
 /**
  * Applies main's inert flag synchronously with the dialog transition.
@@ -18,11 +18,22 @@ function applyDialogInert(open: boolean): void {
  * RulesModal component renders the one current bundled guide. An optional
  * application-owned query starts the modal in search mode.
  */
-export function openRules(opener: HTMLElement, query?: string): void {
-  rulesUi.set(
+export function openRules(
+  uiState: UIStateStore,
+  opener: HTMLElement,
+  query?: string,
+): void {
+  uiState.setRulesReferenceInteraction(
     query === undefined
-      ? { ...rulesUi.current, open: true, openerId: opener.id }
-      : openRulesWithQuery({ ...rulesUi.current, openerId: opener.id }, query),
+      ? {
+          ...uiState.state.rulesReferenceInteraction,
+          open: true,
+          openerId: opener.id,
+        }
+      : openRulesWithQuery(
+          { ...uiState.state.rulesReferenceInteraction, openerId: opener.id },
+          query,
+        ),
   );
   applyDialogInert(true);
 }
@@ -32,9 +43,12 @@ export function openRules(opener: HTMLElement, query?: string): void {
  * clear synchronously — the refocus below would be a silent no-op while
  * main is still inert (T04 learning).
  */
-export function closeRules(): void {
-  const { openerId } = rulesUi.current;
-  rulesUi.set({ ...rulesUi.current, open: false });
+export function closeRules(uiState: UIStateStore): void {
+  const { openerId } = uiState.state.rulesReferenceInteraction;
+  uiState.setRulesReferenceInteraction({
+    ...uiState.state.rulesReferenceInteraction,
+    open: false,
+  });
   applyDialogInert(false);
   if (openerId) document.getElementById(openerId)?.focus();
 }
