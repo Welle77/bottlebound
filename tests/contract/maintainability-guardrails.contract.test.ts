@@ -50,6 +50,15 @@ describe("maintainability guardrails", () => {
     expect(scripts?.["test:browser"]).toBe("playwright test --retries=0");
   });
 
+  it("reserves a dedicated preview port for Playwright browser checks", () => {
+    const configuration = readRepositoryFile("playwright.config.ts");
+
+    expect(configuration).toContain('baseURL: "http://127.0.0.1:4174"');
+    expect(configuration).toContain("--host 127.0.0.1 --port 4174");
+    expect(configuration).toContain("port: 4174");
+    expect(configuration).not.toContain("4173");
+  });
+
   it("keeps the resolved dependency graph policy active for the real repository", () => {
     const configuration = readRepositoryFile(".dependency-cruiser.mts");
 

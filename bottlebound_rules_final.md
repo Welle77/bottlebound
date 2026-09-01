@@ -221,7 +221,7 @@ If a temporary effect is written to expire on the source character’s next turn
 
 - Characters use the maximum HP shown in the roster table: 3, 4, or 5 HP.
 
-- Healing restores exactly 1 HP unless an ability explicitly says otherwise and can never exceed the target’s current maximum HP.
+- Healing restores exactly 1 HP unless an ability explicitly says otherwise and can never exceed the target’s current maximum HP. A healing effect cannot target or activate for a character already at that maximum unless the effect first increases it.
 
 - Ordinary healing cannot affect a Downed character. Only abilities that explicitly revive may do so.
 
@@ -314,7 +314,7 @@ HP 3 • Initiative +1 • Basic Attack: Melee — 2 paces
 | **Range**         | 4 paces                                                                                                     |
 | **Line of Sight** | No                                                                                                          |
 | **Ball Required** | No                                                                                                          |
-| **Effect**        | The target restores 1 HP, up to that character’s current maximum HP. A Downed character cannot be targeted. |
+| **Effect**        | The target restores 1 HP, up to that character’s current maximum HP. A character at full HP or a Downed character cannot be targeted. |
 | **Duration**      | Immediate.                                                                                                  |
 
 #### Paladin — Tank
@@ -330,7 +330,7 @@ HP 5 • Initiative +1 • Basic Attack: Melee — 2 paces
 | **Range**         | 3 paces                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | **Line of Sight** | No                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **Ball Required** | No                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| **Effect**        | Choose one: restore 1 HP to a living target, up to that character’s maximum HP; or restore a Downed ally to 1 HP and stand their bottle upright. A revived character returns to its original initiative position: if that position is still ahead this round, it acts normally when reached; if it has already passed, it waits until the next round. Revival grants no immediate extra turn and does not restore spent abilities or previous temporary effects. |
+| **Effect**        | Choose one: restore 1 HP to a living target, up to that character’s maximum HP; or restore a Downed ally to 1 HP and stand their bottle upright. A living character at full HP cannot be targeted. A revived character returns to its original initiative position: if that position is still ahead this round, it acts normally when reached; if it has already passed, it waits until the next round. Revival grants no immediate extra turn and does not restore spent abilities or previous temporary effects. |
 | **Duration**      | Immediate.                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 ##### \[ \] Divine Shield
@@ -414,7 +414,7 @@ HP 3 • Initiative +2 • Basic Attack: Ranged — 6 paces
 | **Range**         | 4 paces                                                                                             |
 | **Line of Sight** | No                                                                                                  |
 | **Ball Required** | No                                                                                                  |
-| **Effect**        | The target restores 1 HP, up to that character’s maximum HP. A Downed character cannot be targeted. |
+| **Effect**        | The target restores 1 HP, up to that character’s maximum HP. A character at full HP or a Downed character cannot be targeted. |
 | **Duration**      | Immediate.                                                                                          |
 
 ##### \[ \] Battle Hymn
@@ -500,7 +500,7 @@ HP 4 • Initiative +1 • Basic Attack: Melee — 2 paces
 | **Range**         | Self                                               |
 | **Line of Sight** | N/A                                                |
 | **Ball Required** | No                                                 |
-| **Effect**        | Restore 1 HP, up to the Fighter’s maximum of 4 HP. |
+| **Effect**        | Restore 1 HP, up to the Fighter’s maximum of 4 HP. Second Wind cannot be activated at full HP. |
 | **Duration**      | Immediate.                                         |
 
 ##### \[ \] Shield Wall

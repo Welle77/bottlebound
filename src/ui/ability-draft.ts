@@ -99,6 +99,23 @@ function reviveBlockedOnEliminatedTeam(
   );
 }
 
+function healingBlockedAtFullHp(
+  match: ActiveView,
+  ability: MatchConfigurationAbility,
+  targetCharacterId: CharacterId,
+): boolean {
+  if (
+    !ability.operations.includes("heal") ||
+    ability.operations.includes("change-max-hp")
+  ) {
+    return false;
+  }
+  const target = match.characters.find(
+    ({ characterId }) => characterId === targetCharacterId,
+  );
+  return target !== undefined && target.hp === target.currentMaxHp;
+}
+
 export function targetCandidates(
   match: ActiveView,
   ability: MatchConfigurationAbility,
@@ -119,13 +136,13 @@ export function targetCandidates(
       ...(lifeState === "active" && hp === 0 ? ["Active characters only"] : []),
       ...(lifeState === "downed" && hp !== 0 ? ["Downed characters only"] : []),
     ];
-    const blocked = reviveBlockedOnEliminatedTeam(match, ability, character.id);
+    const blocked =
+      reviveBlockedOnEliminatedTeam(match, ability, character.id) ||
+      healingBlockedAtFullHp(match, ability, character.id);
     return {
       characterId: character.id,
       blocked,
-      reasons: blocked
-        ? ["That team is permanently eliminated; revival cannot restore it"]
-        : reasons,
+      reasons: blocked ? ["An absolute rule prevents this target"] : reasons,
     };
   });
 }

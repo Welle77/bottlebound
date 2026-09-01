@@ -86,7 +86,7 @@ export const abilities = [
     lineOfSight: "No",
     ballRequired: "No",
     rulesText:
-      "The target restores 1 HP, up to that character’s current maximum HP. A Downed character cannot be targeted.",
+      "The target restores 1 HP, up to that character’s current maximum HP. A character at full HP or a Downed character cannot be targeted.",
     duration: "Immediate.",
     manualChecks: ["range"],
     operations: ["heal"],
@@ -103,7 +103,7 @@ export const abilities = [
     lineOfSight: "No",
     ballRequired: "No",
     rulesText:
-      "Choose one: restore 1 HP to a living target, up to that character’s maximum HP; or restore a Downed ally to 1 HP and stand their bottle upright. A revived character returns to its original initiative position: if that position is still ahead this round, it acts normally when reached; if it has already passed, it waits until the next round. Revival grants no immediate extra turn and does not restore spent abilities or previous temporary effects.",
+      "Choose one: restore 1 HP to a living target, up to that character’s maximum HP; or restore a Downed ally to 1 HP and stand their bottle upright. A living character at full HP cannot be targeted. A revived character returns to its original initiative position: if that position is still ahead this round, it acts normally when reached; if it has already passed, it waits until the next round. Revival grants no immediate extra turn and does not restore spent abilities or previous temporary effects.",
     duration: "Immediate.",
     manualChecks: ["range"],
     operations: ["heal", "revive"],
@@ -221,7 +221,7 @@ export const abilities = [
     lineOfSight: "No",
     ballRequired: "No",
     rulesText:
-      "The target restores 1 HP, up to that character’s maximum HP. A Downed character cannot be targeted.",
+      "The target restores 1 HP, up to that character’s maximum HP. A character at full HP or a Downed character cannot be targeted.",
     duration: "Immediate.",
     manualChecks: ["range"],
     operations: ["heal"],
@@ -343,7 +343,8 @@ export const abilities = [
     range: "Self",
     lineOfSight: "N/A",
     ballRequired: "No",
-    rulesText: "Restore 1 HP, up to the Fighter’s maximum of 4 HP.",
+    rulesText:
+      "Restore 1 HP, up to the Fighter’s maximum of 4 HP. Second Wind cannot be activated at full HP.",
     duration: "Immediate.",
     manualChecks: [],
     operations: ["heal"],

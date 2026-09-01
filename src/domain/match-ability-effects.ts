@@ -372,6 +372,32 @@ function validateAbsoluteUtilityLifeState(
   }
 }
 
+function validateHealingCapacity(
+  state: ActiveMatchState,
+  ability: MatchConfigurationAbility,
+  targetIds: readonly CharacterId[],
+): void {
+  if (
+    !ability.operations.includes("heal") ||
+    ability.operations.includes("change-max-hp")
+  ) {
+    return;
+  }
+  for (const targetId of targetIds) {
+    const targetCharacter = state.characters.find(
+      (character) => character.characterId === targetId,
+    );
+    if (
+      targetCharacter &&
+      targetCharacter.hp === targetCharacter.currentMaxHp
+    ) {
+      throw new Error(
+        "A character at full HP cannot receive a healing effect.",
+      );
+    }
+  }
+}
+
 function validateUtilityTarget(context: {
   readonly state: ActiveMatchState;
   readonly ability: MatchConfigurationAbility;
@@ -446,15 +472,18 @@ function resolveUtilityTargetIds(
 ): readonly CharacterId[] {
   const { state, ability, input, abilityOverride } = context;
   const targetIds = input.targetCharacterIds ?? [];
-  if (targetIds.length === 0) return selfDefaultTargetIds(ability);
+  const resolvedTargetIds =
+    targetIds.length === 0 ? selfDefaultTargetIds(ability) : [...targetIds];
+  validateHealingCapacity(state, ability, resolvedTargetIds);
+  if (targetIds.length === 0) return resolvedTargetIds;
 
   // Absolute card prohibitions precede the overridable policy gates.
-  validateAbsoluteUtilityLifeState(state, ability, targetIds);
-  for (const targetId of targetIds) {
+  validateAbsoluteUtilityLifeState(state, ability, resolvedTargetIds);
+  for (const targetId of resolvedTargetIds) {
     validateUtilityTarget({ state, ability, targetId, abilityOverride });
   }
-  validateEliminatedTeamRevival(state, ability, targetIds);
-  return [...targetIds];
+  validateEliminatedTeamRevival(state, ability, resolvedTargetIds);
+  return resolvedTargetIds;
 }
 
 function resolveAffectedCharacterIds(
@@ -467,7 +496,9 @@ function resolveAffectedCharacterIds(
     return resolvePhysicalAttackTargetIds(context);
   }
   if (context.ability.interaction === "self") {
-    return [context.ability.ownerCharacterId];
+    const targetIds = [context.ability.ownerCharacterId];
+    validateHealingCapacity(context.state, context.ability, targetIds);
+    return targetIds;
   }
   // Ally, enemy, and utility interactions all use card target selection.
   return resolveUtilityTargetIds(context);

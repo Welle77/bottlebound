@@ -313,6 +313,7 @@ describe("rules coverage audit: card life-state gates", () => {
         {
           abilityId: abilityId("drow-druid", "Nature's Renewal"),
           targetCharacterIds: ["drow-bard"],
+          abilityOverride: "Full HP is not overridable.",
         },
         stamp(1),
       ),
@@ -351,6 +352,31 @@ describe("rules coverage audit: card life-state gates", () => {
         ({ characterId }) => characterId === "drow-bard",
       ),
     ).toMatchObject({ hp: 3 });
+  });
+
+  it("rejects healing effects when the character is already at current maximum HP", () => {
+    const targetedRun = startedAuditMatch("audit-heal-full-target");
+    advanceTo(targetedRun, "drow-druid");
+    expect(() =>
+      resolveAbility(
+        targetedRun.state,
+        {
+          abilityId: abilityId("drow-druid", "Nature's Renewal"),
+          targetCharacterIds: ["drow-bard"],
+        },
+        stamp(1),
+      ),
+    ).toThrow("full HP");
+
+    const selfRun = startedAuditMatch("audit-heal-full-self");
+    advanceTo(selfRun, "duergar-fighter");
+    expect(() =>
+      resolveAbility(
+        selfRun.state,
+        { abilityId: abilityId("duergar-fighter", "Second Wind") },
+        stamp(2),
+      ),
+    ).toThrow("full HP");
   });
 
   it("requires Revivify's target to be a Downed ally", () => {

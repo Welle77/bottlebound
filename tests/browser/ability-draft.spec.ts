@@ -290,6 +290,22 @@ test("ally ability filters targets by policy and an invalid pick records an Over
   ).toHaveCount(0);
 });
 
+test("healing abilities do not offer full-HP characters as targets", async ({
+  page,
+}) => {
+  await startMatch(page);
+  await activateCharacter(page, "Druid");
+  await page.getByRole("button", { name: "Use Ability" }).click();
+  await page.getByRole("button", { name: "Use Nature’s Renewal" }).click();
+
+  await expect(page.locator("[data-eligible-targets]")).not.toContainText(
+    "Bard · Drow",
+  );
+  await expect(page.locator('[data-ability-target="drow-bard"]')).toHaveCount(
+    0,
+  );
+});
+
 test("utility ability resolves several policy-allowed targets in one resolution", async ({
   page,
 }) => {

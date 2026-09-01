@@ -489,9 +489,9 @@
       {#if targeting.blockedCount > 0}
         <!-- Single-line run: this sentence stays one contiguous phrase. -->
         <p class="device-note">
-          {targeting.blockedCount} Downed character{targeting.blockedCount === 1
-            ? ""
-            : "s"} of an eliminated team cannot be revived and remain unavailable.
+          {targeting.blockedCount} character{targeting.blockedCount === 1
+            ? " is"
+            : "s are"} unavailable because an absolute rule blocks the selection.
         </p>
       {/if}
       <div class="match-actions">
