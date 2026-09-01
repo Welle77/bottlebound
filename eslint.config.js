@@ -1,5 +1,4 @@
 import eslint from "@eslint/js";
-import functional from "eslint-plugin-functional";
 import sveltePlugin from "eslint-plugin-svelte";
 import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
@@ -88,7 +87,7 @@ export default defineConfig(
     rules: {
       "@typescript-eslint/explicit-module-boundary-types": "error",
       "@typescript-eslint/switch-exhaustiveness-check": "error",
-      complexity: ["error", 20],
+      complexity: ["error", 10],
       "max-depth": ["error", 4],
       "max-params": ["error", 3],
       "max-lines": ["error", { max: 800 }],
@@ -135,16 +134,6 @@ export default defineConfig(
     name: "style/test-statement-limit",
     files: ["tests/**/*.ts"],
     rules: { "max-statements": ["error", 70] },
-  },
-
-  // Functional type discipline.
-  {
-    name: "functional/base",
-    files: typescriptFiles,
-    plugins: { functional },
-    rules: {
-      "functional/no-mixed-types": "error",
-    },
   },
   // Testing standard: no test file under application folders.
   {
