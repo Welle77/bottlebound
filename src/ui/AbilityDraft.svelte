@@ -32,6 +32,27 @@
   // exactly the finalized damage and effect consumption that confirming
   // records; since T10 they render as real markup through CharacterName.
   type DraftStep = ActionDraft["step"];
+  type AbilityActionDraft = Extract<ActionDraft, { kind: "ability" }>;
+
+  function abilityCommandInput(draft: AbilityActionDraft) {
+    return {
+      abilityId: draft.abilityId,
+      ...(draft.targets.length > 0
+        ? { targetCharacterIds: [...draft.targets] }
+        : {}),
+      ...(draft.attackLegs.length > 0
+        ? {
+            attackLegs: draft.attackLegs.map((affectedCharacterIds) => ({
+              affectedCharacterIds: [...affectedCharacterIds],
+            })),
+          }
+        : {}),
+      physicalConfirmations: draft.physicalConfirmations,
+      ...(draft.reactions.length > 0 ? { reactions: draft.reactions } : {}),
+      majorActionOverride: draft.majorActionOverride,
+      abilityOverride: draft.abilityOverride,
+    };
+  }
 
   // Interpolated separators keep their spaces; literal whitespace at
   // control-flow block edges is trimmed by the Svelte compiler.
@@ -319,23 +340,9 @@
       draft.abilityId === null
     )
       return;
-    const succeeded = await application.resolveAbility({
-      abilityId: draft.abilityId,
-      ...(draft.targets.length > 0
-        ? { targetCharacterIds: [...draft.targets] }
-        : {}),
-      ...(draft.attackLegs.length > 0
-        ? {
-            attackLegs: draft.attackLegs.map((affectedCharacterIds) => ({
-              affectedCharacterIds: [...affectedCharacterIds],
-            })),
-          }
-        : {}),
-      physicalConfirmations: draft.physicalConfirmations,
-      ...(draft.reactions.length > 0 ? { reactions: draft.reactions } : {}),
-      majorActionOverride: draft.majorActionOverride,
-      abilityOverride: draft.abilityOverride,
-    });
+    const succeeded = await application.resolveAbility(
+      abilityCommandInput(draft),
+    );
     if (!succeeded) {
       const message = application.state.errors.operation;
       if (message && OVERRIDEABLE_DOMAIN_ERRORS.has(message)) {

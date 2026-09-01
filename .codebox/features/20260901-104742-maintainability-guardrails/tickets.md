@@ -154,3 +154,18 @@ property.
 - [x] Type-only imports obey the same direction rules, and no exception baseline or allowlist remains.
 - [x] Application-interface tests and existing domain, storage, Svelte, Rules Reference, service-worker, and browser tests pass after compatibility removal.
 - [x] Dependency analysis, TypeScript, ESLint, formatting, and focused tests pass; complete canonical check is owned by final Test.
+
+## T08: Lower complexity threshold and clear all lint violations
+
+**What to build:** Set the repository-wide maximum cyclomatic complexity to 10,
+including Svelte files, and refactor every currently reported violation without
+changing runtime behavior.
+
+**Blocked by:** T07.
+
+**Status:** in progress
+
+- [ ] TypeScript and Svelte ESLint configurations both enforce complexity 10.
+- [ ] `pnpm run lint` passes with zero errors and zero warnings.
+- [ ] Focused regression tests, formatting, and TypeScript checks pass after the
+  behavior-preserving refactors.

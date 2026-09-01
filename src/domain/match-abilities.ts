@@ -92,13 +92,11 @@ function normalizedOverride(value: string | null | undefined): string | null {
   return value?.trim() || null;
 }
 
-function validateAbilityUse(context: {
-  readonly state: ActiveMatchState;
-  readonly ability: MatchConfigurationAbility;
-  readonly abilityOverride: string | null;
-  readonly majorActionOverride: string | null;
-}): void {
-  const { state, ability, abilityOverride, majorActionOverride } = context;
+function assertAbilityOwnerIsActive(
+  state: ActiveMatchState,
+  ability: MatchConfigurationAbility,
+  abilityOverride: string | null,
+): void {
   const activeCharacterId = state.initiative[state.activeSlot - 1]?.characterId;
   if (
     ability.ownerCharacterId !== activeCharacterId &&
@@ -106,6 +104,12 @@ function validateAbilityUse(context: {
   ) {
     throw new Error("wrong-active-character");
   }
+}
+
+function assertAbilitySourceCanAct(
+  state: ActiveMatchState,
+  ability: MatchConfigurationAbility,
+): void {
   const sourceCharacter = state.characters.find(
     ({ characterId }) => characterId === ability.ownerCharacterId,
   );
@@ -121,12 +125,12 @@ function validateAbilityUse(context: {
       "Shapeshift may be activated only while the Druid is at 2 or 3 HP.",
     );
   }
-  if (
-    abilityWarnings(state, ability.id).length > 0 &&
-    abilityOverride === null
-  ) {
-    throw new Error("ability-already-spent");
-  }
+}
+
+function assertAbilityActionAvailable(
+  state: ActiveMatchState,
+  majorActionOverride: string | null,
+): void {
   if (
     (state.actionsUsed ?? (state.majorActionUsed ? 1 : 0)) >= 2 &&
     majorActionOverride === null
@@ -135,6 +139,12 @@ function validateAbilityUse(context: {
       "Ability needs an unused action or a recorded referee override.",
     );
   }
+}
+
+function assertPowerfulAbilityAllowed(
+  state: ActiveMatchState,
+  ability: MatchConfigurationAbility,
+): void {
   const powerfulProhibited = state.activeEffects.some(
     (effect) =>
       effect.kind === "prohibit-powerful" &&
@@ -145,6 +155,25 @@ function validateAbilityUse(context: {
       "A Powerful Ability is prohibited on this turn by a recorded card effect.",
     );
   }
+}
+
+function validateAbilityUse(context: {
+  readonly state: ActiveMatchState;
+  readonly ability: MatchConfigurationAbility;
+  readonly abilityOverride: string | null;
+  readonly majorActionOverride: string | null;
+}): void {
+  const { state, ability, abilityOverride, majorActionOverride } = context;
+  assertAbilityOwnerIsActive(state, ability, abilityOverride);
+  assertAbilitySourceCanAct(state, ability);
+  if (
+    abilityWarnings(state, ability.id).length > 0 &&
+    abilityOverride === null
+  ) {
+    throw new Error("ability-already-spent");
+  }
+  assertAbilityActionAvailable(state, majorActionOverride);
+  assertPowerfulAbilityAllowed(state, ability);
 }
 
 function reactionOperations(

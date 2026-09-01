@@ -29,25 +29,37 @@
     return `${ability.actionType === "powerful" ? MATCH_CONFIGURATION.labels.powerfulAbility : MATCH_CONFIGURATION.labels.standardAbility} · Range ${ability.range}${ability.targetPolicy.lifeState === "active" ? " · Active targets" : ""}`;
   }
 
-  function openAbilityDraft(abilityId: AbilityId): void {
+  function findAbilityDraftContext(abilityId: AbilityId): {
+    readonly activeCharacterId: string;
+    readonly ability: MatchConfigurationAbility;
+  } | null {
     const { match: currentMatch } = application.state;
     if (
       currentMatch?.phase !== "active" ||
       currentMatch.configurationVersion !== MATCH_CONFIGURATION.version
     )
-      return;
+      return null;
     const activeCharacterId =
       currentMatch.initiative[currentMatch.activeSlot - 1]?.characterId;
     const ability = MATCH_CONFIGURATION.abilities.find(
       ({ id }) => id === abilityId,
     );
-    if (!ability || !activeCharacterId) return;
+    if (!ability || !activeCharacterId) return null;
     if (
       ability.ownerCharacterId !== activeCharacterId ||
       ability.actionType === "reaction" ||
       currentMatch.spentAbilityIds.includes(ability.id)
     )
-      return;
+      return null;
+    return { activeCharacterId, ability };
+  }
+
+  function openAbilityDraft(abilityId: AbilityId): void {
+    const context = findAbilityDraftContext(abilityId);
+    if (!context) return;
+    const { activeCharacterId, ability } = context;
+    const { match: currentMatch } = application.state;
+    if (currentMatch?.phase !== "active") return;
     const physical = ability.interaction === "physical-attack";
     const step = (() => {
       if (ability.interaction === "self") return "review";

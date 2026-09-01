@@ -153,6 +153,39 @@
     return "none";
   }
 
+  function moveIsAvailable(
+    match: ActiveMatchState,
+    saving: boolean,
+    activeDowned: boolean,
+  ): boolean {
+    return (
+      !saving &&
+      !activeDowned &&
+      match.eliminatedTeams.length !== 2 &&
+      (match.actionsUsed ?? (match.majorActionUsed ? 1 : 0)) < 2
+    );
+  }
+
+  function outcomeText(match: ActiveMatchState): string {
+    return match.eliminatedTeams.length === 2 && match.outcome !== null
+      ? outcomeLabel(match.outcome)
+      : "";
+  }
+
+  function commandsAreVisible(promptKind: PromptKind): boolean {
+    return promptKind === "none" || promptKind === "acknowledged";
+  }
+
+  function endGameControlIsVisible(
+    match: ActiveMatchState,
+    promptKind: PromptKind,
+  ): boolean {
+    return (
+      commandsAreVisible(promptKind) &&
+      !(match.eliminatedTeams.length === 2 && match.outcome === null)
+    );
+  }
+
   function buildActiveMatchView(match: ActiveMatchState) {
     const activeEntry = requireInitiativeEntry(match, match.activeSlot);
     const nextSlot = findNextActiveSlot(match);
@@ -183,11 +216,7 @@
       nextHp,
       activeDowned,
       actionsUsed,
-      moveAvailable:
-        !saving &&
-        !activeDowned &&
-        match.eliminatedTeams.length !== 2 &&
-        (match.actionsUsed ?? (match.majorActionUsed ? 1 : 0)) < 2,
+      moveAvailable: moveIsAvailable(match, saving, activeDowned),
       rows,
       saving,
       canUndo,
@@ -196,14 +225,9 @@
       // single-spaced sentence across the version interpolation.
       combatStatusText: `Basic Attack is unavailable because combat data for Match Configuration ${match.configurationVersion} is not bundled. Finish Turn and Undo remain available.`,
       promptKind,
-      outcomeText:
-        match.eliminatedTeams.length === 2 && match.outcome !== null
-          ? outcomeLabel(match.outcome)
-          : "",
-      showCommands: promptKind === "none" || promptKind === "acknowledged",
-      showEndGameControl:
-        (promptKind === "none" || promptKind === "acknowledged") &&
-        !(match.eliminatedTeams.length === 2 && match.outcome === null),
+      outcomeText: outcomeText(match),
+      showCommands: commandsAreVisible(promptKind),
+      showEndGameControl: endGameControlIsVisible(match, promptKind),
       matchError: application.state.errors.operation,
       summary: application.state.summary,
     };

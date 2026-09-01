@@ -98,21 +98,7 @@
     source.scrollIntoView({ block: "start" });
   }
 
-  /**
-   * Focus-trap and dismissal key handling, owned by this dialog component
-   * since T09 (previously a document-level listener wired by App). The open
-   * guard keeps the window-level listener inert while no dialog exists.
-   */
-  function handleKeydown(event: KeyboardEvent): void {
-    if (!uiState.state.rulesReferenceInteraction.open) return;
-    if (event.key === "Escape") {
-      event.preventDefault();
-      closeRules(uiState);
-      return;
-    }
-    if (event.key !== "Tab") return;
-    const dialog = dialogElement;
-    if (!dialog) return;
+  function trapDialogFocus(event: KeyboardEvent, dialog: HTMLElement): void {
     const controls = Array.from(
       dialog.querySelectorAll<HTMLElement>(
         'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
@@ -128,6 +114,24 @@
       event.preventDefault();
       first.focus();
     }
+  }
+
+  /**
+   * Focus-trap and dismissal key handling, owned by this dialog component
+   * since T09 (previously a document-level listener wired by App). The open
+   * guard keeps the window-level listener inert while no dialog exists.
+   */
+  function handleKeydown(event: KeyboardEvent): void {
+    if (!uiState.state.rulesReferenceInteraction.open) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeRules(uiState);
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const dialog = dialogElement;
+    if (!dialog) return;
+    trapDialogFocus(event, dialog);
   }
 
   function html(

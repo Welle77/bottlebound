@@ -114,38 +114,39 @@
     uiState.setEndGamePresentation({ open: false, preview: null });
   }
 
+  type ConfirmationAction = Exclude<UiConfirmation, "undo" | null>;
+  const confirmationActions: Record<ConfirmationAction, () => Promise<void>> = {
+    "remove-summary": async () => {
+      await application.deleteSummary();
+    },
+    "start-new": async () => {
+      if (application.state.match?.phase === "ended")
+        await application.createMatch();
+    },
+    end: async () => {
+      if (application.state.match?.phase === "active")
+        await application.endMatch();
+    },
+    remove: async () => {
+      const { match } = application.state;
+      if (match?.phase === "ended") await application.deleteMatch(match.matchId);
+    },
+    reroll: async () => {
+      if (application.state.match?.phase === "setup")
+        await application.rerollInitiative();
+    },
+    discard: async () => {
+      const { match } = application.state;
+      if (match?.phase === "setup") await application.deleteMatch(match.matchId);
+    },
+  };
+
   async function handleConfirm(): Promise<void> {
     const { confirmation } = uiState.state;
     if (confirmation === null || confirmation === "undo") return;
     uiState.clearConfirmation();
     uiState.setEndGamePresentation({ open: false, preview: null });
-    if (confirmation === "remove-summary") {
-      await application.deleteSummary();
-      return;
-    }
-    if (confirmation === "start-new") {
-      if (application.state.match?.phase === "ended")
-        await application.createMatch();
-      return;
-    }
-    if (confirmation === "end") {
-      if (application.state.match?.phase === "active")
-        await application.endMatch();
-      return;
-    }
-    const { match } = application.state;
-    if (match === null) return;
-    if (confirmation === "remove" && match.phase === "ended") {
-      await application.deleteMatch(match.matchId);
-      return;
-    }
-    if (match.phase === "setup" && confirmation === "reroll") {
-      await application.rerollInitiative();
-      return;
-    }
-    if (match.phase === "setup" && confirmation === "discard") {
-      await application.deleteMatch(match.matchId);
-    }
+    await confirmationActions[confirmation]();
   }
 </script>
 

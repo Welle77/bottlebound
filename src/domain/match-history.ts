@@ -71,17 +71,31 @@ function hasValidActiveEffectIdentity(
   isValidAbilityId: (value: string) => boolean = isAbilityId,
 ): boolean {
   return (
-    typeof effect.effectId === "string" &&
-    effect.effectId.length > 0 &&
-    typeof effect.abilityId === "string" &&
-    isValidAbilityId(effect.abilityId) &&
-    typeof effect.anchorCharacterId === "string" &&
-    isCharacterId(effect.anchorCharacterId) &&
-    typeof effect.affectedCharacterId === "string" &&
-    isCharacterId(effect.affectedCharacterId) &&
-    isInteger(effect.appliedSequence) &&
-    effect.appliedSequence >= 1
+    hasNonEmptyString(effect.effectId) &&
+    hasValidStringId(effect.abilityId, isValidAbilityId) &&
+    hasValidCharacterId(effect.anchorCharacterId) &&
+    hasValidCharacterId(effect.affectedCharacterId) &&
+    hasPositiveInteger(effect.appliedSequence)
   );
+}
+
+function hasNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+function hasValidStringId(
+  value: unknown,
+  validator: (value: string) => boolean,
+): boolean {
+  return hasNonEmptyString(value) && validator(value);
+}
+
+function hasValidCharacterId(value: unknown): boolean {
+  return hasNonEmptyString(value) && isCharacterId(value);
+}
+
+function hasPositiveInteger(value: unknown): boolean {
+  return isInteger(value) && value >= 1;
 }
 
 function hasValidEffectBranch(
@@ -150,21 +164,22 @@ function assertMatchStateHeader(
   value: unknown,
   schemaVersion: typeof MATCH_SCHEMA_VERSION,
 ): asserts value is MatchState {
-  if (
-    !isRecord(value) ||
-    value.schemaVersion !== schemaVersion ||
-    typeof value.configurationVersion !== "string" ||
-    value.configurationVersion.length === 0 ||
-    typeof value.matchId !== "string" ||
-    value.matchId.length === 0 ||
-    (value.phase !== "setup" &&
-      value.phase !== "active" &&
-      value.phase !== "ended") ||
-    !isInteger(value.sequence) ||
-    value.sequence < 1
-  ) {
+  if (!isRecord(value) || !hasValidMatchStateHeader(value, schemaVersion)) {
     throw new Error("The validated Match State is structurally invalid.");
   }
+}
+
+function hasValidMatchStateHeader(
+  value: Record<string, unknown>,
+  schemaVersion: typeof MATCH_SCHEMA_VERSION,
+): boolean {
+  return (
+    value.schemaVersion === schemaVersion &&
+    hasNonEmptyString(value.configurationVersion) &&
+    hasNonEmptyString(value.matchId) &&
+    ["setup", "active", "ended"].includes(String(value.phase)) &&
+    hasPositiveInteger(value.sequence)
+  );
 }
 
 function assertMatchStateRoster(value: MatchState): void {
@@ -179,24 +194,28 @@ function assertMatchStateRoster(value: MatchState): void {
     if (
       !rulesCharacter ||
       !isRecord(entry) ||
-      entry.characterId !== rulesCharacter.id ||
-      !isInteger(entry.hp) ||
-      entry.hp < 0
-    ) {
-      throw new Error("The validated Match State roster is invalid.");
-    }
-    const currentMaxHp = isInteger(entry.currentMaxHp)
-      ? entry.currentMaxHp
-      : undefined;
-    const effectiveMax = currentMaxHp ?? rulesCharacter.baseHp;
-    if (
-      entry.hp > effectiveMax ||
-      (currentMaxHp !== undefined &&
-        (!isInteger(currentMaxHp) || currentMaxHp < 1 || currentMaxHp > 10))
+      !isValidRosterEntry(entry, rulesCharacter)
     ) {
       throw new Error("The validated Match State roster is invalid.");
     }
   });
+}
+
+function isValidRosterEntry(
+  entry: Record<string, unknown>,
+  rulesCharacter: (typeof MATCH_CONFIGURATION.characters)[number],
+): boolean {
+  const currentMaxHp = isInteger(entry.currentMaxHp)
+    ? entry.currentMaxHp
+    : null;
+  const effectiveMax = currentMaxHp ?? rulesCharacter.baseHp;
+  return (
+    entry.characterId === rulesCharacter.id &&
+    isInteger(entry.hp) &&
+    entry.hp >= 0 &&
+    entry.hp <= effectiveMax &&
+    (currentMaxHp === null || (currentMaxHp >= 1 && currentMaxHp <= 10))
+  );
 }
 
 function assertMatchStateInitiative(value: MatchState): void {
@@ -306,20 +325,7 @@ function assertMatchStatePersistence(value: MatchState): void {
   state.activeEffects.forEach((effect) => {
     assertActiveEffectStructure(effect, isValidAbilityId);
   });
-  const names = state.displayNames;
-  if (
-    !isRecord(names) ||
-    !Object.keys(names).every(
-      (characterId) =>
-        isCharacterId(characterId) &&
-        typeof names[characterId] === "string" &&
-        names[characterId].length > 0 &&
-        names[characterId].trim() === names[characterId] &&
-        MATCH_CONFIGURATION.characters.some(({ id }) => id === characterId),
-    )
-  ) {
-    throw new Error("The validated Match display names are invalid.");
-  }
+  assertValidDisplayNames(state.displayNames);
   assertStringArray(state.spentReactionIds, "spent Reactions", isReactionId);
   assertStringArray(state.eliminatedTeams, "Team Elimination state", isTeam);
   assertStringArray(
@@ -327,15 +333,37 @@ function assertMatchStatePersistence(value: MatchState): void {
     "acknowledged Team Elimination state",
     isTeam,
   );
-  if (
-    !isValidCombatEconomy(state) ||
-    !state.eliminatedTeams.every((team) => isTeam(team)) ||
-    new Set(state.eliminatedTeams).size !== state.eliminatedTeams.length ||
-    !state.acknowledgedEliminations.every((team) => isTeam(team)) ||
-    (state.outcome !== null && !isMatchOutcome(state.outcome))
-  ) {
+  if (!isValidCombatState(state)) {
     throw new Error("The validated combat state is structurally invalid.");
   }
+}
+
+function assertValidDisplayNames(names: unknown): void {
+  if (
+    !isRecord(names) ||
+    !Object.keys(names).every((characterId) => {
+      const name = names[characterId];
+      return (
+        isCharacterId(characterId) &&
+        typeof name === "string" &&
+        name.length > 0 &&
+        name.trim() === name &&
+        MATCH_CONFIGURATION.characters.some(({ id }) => id === characterId)
+      );
+    })
+  ) {
+    throw new Error("The validated Match display names are invalid.");
+  }
+}
+
+function isValidCombatState(state: MatchState): boolean {
+  return (
+    isValidCombatEconomy(state) &&
+    state.eliminatedTeams.every((team) => isTeam(team)) &&
+    new Set(state.eliminatedTeams).size === state.eliminatedTeams.length &&
+    state.acknowledgedEliminations.every((team) => isTeam(team)) &&
+    (state.outcome === null || isMatchOutcome(state.outcome))
+  );
 }
 
 function assertFinalTeamTallies(

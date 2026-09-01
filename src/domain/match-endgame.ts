@@ -61,36 +61,62 @@ export function getEndGamePreview(
   random: RandomSource = cryptoRandomSource,
 ): EndGamePreview {
   const { finalCounts, finalHpTotals } = computeFinalTallies(state);
+  return previewFromState({ state, random, finalCounts, finalHpTotals });
+}
+
+function previewFromState(context: {
+  readonly state: ActiveMatchState;
+  readonly random: RandomSource;
+  readonly finalCounts: FinalTeamCounts;
+  readonly finalHpTotals: FinalTeamCounts;
+}): EndGamePreview {
+  const { state, random, finalCounts, finalHpTotals } = context;
   if (state.eliminatedTeams.length === 1) {
-    const outcome: Exclude<MatchOutcome, null> =
-      state.eliminatedTeams[0] === "Drow" ? "Duergar" : "Drow";
-    if (state.outcome !== null && state.outcome !== outcome) {
-      throw new Error(
-        "End Game elimination outcome does not match Match State.",
-      );
-    }
-    return {
-      outcome,
-      decisionBasis: "elimination",
-      finalCounts,
-      finalHpTotals,
-    };
+    return previewForSingleElimination(state, finalCounts, finalHpTotals);
   }
   if (state.eliminatedTeams.length === 2) {
-    if (state.outcome === null) {
-      throw new Error("End Game needs a resolved Team Elimination result.");
-    }
-    const basisOutcome = state.outcome;
-    return {
-      outcome: basisOutcome,
-      decisionBasis: "elimination",
-      finalCounts,
-      finalHpTotals,
-    };
+    return previewForDoubleElimination(state, finalCounts, finalHpTotals);
   }
   if (state.eliminatedTeams.length !== 0) {
     throw new Error("End Game Team Elimination state is invalid.");
   }
+  return previewForTallies(random, finalCounts, finalHpTotals);
+}
+
+function previewForSingleElimination(
+  state: ActiveMatchState,
+  finalCounts: FinalTeamCounts,
+  finalHpTotals: FinalTeamCounts,
+): EndGamePreview {
+  const outcome: Exclude<MatchOutcome, null> =
+    state.eliminatedTeams[0] === "Drow" ? "Duergar" : "Drow";
+  if (state.outcome !== null && state.outcome !== outcome) {
+    throw new Error("End Game elimination outcome does not match Match State.");
+  }
+  return { outcome, decisionBasis: "elimination", finalCounts, finalHpTotals };
+}
+
+function previewForDoubleElimination(
+  state: ActiveMatchState,
+  finalCounts: FinalTeamCounts,
+  finalHpTotals: FinalTeamCounts,
+): EndGamePreview {
+  if (state.outcome === null) {
+    throw new Error("End Game needs a resolved Team Elimination result.");
+  }
+  return {
+    outcome: state.outcome,
+    decisionBasis: "elimination",
+    finalCounts,
+    finalHpTotals,
+  };
+}
+
+function previewForTallies(
+  random: RandomSource,
+  finalCounts: FinalTeamCounts,
+  finalHpTotals: FinalTeamCounts,
+): EndGamePreview {
   if (finalCounts.Drow !== finalCounts.Duergar) {
     return {
       outcome: finalCounts.Drow > finalCounts.Duergar ? "Drow" : "Duergar",

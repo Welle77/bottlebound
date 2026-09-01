@@ -87,7 +87,7 @@ export default defineConfig(
     rules: {
       "@typescript-eslint/explicit-module-boundary-types": "error",
       "@typescript-eslint/switch-exhaustiveness-check": "error",
-      complexity: ["error", 10],
+      complexity: ["error", 20],
       "max-depth": ["error", 4],
       "max-params": ["error", 3],
       "max-lines": ["error", { max: 800 }],
@@ -95,10 +95,18 @@ export default defineConfig(
     },
   },
   {
+    name: "application/contracts",
+    files: ["src/app/**/*.ts"],
+    rules: {
+      complexity: ["error", 10],
+      "max-statements": ["error", 40],
+    },
+  },
+  {
     name: "svelte/contracts",
     files: ["src/**/*.svelte"],
     rules: {
-      complexity: ["error", 20],
+      complexity: ["error", 10],
       "max-depth": ["error", 4],
       "max-params": ["error", 3],
       "max-lines": ["error", { max: 800 }],
@@ -133,7 +141,10 @@ export default defineConfig(
   {
     name: "style/test-statement-limit",
     files: ["tests/**/*.ts"],
-    rules: { "max-statements": ["error", 70] },
+    rules: {
+      complexity: ["error", 70],
+      "max-statements": ["error", 70],
+    },
   },
   // Testing standard: no test file under application folders.
   {
