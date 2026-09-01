@@ -1,6 +1,11 @@
 <script lang="ts">
   import { useConsoleContext } from "./console-context";
-  import { MATCH_CONFIGURATION, type CharacterId, type Team } from "../domain/match";
+  import {
+    MATCH_CONFIGURATION,
+    type AbilityId,
+    type CharacterId,
+    type Team,
+  } from "../domain/match";
   import {
     attackPreviewRow,
     currentMaxHpOf,
@@ -32,11 +37,9 @@
   // exactly the finalized damage and effect consumption that confirming
   // records; since T10 they render as real markup through CharacterName.
   type DraftStep = ActionDraft["step"];
-  type AbilityActionDraft = Extract<ActionDraft, { kind: "ability" }>;
-
-  function abilityCommandInput(draft: AbilityActionDraft) {
+  function abilityCommandInput(abilityId: AbilityId, draft: ActionDraft) {
     return {
-      abilityId: draft.abilityId,
+      abilityId,
       ...(draft.targets.length > 0
         ? { targetCharacterIds: [...draft.targets] }
         : {}),
@@ -341,7 +344,7 @@
     )
       return;
     const succeeded = await application.resolveAbility(
-      abilityCommandInput(draft),
+      abilityCommandInput(draft.abilityId, draft),
     );
     if (!succeeded) {
       const message = application.state.errors.operation;

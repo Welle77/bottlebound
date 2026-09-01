@@ -1,6 +1,6 @@
 <script lang="ts">
   import { useConsoleContext } from "./console-context";
-  import type { AbilityId, MatchState } from "../domain/match";
+  import type { AbilityId, CharacterId, MatchState } from "../domain/match";
   import {
     MATCH_CONFIGURATION,
     type MatchConfigurationAbility,
@@ -30,7 +30,7 @@
   }
 
   function findAbilityDraftContext(abilityId: AbilityId): {
-    readonly activeCharacterId: string;
+    readonly activeCharacterId: CharacterId;
     readonly ability: MatchConfigurationAbility;
   } | null {
     const { match: currentMatch } = application.state;
