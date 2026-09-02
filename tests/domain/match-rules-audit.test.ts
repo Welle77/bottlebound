@@ -123,7 +123,7 @@ describe("rules coverage audit: attack damage pipeline", () => {
         targetCharacterIds: ["drow-wizard"],
         reactions: [
           {
-            reactionId: "drow-paladin-divine-shield",
+            reactionId: "drow-wizard-misty-escape",
             protectedCharacterId: "drow-wizard",
             override: null,
           },

@@ -15,7 +15,7 @@ function expectDeeplyFrozen(value: unknown): void {
 
 describe("application-owned Match Configuration", () => {
   it("publishes the fixed roster, attacks, abilities, and Reactions", () => {
-    expect(MATCH_CONFIGURATION.version).toBe("BB20260822A1");
+    expect(MATCH_CONFIGURATION.version).toBe("BB20260902A1");
     expect(MATCH_CONFIGURATION.roster).toHaveLength(12);
     expect(MATCH_CONFIGURATION.roster[0]).toEqual({
       id: "drow-rogue",
@@ -87,7 +87,7 @@ describe("application-owned Match Configuration", () => {
         target: "Self or 1 ally",
         range: "3 paces",
         lineOfSight: "No",
-        operations: [{ type: "prevent-damage-and-effects" }],
+        operations: [{ type: "reduce-remaining-damage" }],
       },
       {
         id: "drow-wizard-misty-escape",
@@ -133,7 +133,7 @@ describe("application-owned Match Configuration", () => {
         target: "Self or 1 ally",
         range: "2 paces",
         lineOfSight: "No",
-        operations: [{ type: "prevent-damage-and-effects" }],
+        operations: [{ type: "reduce-remaining-damage" }],
       },
     ]);
   });
@@ -167,7 +167,9 @@ describe("application-owned Match Configuration", () => {
       "deal-damage":
         "Apply the attack's damage to each legal affected character.",
       "prevent-damage-and-effects":
-        "Prevent damage and attached effects for the protected character.",
+        "Attack Avoidance prevents damage and attached effects for the protected character.",
+      "reduce-remaining-damage":
+        "Reduce remaining damage by the declared amount.",
       "redirect-physical-attack":
         "Redirect the same physical attack toward the original thrower.",
     });

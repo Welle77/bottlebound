@@ -110,10 +110,13 @@ test("the complete bundled Ruleset opens globally in the responsive modal", asyn
 
   const dialog = page.getByRole("dialog", { name: "BOTTLEBOUND Rules" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByText("Ruleset BB20260822A1")).toBeVisible();
+  await expect(dialog.getByText("Ruleset BB20260902A1")).toBeVisible();
   await expect(dialog.locator("[data-rules-contents] ol a")).toHaveCount(16);
   await expect(dialog.locator("[data-rules-document] h2")).toHaveCount(16);
   await expect(dialog.getByRole("heading", { name: "Backstab" })).toBeVisible();
+  await expect(dialog.locator("[data-rules-document]")).toContainText(
+    "use Attack Avoidance to prevent all damage and effects",
+  );
   await expect(
     dialog.getByRole("heading", { name: "16. Referee Quick Reference" }),
   ).toBeVisible();
@@ -152,13 +155,24 @@ test("the complete bundled Ruleset opens globally in the responsive modal", asyn
   await page.getByRole("button", { name: "Create Match" }).click();
   await expect(rules).toBeVisible();
   await rules.click();
-  await expect(dialog.getByText("Ruleset BB20260822A1")).toBeVisible();
+  await expect(dialog.getByText("Ruleset BB20260902A1")).toBeVisible();
   await dialog.getByRole("button", { name: "Close Rules" }).click();
   await page.getByRole("button", { name: "Generate initiative" }).click();
   await page.getByRole("button", { name: "Start Match" }).click();
   await expect(rules).toBeVisible();
   await rules.click();
-  await expect(dialog.getByText("Ruleset BB20260822A1")).toBeVisible();
+  await expect(dialog.getByText("Ruleset BB20260902A1")).toBeVisible();
+});
+
+test("generated Rules Reference includes authoritative Attack Avoidance card text", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Rules", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "BOTTLEBOUND Rules" });
+  await expect(dialog.locator("[data-rules-document]")).toContainText(
+    "use Attack Avoidance to prevent all damage and effects",
+  );
 });
 
 test("the complete bundled Ruleset remains readable after an offline cold launch", async ({
@@ -278,7 +292,7 @@ test("restores an older Match unchanged while Rules Reference stays independent"
   await page.getByRole("button", { name: "Rules", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "BOTTLEBOUND Rules" });
   await expect(
-    dialog.getByText("Ruleset BB20260822A1", { exact: true }),
+    dialog.getByText("Ruleset BB20260902A1", { exact: true }),
   ).toBeVisible();
   await expect(
     dialog.getByRole("heading", { name: "BOTTLEBOUND Rules" }),
@@ -330,7 +344,7 @@ test("Rules retains live context, focus, search, and reading position", async ({
   await expect(
     dialog.getByRole("searchbox", { name: "Search rules" }),
   ).toHaveValue("Initiative");
-  await expect(dialog.getByText("Ruleset BB20260822A1")).toBeVisible();
+  await expect(dialog.getByText("Ruleset BB20260902A1")).toBeVisible();
 
   const search = dialog.getByRole("searchbox", { name: "Search rules" });
   await search.fill("backstab");

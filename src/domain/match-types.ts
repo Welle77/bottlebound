@@ -570,6 +570,10 @@ export type ProtectiveReactionOperation =
       readonly characterId: CharacterId;
     }
   | {
+      readonly type: "reduce-remaining-damage";
+      readonly characterId: CharacterId;
+    }
+  | {
       readonly type: "manual-movement";
       readonly characterId: CharacterId;
       readonly maxPaces: 2;
@@ -601,6 +605,7 @@ export type ProtectiveReactionChoice = {
   readonly ownerCharacterId: CharacterId;
   readonly protectedCharacterId: CharacterId;
   readonly eligible: boolean;
+  readonly overrideAllowed: boolean;
   readonly warnings: readonly string[];
 };
 

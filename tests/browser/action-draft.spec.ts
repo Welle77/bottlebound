@@ -229,7 +229,7 @@ test("protective Reactions prevent only selected damage and restore after Undo",
     .locator("fieldset")
     .filter({ hasText: "Protective Reactions" })
     .locator(".reaction-group .reaction-control");
-  await expect(reactionControls).toHaveCount(12);
+  await expect(reactionControls).toHaveCount(10);
   for (const control of await reactionControls.all()) {
     await expect(control).toBeVisible();
     await expect(control).toContainText(/Protect .+/);
@@ -334,10 +334,78 @@ test("the referee can inspect a Reaction and choose characters inside its group"
 
   await expect(guidanceButton).toHaveAttribute("aria-expanded", "true");
   await expect(guidance).toContainText(
-    "prevent all damage and effects from that attack against that character",
+    "reduce that character's remaining damage by 1",
   );
   await expect(guidance).toContainText("Target: Self or 1 ally");
   await expect(guidance).toContainText("Range: 3 paces");
+});
+
+test("Damage Block availability and review preview stay consistent", async ({
+  page,
+}) => {
+  await startMatch(page);
+  await activateCharacter(page, "Sorcerer");
+  await page.getByRole("button", { name: "Use Ability" }).click();
+  await page.getByRole("button", { name: "Use Arcane Bolt" }).click();
+
+  await page.getByText("Override unavailable targets", { exact: true }).click();
+  await page.getByLabel(/Paladin · Drow/).check();
+  await page.getByRole("button", { name: "Choose Reactions" }).click();
+
+  await reactionChoice(page, "Divine Shield · Paladin", "Paladin").check();
+  await expect(
+    reactionChoice(page, "Shield Wall · Fighter", "Paladin"),
+  ).toBeHidden();
+
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Override Arcane Bolt" }),
+  ).toBeVisible();
+  await expect(page.locator("[data-action-review-hit]")).toContainText("0");
+  await expect(page.locator("[data-action-review-hit]")).toContainText("5 → 5");
+  await expect(page.locator("[data-reaction-review]")).toContainText(
+    "Reduces remaining damage by 1",
+  );
+});
+
+test("targeted Arcane Bolt against the Monk does not offer Deflecting Palm", async ({
+  page,
+}) => {
+  await startMatch(page);
+  await activateCharacter(page, "Sorcerer");
+  await page.getByRole("button", { name: "Use Ability" }).click();
+  await page.getByRole("button", { name: "Use Arcane Bolt" }).click();
+
+  await page.getByText("Override unavailable targets", { exact: true }).click();
+  await page.getByLabel(/Monk · Duergar/).check();
+  await page.getByRole("button", { name: "Choose Reactions" }).click();
+
+  await expect(
+    page.getByRole("group", { name: "Deflecting Palm · Monk" }),
+  ).toHaveCount(0);
+});
+
+test("Attack Avoidance conflict stays disabled until the referee deselects it", async ({
+  page,
+}) => {
+  await startMatch(page);
+  await page.getByRole("button", { name: "Basic Attack" }).click();
+  await page.getByLabel(/Wizard · Drow/).check();
+
+  const mistyEscape = reactionChoice(page, "Misty Escape · Wizard", "Wizard");
+  const divineShield = reactionChoice(
+    page,
+    "Divine Shield · Paladin",
+    "Wizard",
+  );
+  await mistyEscape.check();
+  await expect(divineShield).toBeDisabled();
+  await expect(divineShield).toHaveAttribute("data-reaction-override", "false");
+
+  await mistyEscape.uncheck();
+  await expect(divineShield).toBeEnabled();
+  await divineShield.check();
+  await expect(divineShield).toBeChecked();
 });
 
 test("a spent protective Reaction needs a clear recorded Override", async ({

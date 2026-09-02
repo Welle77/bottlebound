@@ -6,7 +6,7 @@ import { buildRulesReference } from "./rules-reference.ts";
 
 const VIRTUAL_ID = "virtual:rules-reference";
 const RESOLVED_ID = `\0${VIRTUAL_ID}`;
-const RULES_REFERENCE_VERSION = "BB20260822A1";
+const RULES_REFERENCE_VERSION = "BB20260902A1";
 
 const rulesSource = new URL("../bottlebound_rules_final.md", import.meta.url);
 

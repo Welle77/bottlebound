@@ -526,10 +526,15 @@ export function createApplication(
 
   function reactionChoices(
     affectedCharacterIds: readonly import("../domain/match").CharacterId[],
+    selectedReactions: readonly import("../domain/match").ProtectiveReactionInput[] = [],
+    physicalAttack = true,
   ): readonly import("../domain/match").ProtectiveReactionChoice[] {
     if (snapshot.match?.phase !== "active") return [];
     return clone(
-      getProtectiveReactionChoices(snapshot.match, affectedCharacterIds),
+      getProtectiveReactionChoices(snapshot.match, affectedCharacterIds, {
+        selectedReactions,
+        physicalAttack,
+      }),
     );
   }
 

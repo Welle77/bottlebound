@@ -200,6 +200,12 @@ const protectiveReactionOperationSchema = z.discriminatedUnion("type", [
     .catchall(z.unknown()),
   z
     .object({
+      type: z.literal("reduce-remaining-damage"),
+      characterId: characterIdSchema,
+    })
+    .catchall(z.unknown()),
+  z
+    .object({
       type: z.literal("manual-movement"),
       characterId: characterIdSchema,
       maxPaces: z.literal(2),

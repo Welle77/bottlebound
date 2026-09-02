@@ -92,6 +92,16 @@
     );
   }
 
+  function reactionDescription(
+    reaction: (typeof MATCH_CONFIGURATION.reactions)[number],
+    match: ActiveView,
+    characterId: CharacterId,
+  ): string {
+    return reaction.operations[0]?.type === "reduce-remaining-damage"
+      ? `Reduces remaining damage by 1 for ${primaryNameOf(match, characterId)}.`
+      : `Prevents damage and effects for ${primaryNameOf(match, characterId)}.`;
+  }
+
   const review = $derived.by(() => {
     const b = base;
     if (!b || b.draft.step !== "review") return null;
@@ -118,7 +128,10 @@
         redirect: index === 1,
       }),
     );
-    const choices = application.getProtectiveReactionChoices(affectedCharacterIds);
+    const choices = application.getProtectiveReactionChoices(
+      affectedCharacterIds,
+      draft.reactions,
+    );
     const reactionReviews: readonly ReactionReview[] = draft.reactions.flatMap(
       (selection) => {
         const reaction = MATCH_CONFIGURATION.reactions.find(
@@ -140,7 +153,7 @@
               protectedCharacterId === selection.protectedCharacterId,
           )?.warnings ?? [];
         const details = [
-          `Prevents damage and effects for ${primaryNameOf(match, protectedCharacter.id)}.`,
+          reactionDescription(reaction, match, protectedCharacter.id),
           reaction.name === "Misty Escape"
             ? `Move ${primaryNameOf(match, owner.id)} up to 2 paces immediately. Position remains physical.`
             : "",

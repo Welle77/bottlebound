@@ -5,6 +5,7 @@ import {
   createSetup,
   generateInitiative,
   resolveBasicAttack,
+  restoreStateFromEvents,
   startMatch,
   undoLastEvent,
 } from "../../src/domain/match";
@@ -17,8 +18,80 @@ import {
   rewriteCurrentSnapshotAsRetiredSchema,
   rewriteStoredConfigurationVersion,
 } from "./match-store.test-helpers";
+import {
+  cast,
+  CONFIRMATIONS,
+  startedAuditMatch,
+} from "../domain/match-rules-audit-fixtures";
 
 describe("IndexedDbMatchStore", () => {
+  it("restores, replays, and undoes an Attack Avoidance event", async () => {
+    const store = createIndexedDbMatchStore(
+      new IDBFactory(),
+      "restore-avoidance",
+    );
+    const setup = createSetup("match-avoidance", "2026-08-22T14:00:00.000Z");
+    const generated = generateInitiative(
+      setup.state,
+      randomQueue([19, 19, 18, 18, 17, 14, 12, 11, 12, 11, 11, 10]),
+      "2026-08-22T14:01:00.000Z",
+    );
+    const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
+    const sourceCharacterId = started.state.initiative[0]?.characterId;
+    if (!sourceCharacterId) throw new Error("The test needs an active source.");
+    const avoidance = resolveBasicAttack(
+      started.state,
+      {
+        sourceCharacterId,
+        affectedCharacterIds: ["drow-wizard"],
+        physicalConfirmations: {
+          range: true,
+          lineOfSight: true,
+          legalBottleContact: true,
+          terrainContact: true,
+        },
+        reactions: [
+          {
+            reactionId: "drow-wizard-misty-escape",
+            protectedCharacterId: "drow-wizard",
+            override: null,
+          },
+        ],
+        majorActionOverride: null,
+      },
+      "2026-08-22T14:03:00.000Z",
+    );
+    expect(avoidance.event.reactions[0]?.operations).toContainEqual({
+      type: "prevent-damage-and-effects",
+      characterId: "drow-wizard",
+    });
+    const history = [
+      setup.event,
+      generated.event,
+      started.event,
+      avoidance.event,
+    ];
+    expect(restoreStateFromEvents(history)).toEqual(avoidance.state);
+    for (const result of [setup, generated, started, avoidance]) {
+      await store.commit(result.event, result.state);
+    }
+    await expect(store.restore()).resolves.toEqual({
+      state: avoidance.state,
+      events: history,
+      summary: null,
+    });
+    const undone = undoLastEvent(avoidance.state, history, {
+      occurredAt: "2026-08-22T14:04:00.000Z",
+      confirmed: true,
+    });
+    await store.commit(undone.event, undone.state);
+    await expect(store.restore()).resolves.toEqual({
+      state: undone.state,
+      events: [...history, undone.event],
+      summary: null,
+    });
+  });
+
   it("atomically restores and undoes one redirected Action Resolution", async () => {
     const store = createIndexedDbMatchStore(
       new IDBFactory(),
@@ -99,6 +172,55 @@ describe("IndexedDbMatchStore", () => {
         undo.event,
       ],
       summary: null,
+    });
+  });
+
+  it("restores a physical Ability redirect when a Damage Block precedes Deflecting Palm", async () => {
+    const store = createIndexedDbMatchStore(
+      new IDBFactory(),
+      "restore-ability-redirect-order",
+    );
+    const run = startedAuditMatch("match-ability-redirect-order");
+    cast(run, "duergar-monk", {
+      abilityName: "Stunning Strike",
+      input: {
+        attackLegs: [
+          { affectedCharacterIds: ["duergar-monk", "drow-sorcerer"] },
+          { affectedCharacterIds: ["drow-paladin"] },
+        ],
+        physicalConfirmations: CONFIRMATIONS,
+        reactions: [
+          {
+            reactionId: "duergar-fighter-shield-wall",
+            protectedCharacterId: "drow-sorcerer",
+            override: null,
+          },
+          {
+            reactionId: "duergar-monk-deflecting-palm",
+            protectedCharacterId: "duergar-monk",
+            override: null,
+          },
+        ],
+      },
+      step: 1,
+    });
+    const event = run.events.at(-1);
+    if (!event || event.type !== "ActionResolved") {
+      throw new Error("The test expected a physical Ability resolution.");
+    }
+    expect(event.attackLegs[1]?.redirectedByReactionId).toBe(
+      "duergar-monk-deflecting-palm",
+    );
+
+    for (const [index, historyEvent] of run.events.entries()) {
+      await store.commit(
+        historyEvent,
+        restoreStateFromEvents(run.events.slice(0, index + 1)),
+      );
+    }
+    await expect(store.restore()).resolves.toMatchObject({
+      events: run.events,
+      state: run.state,
     });
   });
 

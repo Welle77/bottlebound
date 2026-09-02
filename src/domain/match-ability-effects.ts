@@ -536,6 +536,8 @@ export type AttackDamageInput = {
   readonly physicalAttack: boolean;
   /** A protective Reaction prevented all damage and effects for the character. */
   readonly prevented: boolean;
+  /** Number of selected one-point Damage Blocks for this character. */
+  readonly damageBlocks?: number;
   readonly activeEffects: readonly ActiveEffect[];
   readonly sequence: number;
 };
@@ -563,6 +565,7 @@ function resolveAttackDamageAgainstCharacter(
     affectedCharacterId,
     physicalAttack,
     prevented,
+    damageBlocks = 0,
     activeEffects,
     sequence,
   } = input;
@@ -585,9 +588,10 @@ function resolveAttackDamageAgainstCharacter(
       effect.affectedCharacterId === affectedCharacterId,
   );
   const unmitigated = prevented || vanished ? 0 : baseDamage + marks.length;
-  const finalDamage = rage && unmitigated >= 1 ? unmitigated - 1 : unmitigated;
+  const afterBlocks = Math.max(0, unmitigated - damageBlocks);
+  const finalDamage = rage && afterBlocks >= 1 ? afterBlocks - 1 : afterBlocks;
   const expiredRage: readonly ActiveEffect[] =
-    rage && unmitigated >= 1 ? [rage] : [];
+    rage && afterBlocks >= 1 ? [rage] : [];
   if (finalDamage >= 1) {
     return {
       finalDamage,

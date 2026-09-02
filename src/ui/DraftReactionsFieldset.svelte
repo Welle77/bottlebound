@@ -20,10 +20,13 @@
   const {
     match,
     affectedCharacterIds,
+    physicalAttack,
   }: {
     match: Extract<MatchState, { readonly phase: "active" }>;
     affectedCharacterIds: readonly CharacterId[];
+    physicalAttack?: boolean;
   } = $props();
+  const physicalAttackMode = $derived(physicalAttack ?? true);
 
   type ReactionRow = {
     readonly reactionId: ReactionId;
@@ -34,6 +37,7 @@
     };
     readonly warning: string;
     readonly override: boolean;
+    readonly disabled: boolean;
     readonly selected: boolean;
   };
 
@@ -54,7 +58,11 @@
   const model = $derived.by(() => {
     const draft = uiState.state.actionDraft;
     if (!draft || affectedCharacterIds.length === 0) return null;
-    const choices = application.getProtectiveReactionChoices(affectedCharacterIds);
+    const choices = application.getProtectiveReactionChoices(
+      affectedCharacterIds,
+      draft.reactions,
+      physicalAttackMode,
+    );
     const rowOf = (
       choice: (typeof choices)[number],
       override: boolean,
@@ -68,7 +76,8 @@
         protectedCharacterId: choice.protectedCharacterId,
         protectedCharacter: rulesCharacterOf(choice.protectedCharacterId),
         warning: choice.warnings.join(" "),
-        override,
+        override: override && choice.overrideAllowed,
+        disabled: !choice.overrideAllowed,
         selected: draft.reactions.some(
           ({ reactionId, protectedCharacterId }) =>
             reactionId === choice.reactionId &&
@@ -83,9 +92,20 @@
         return row ? [row] : [];
       });
     const overrides = choices
-      .filter(({ eligible }) => !eligible)
+      .filter(({ eligible, overrideAllowed }) => !eligible && overrideAllowed)
       .flatMap((choice) => {
         const row = rowOf(choice, true);
+        return row ? [row] : [];
+      });
+    const avoidanceConflicts = choices
+      .filter(
+        ({ eligible, overrideAllowed, warnings }) =>
+          !eligible &&
+          !overrideAllowed &&
+          warnings.some((warning) => warning.startsWith("Attack Avoidance")),
+      )
+      .flatMap((choice) => {
+        const row = rowOf(choice, false);
         return row ? [row] : [];
       });
     const groupsOf = (rows: readonly ReactionRow[]): readonly ReactionGroup[] =>
@@ -111,7 +131,10 @@
           },
         ];
       });
-    return { eligible: groupsOf(eligible), overrides: groupsOf(overrides) };
+    return {
+      eligible: groupsOf([...eligible, ...avoidanceConflicts]),
+      overrides: groupsOf(overrides),
+    };
   });
 
   function handleReactionChange(row: ReactionRow): (event: Event) => void {
@@ -168,6 +191,7 @@
       data-reaction-id={row.reactionId}
       data-protected-character={row.protectedCharacterId}
       data-reaction-override={String(row.override)}
+      disabled={row.disabled}
       checked={row.selected}
       onchange={handleReactionChange(row)}
     />

@@ -232,8 +232,13 @@
         const protectedCharacter = rulesCharacterOf(
           selection.protectedCharacterId,
         );
+        const isDamageBlock = reaction.operations.some(
+          ({ type }) => type === "reduce-remaining-damage",
+        );
         const details = [
-          `Prevents damage and effects for ${protectedCharacter.name}.`,
+          isDamageBlock
+            ? `Reduces remaining damage by 1 for ${protectedCharacter.name}.`
+            : `Prevents damage and effects for ${protectedCharacter.name}.`,
           reaction.name === "Misty Escape"
             ? `Move ${owner.name} up to 2 paces immediately. Position remains physical.`
             : "",
@@ -520,6 +525,7 @@
       <DraftReactionsFieldset
         match={base.match}
         affectedCharacterIds={base.draft.targets}
+        physicalAttack={false}
       />
       <div class="match-actions">
         <button

@@ -21,24 +21,19 @@ import {
   isRecord,
 } from "./match-store-validated-state";
 import { matchEventSchema } from "./match-store-schemas";
-
 /**
- * Highest finalized per-character attack damage: a base or ability attack
- * contributes its written 1 damage and both
- * stacking character effects (Hunter's Mark, Hex) add +1 each, for a maximum of 3.
+ * Highest finalized per-character attack damage: a written 1 damage attack
+ * plus Hunter's Mark and Hex, for a maximum of 3.
  */
 const MAX_STACKED_ATTACK_DAMAGE = 3;
-
 function isUnknownArray(value: unknown): value is readonly unknown[] {
   return Array.isArray(value);
 }
-
 function assertString(value: unknown): asserts value is string {
   if (typeof value !== "string") {
     throw new Error("The validated Match Event contains an invalid string.");
   }
 }
-
 function isInitiativeEntry(value: unknown): value is InitiativeEntry {
   return (
     isRecord(value) &&
@@ -195,7 +190,6 @@ function assertTurnFinishedEvent(value: Record<string, unknown>): void {
   assertTurnSkippedSlots(value, expectedVisitedTurnSlots(value));
   assertExpiredEffectCollection(value.expiredEffects);
 }
-
 function assertDashedEvent(value: Record<string, unknown>): void {
   if (
     typeof value.sourceCharacterId !== "string" ||
@@ -206,7 +200,6 @@ function assertDashedEvent(value: Record<string, unknown>): void {
     throw new Error("The validated Dash Event is invalid.");
   }
 }
-
 function assertActionResolutionCollections(
   value: Record<string, unknown>,
 ): void {
@@ -289,7 +282,6 @@ function assertAttackLegTargets(
   }
   return affectedCharacterIds;
 }
-
 function characterIdsFrom(value: unknown): readonly CharacterId[] | null {
   if (!Array.isArray(value)) return null;
   return value.reduce<readonly CharacterId[] | null>((ids, characterId) => {
@@ -304,7 +296,6 @@ function characterIdsFrom(value: unknown): readonly CharacterId[] | null {
     return [...ids, characterId];
   }, []);
 }
-
 function affectedIdsForLeg(
   value: Record<string, unknown>,
   context: {
@@ -371,14 +362,26 @@ function assertReactionProtection(
 function isValidReactionOperation(
   operation: unknown,
   context: {
+    readonly index: number;
     readonly owner: string;
+    readonly protectedCharacterId: unknown;
     readonly sourceCharacterId: unknown;
-    readonly reaction: { readonly name: string } | undefined;
+    readonly reaction:
+      | {
+          readonly name: string;
+          readonly operations: readonly { readonly type: string }[];
+        }
+      | undefined;
   },
 ): boolean {
-  const { owner, sourceCharacterId, reaction } = context;
+  const { index, owner, protectedCharacterId, sourceCharacterId, reaction } =
+    context;
   if (!isRecord(operation)) return false;
+  if (operation.type !== reaction?.operations[index]?.type) return false;
   if (operation.type === "prevent-damage-and-effects") return true;
+  if (operation.type === "reduce-remaining-damage") {
+    return operation.characterId === protectedCharacterId;
+  }
   if (operation.type === "manual-movement") {
     return (
       operation.characterId === owner &&
@@ -401,7 +404,12 @@ function assertReactionOperations(
   context: {
     readonly owner: string;
     readonly value: Readonly<Record<string, unknown>>;
-    readonly reaction: { readonly name: string } | undefined;
+    readonly reaction:
+      | {
+          readonly name: string;
+          readonly operations: readonly { readonly type: string }[];
+        }
+      | undefined;
   },
 ): void {
   const { owner, value, reaction } = context;
@@ -410,9 +418,13 @@ function assertReactionOperations(
       (typeof reactionResolution.override !== "string" ||
         reactionResolution.override.trim().length === 0)) ||
     !Array.isArray(reactionResolution.operations) ||
-    !reactionResolution.operations.every((operation) =>
+    !reaction ||
+    reactionResolution.operations.length !== reaction.operations.length ||
+    !reactionResolution.operations.every((operation, index) =>
       isValidReactionOperation(operation, {
+        index,
         owner,
+        protectedCharacterId: reactionResolution.protectedCharacterId,
         sourceCharacterId: value.sourceCharacterId,
         reaction,
       }),
@@ -772,7 +784,6 @@ function validateValidatedEvent(
   }
   assertInitiativeEvent(value, expectedConfigurationVersion);
 }
-
 export function parseValidatedEvent(
   value: unknown,
   expectedConfigurationVersion?: string,
@@ -781,7 +792,6 @@ export function parseValidatedEvent(
   validateValidatedEvent(value, expectedConfigurationVersion);
   return parsed;
 }
-
 export function assertValidatedEvent(
   value: unknown,
   expectedConfigurationVersion?: string,

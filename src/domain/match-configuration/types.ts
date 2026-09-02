@@ -111,6 +111,7 @@ export type MatchConfigurationAbility = {
 
 export type ReactionOperationDeclaration =
   | { readonly type: "prevent-damage-and-effects" }
+  | { readonly type: "reduce-remaining-damage" }
   | {
       readonly type: "manual-movement";
       readonly character: ReactionMovementCharacter;
@@ -155,7 +156,7 @@ export type MatchConfigurationRefereeInstructions = {
   readonly manualPhysicalConfirmations: string;
 };
 
-export type MatchConfigurationVersion = "BB20260822A1";
+export type MatchConfigurationVersion = "BB20260902A1";
 
 export type MatchConfiguration = {
   readonly version: MatchConfigurationVersion;
