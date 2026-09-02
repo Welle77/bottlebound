@@ -187,10 +187,8 @@
     const b = base;
     if (!b || b.draft.step === "review") return null;
     const activeLegIndex = b.draft.attackLegs.length - 1;
-    const affectedCharacterIds = b.draft.attackLegs.flat();
     const requireManualChecks = uiState.state.physicalConfirmationPreference;
     const ready =
-      affectedCharacterIds.length > 0 &&
       (!requireManualChecks ||
         Object.values(b.draft.physicalConfirmations).every(Boolean));
     const closedLegSource = b.draft.attackLegs.at(0);

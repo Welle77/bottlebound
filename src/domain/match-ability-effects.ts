@@ -280,11 +280,6 @@ function validatePhysicalTargets(
   state: ActiveMatchState,
   targetIds: readonly CharacterId[],
 ): void {
-  if (targetIds.length === 0) {
-    throw new Error(
-      "A physical ability needs at least one affected character.",
-    );
-  }
   if (new Set(targetIds).size !== targetIds.length) {
     throw new Error("Basic Attack contacts must be unique.");
   }

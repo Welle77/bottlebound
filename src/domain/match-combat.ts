@@ -217,9 +217,7 @@ function resolveAttackContacts(
     { affectedCharacterIds: input.affectedCharacterIds ?? [] },
   ];
   const [firstLeg] = inputLegs;
-  if (!firstLeg || firstLeg.affectedCharacterIds.length === 0) {
-    throw new Error("Basic Attack needs at least one affected character.");
-  }
+  if (!firstLeg) throw new Error("Basic Attack needs an Attack Leg.");
   const affectedCharacterIds = inputLegs.flatMap(
     ({ affectedCharacterIds }) => affectedCharacterIds,
   );

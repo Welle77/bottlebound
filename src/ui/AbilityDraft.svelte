@@ -162,7 +162,6 @@
             }
           : null,
       ready:
-        activeLeg.length > 0 &&
         (!uiState.state.physicalConfirmationPreference ||
           Object.values(b.draft.physicalConfirmations).every(Boolean)),
     };
