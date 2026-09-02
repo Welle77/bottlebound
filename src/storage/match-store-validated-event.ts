@@ -271,8 +271,7 @@ function assertAttackLegTargets(
   const affectedCharacterIds = characterIdsFrom(leg.affectedCharacterIds);
   if (
     leg.towardCharacterId !== (index === 0 ? null : value.sourceCharacterId) ||
-    affectedCharacterIds === null ||
-    (index === 0 && affectedCharacterIds.length === 0)
+    affectedCharacterIds === null
   ) {
     throw new Error("The validated Attack Leg is invalid.");
   }

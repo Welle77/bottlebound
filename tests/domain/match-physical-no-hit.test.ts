@@ -7,6 +7,7 @@ import {
   play,
   startedAuditMatch,
 } from "./match-rules-audit-fixtures";
+import { assertValidatedEvent } from "../../src/storage/match-store-validated-event";
 
 describe("physical throws with no bottle contact", () => {
   it.each([
@@ -35,6 +36,11 @@ describe("physical throws with no bottle contact", () => {
       targetCharacterIds: [],
       attackLegs: [expect.objectContaining({ affectedCharacterIds: [] })],
     });
+    const event = run.events.at(-1);
+    if (!event) throw new Error("Expected a recorded Action Resolution.");
+    expect(() => {
+      assertValidatedEvent(event);
+    }).not.toThrow();
   });
 
   it("resolves a Basic Attack without a hit", () => {
@@ -61,5 +67,10 @@ describe("physical throws with no bottle contact", () => {
       effects: [],
       attackLegs: [expect.objectContaining({ affectedCharacterIds: [] })],
     });
+    const event = run.events.at(-1);
+    if (!event) throw new Error("Expected a recorded Action Resolution.");
+    expect(() => {
+      assertValidatedEvent(event);
+    }).not.toThrow();
   });
 });
