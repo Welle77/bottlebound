@@ -118,6 +118,7 @@ function nextTurnPosition(state: ActiveMatchState): TurnPosition {
   );
 }
 
+/** @returns The initiative slot for the character, or undefined. */
 function characterSlot(
   slotToCharacter: ReadonlyMap<number, CharacterId>,
   characterId: CharacterId,
@@ -125,6 +126,12 @@ function characterSlot(
   return [...slotToCharacter.entries()].find(
     ([, candidateId]) => candidateId === characterId,
   )?.[0];
+}
+
+function effectAnchorId(effect: ActiveEffect): CharacterId {
+  return effect.duration.anchor === "source"
+    ? effect.anchorCharacterId
+    : effect.affectedCharacterId;
 }
 
 function effectExpiresAtBoundary(
@@ -140,12 +147,9 @@ function effectExpiresAtBoundary(
     stateSequence,
   } = context;
   const trigger = effect.duration.boundaryTrigger;
-  const anchorId =
-    effect.duration.anchor === "source"
-      ? effect.anchorCharacterId
-      : effect.affectedCharacterId;
+  const anchorId = effectAnchorId(effect);
   const anchorSlot = characterSlot(slotToCharacter, anchorId);
-  if (!trigger) return false;
+  if (trigger === undefined) return false;
   if (
     trigger === "beginning-of-next-turn" &&
     effect.duration.anchor === "affected"

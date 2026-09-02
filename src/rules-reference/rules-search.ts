@@ -108,6 +108,7 @@ function insertSorted(
   return [...ranges.slice(0, index), range, ...ranges.slice(index)];
 }
 
+/** @returns Matching source ranges, or null when a term is absent. */
 function matchingRanges(
   normalized: NormalizedText,
   terms: readonly string[],

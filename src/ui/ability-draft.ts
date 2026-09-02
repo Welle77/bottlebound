@@ -12,6 +12,7 @@ import type { ActionDraft } from "./ui-state";
 
 type ActiveView = Extract<MatchState, { readonly phase: "active" }>;
 
+/** @returns The active character id, or undefined for an empty slot. */
 export function activeCharacterIdOf(
   match: ActiveView,
 ): CharacterId | undefined {

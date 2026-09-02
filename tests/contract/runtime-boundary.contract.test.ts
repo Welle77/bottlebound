@@ -28,15 +28,19 @@ function runtimeSourceFiles(): readonly string[] {
 }
 
 function boundaryViolations(): readonly string[] {
-  const importPattern =
-    /(?:from\s*|import\s*\(\s*)["'][^"']*(?:virtual:rules-reference|rules-reference|build\/rules-reference|domain\/ruleset|(?:^|\/)ruleset(?:\.ts)?)[^"']*["']/u;
+  const importPatterns = [
+    /(?:from\s*|import\s*\(\s*)["'][^"']*(?:virtual:rules-reference|rules-reference|build\/rules-reference|domain\/ruleset)[^"']*["']/u,
+    /(?:from\s*|import\s*\(\s*)["'][^"']*(?:^|\/)ruleset(?:\.ts)?[^"']*["']/u,
+  ];
   return runtimeSourceFiles().flatMap((path) => {
     const source = readFileSync(path, "utf8");
     const violations = [
       ...(path.endsWith("/ruleset.ts")
         ? ["restored domain/ruleset module"]
         : []),
-      ...(importPattern.test(source) ? ["guide-derived runtime import"] : []),
+      ...(importPatterns.some((pattern) => pattern.test(source))
+        ? ["guide-derived runtime import"]
+        : []),
       ...(source.match(/\b(?:RULESET|RULES_VERSION)\b/u)
         ? ["obsolete Ruleset runtime symbol"]
         : []),

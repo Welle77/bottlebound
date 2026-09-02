@@ -90,21 +90,27 @@ function requestResult<T>(request: IDBRequest<T>): Promise<T> {
  * wrappers restore the expected payload shape at a single boundary. The
  * payloads remain guarded by the structural assertions applied afterwards.
  */
+/** @returns The parsed record, or undefined when no record exists. */
 function getRecord<T>(
   store: IDBObjectStore,
   key: IDBValidKey,
   schema: z.ZodType<T>,
 ): Promise<T | undefined> {
-  return requestResult(store.get(key)).then((value) => {
-    if (value === undefined) return undefined;
-    try {
-      return schema.parse(value);
-    } catch (error) {
-      throw new Error("Saved validated data is structurally invalid.", {
-        cause: error,
-      });
-    }
-  });
+  return requestResult(store.get(key)).then((value) =>
+    parseRecord(value, schema),
+  );
+}
+
+/** @returns The parsed record, or undefined when the source value is absent. */
+function parseRecord<T>(value: unknown, schema: z.ZodType<T>): T | undefined {
+  if (value === undefined) return undefined;
+  try {
+    return schema.parse(value);
+  } catch (error) {
+    throw new Error("Saved validated data is structurally invalid.", {
+      cause: error,
+    });
+  }
 }
 
 function getAllRecords<T>(
@@ -307,8 +313,6 @@ export type MatchStore = {
   readonly deleteSummary: (confirmed: boolean) => Promise<void>;
   readonly deleteMatch: (matchId: string, confirmed: boolean) => Promise<void>;
 };
-
-export type IndexedDbMatchStore = MatchStore;
 
 export function createIndexedDbMatchStore(
   factory: IDBFactory = globalThis.indexedDB,

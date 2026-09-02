@@ -91,8 +91,6 @@ export type UIState = {
   readonly rulesReferenceInteraction: RulesReferenceInteraction;
 };
 
-export type UiState = UIState;
-
 export type UIStateAccess = {
   readonly state: UIState;
 };

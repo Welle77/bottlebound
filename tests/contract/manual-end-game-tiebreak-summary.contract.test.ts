@@ -21,7 +21,7 @@ import {
 import { MATCH_CONFIGURATION } from "../../src/domain/match-configuration";
 import {
   createIndexedDbMatchStore,
-  type IndexedDbMatchStore,
+  type MatchStore,
 } from "../../src/storage/match-store";
 import { assertValidatedEvent } from "../../src/storage/match-store-validated-event";
 import { initiativeCharacterId } from "../domain/match-test-support";
@@ -51,7 +51,7 @@ function activeStateWithTweaks(
 function toEndedViaStore(
   factory: IDBFactory,
   databaseName: string,
-): Promise<IndexedDbMatchStore> {
+): Promise<MatchStore> {
   return Promise.resolve(createIndexedDbMatchStore(factory, databaseName));
 }
 

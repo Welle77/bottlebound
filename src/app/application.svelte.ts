@@ -126,7 +126,7 @@ export function createApplication(
   }
 
   function readState(): ApplicationState {
-    void revision.value;
+    String(revision.value);
     return snapshot;
   }
 
@@ -432,6 +432,7 @@ export function createApplication(
     );
   }
 
+  /** @returns The preview when available, otherwise null. */
   function previewEndGame(): ReturnType<typeof getEndGamePreview> | null {
     if (snapshot.match?.phase !== "active") return null;
     try {

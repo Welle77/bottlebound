@@ -18,20 +18,34 @@ async function persistedMatchData(page: import("@playwright/test").Page) {
       ["metadata", "snapshots", "events"],
       "readonly",
     );
-    const readStore = (name: string) =>
+    const result = await Promise.all([
       new Promise<unknown[]>((resolve, reject) => {
-        const request = transaction.objectStore(name).getAll();
+        const request = transaction.objectStore("metadata").getAll();
         request.addEventListener("success", () => {
           resolve(request.result);
         });
         request.addEventListener("error", () => {
-          reject(request.error ?? new Error(`Failed to read ${name}`));
+          reject(request.error ?? new Error("Failed to read metadata"));
         });
-      });
-    const result = await Promise.all([
-      readStore("metadata"),
-      readStore("snapshots"),
-      readStore("events"),
+      }),
+      new Promise<unknown[]>((resolve, reject) => {
+        const request = transaction.objectStore("snapshots").getAll();
+        request.addEventListener("success", () => {
+          resolve(request.result);
+        });
+        request.addEventListener("error", () => {
+          reject(request.error ?? new Error("Failed to read snapshots"));
+        });
+      }),
+      new Promise<unknown[]>((resolve, reject) => {
+        const request = transaction.objectStore("events").getAll();
+        request.addEventListener("success", () => {
+          resolve(request.result);
+        });
+        request.addEventListener("error", () => {
+          reject(request.error ?? new Error("Failed to read events"));
+        });
+      }),
     ]);
     database.close();
     return result;

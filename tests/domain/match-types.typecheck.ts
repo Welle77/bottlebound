@@ -43,13 +43,15 @@ const invalidEffectBoundaryTrigger: NonNullable<
 const invalidEffectOperation: ActiveEffect["operations"][number] =
   "invented-operation";
 
-void invalidCharacterId;
-void invalidBasicAttackSourceCharacterId;
-void invalidDisplayNames;
-void invalidAbilityId;
-void invalidAbilityName;
-void abilityUsedAsBasicAttackId;
-void invalidReactionId;
-void invalidActiveEffectKind;
-void invalidEffectBoundaryTrigger;
-void invalidEffectOperation;
+export {
+  invalidCharacterId,
+  invalidBasicAttackSourceCharacterId,
+  invalidDisplayNames,
+  invalidAbilityId,
+  invalidAbilityName,
+  abilityUsedAsBasicAttackId,
+  invalidReactionId,
+  invalidActiveEffectKind,
+  invalidEffectBoundaryTrigger,
+  invalidEffectOperation,
+};

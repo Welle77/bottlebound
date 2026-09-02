@@ -1,4 +1,5 @@
 import eslint from "@eslint/js";
+import sonarjs from "eslint-plugin-sonarjs";
 import sveltePlugin from "eslint-plugin-svelte";
 import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
@@ -6,6 +7,7 @@ import tseslint from "typescript-eslint";
 
 // Shared file groups – single source of truth for lint scopes.
 const typescriptFiles = ["{src,tests,build}/**/*.ts", "*.config.ts"];
+const sonarjsFiles = ["{src,tests}/**/*.ts", "*.config.ts"];
 
 const projectEslintPlugin = {
   rules: {
@@ -42,6 +44,14 @@ export default defineConfig(
   eslint.configs.recommended,
   tseslint.configs.strict,
   tseslint.configs.stylistic,
+  {
+    ...sonarjs.configs.recommended,
+    files: sonarjsFiles,
+  },
+  {
+    name: "sonarjs/project-conventions",
+    files: sonarjsFiles,
+  },
   {
     name: "project/base",
     linterOptions: {

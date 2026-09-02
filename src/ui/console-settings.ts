@@ -14,6 +14,7 @@ const REQUIRE_PHYSICAL_CONFIRMATIONS_KEY =
 
 export type SettingsStorage = Pick<Storage, "getItem" | "setItem">;
 
+/** @returns Device storage when available, otherwise null. */
 function resolveSettingsStorage(): SettingsStorage | null {
   try {
     return globalThis.localStorage;

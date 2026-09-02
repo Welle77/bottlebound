@@ -14,8 +14,10 @@ import {
 function createQueueCursor(values: readonly number[]) {
   let position = 0;
   return {
-    take(): number | undefined {
+    take(): number {
       const value = values[position];
+      if (value === undefined)
+        throw new Error("The test random queue is empty.");
       position += 1;
       return value;
     },
@@ -26,11 +28,7 @@ export function queuedRandom(...values: readonly number[]): RandomSource {
   const cursor = createQueueCursor(values);
   return {
     nextUint32: () => {
-      const value = cursor.take();
-      if (value === undefined) {
-        throw new Error("The test random queue is empty.");
-      }
-      return value;
+      return cursor.take();
     },
   };
 }

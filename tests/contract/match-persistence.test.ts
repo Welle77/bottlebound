@@ -16,6 +16,10 @@ import {
 } from "../../src/domain/match";
 import { createIndexedDbMatchStore } from "../../src/storage/match-store";
 
+function isCoinFlip(flip: string): boolean {
+  return flip === "heads" || flip === "tails";
+}
+
 function randomQueue(values: number[]) {
   let index = 0;
   return {
@@ -149,11 +153,7 @@ describe("Match command persistence contract", () => {
       generated.event.tieOrder[0]?.steps.every((step) =>
         step.attempts.every(
           (attempt) =>
-            attempt.flips.length > 0 &&
-            attempt.flips.every((flip) => {
-              const value: string = flip;
-              return value === "heads" || value === "tails";
-            }),
+            attempt.flips.length > 0 && attempt.flips.every(isCoinFlip),
         ),
       ),
     ).toBe(true);

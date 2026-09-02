@@ -6,13 +6,14 @@ import {
   type SettingsStorage,
 } from "../src/ui/console-settings";
 
+/** @returns A deterministic in-memory SettingsStorage implementation. */
 function createMemoryStorage(
   initial: Readonly<Record<string, string>> = {},
 ): SettingsStorage {
   let values: ReadonlyMap<string, string> = new Map(Object.entries(initial));
   return {
-    getItem(key: string): string | null {
-      return values.get(key) ?? null;
+    getItem(key: string): string {
+      return values.get(key) ?? "";
     },
     setItem(key: string, value: string): void {
       values = new Map([...values, [key, value]]);

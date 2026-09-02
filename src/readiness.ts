@@ -39,12 +39,25 @@ export function deriveReadinessState(inputs: ReadinessInputs): ReadinessState {
     validatedStorage: inputs.validatedStorage,
     offline,
     matchCreation: storageReady ? "available" : "blocked",
-    blockingReason: (() => {
-      if (storageReady) return null;
-      if (inputs.validatedStorage === "failed") {
-        return "Validated storage is unavailable. Retry the storage check before you create a Match.";
-      }
-      return "Validated storage must pass its safety check before you create a Match.";
-    })(),
+    blockingReason: blockingReasonForStorage(
+      inputs.validatedStorage,
+      storageReady,
+    ),
   };
+}
+
+/** @returns The storage blocking message, or null when storage is ready. */
+function blockingReasonForStorage(
+  storage: ReadinessInputs["validatedStorage"],
+  storageReady: boolean,
+): string | null {
+  let reason: string | null = null;
+  if (!storageReady && storage === "failed") {
+    reason =
+      "Validated storage is unavailable. Retry the storage check before you create a Match.";
+  } else if (!storageReady) {
+    reason =
+      "Validated storage must pass its safety check before you create a Match.";
+  }
+  return reason;
 }

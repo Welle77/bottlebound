@@ -27,6 +27,7 @@ import type {
   EndGamePreview,
   MatchEndedEvent,
   MatchEvent,
+  MatchOutcome,
   MatchState,
   RandomSource,
   ReversibleMatchEvent,
@@ -53,10 +54,12 @@ function applyHistoricalActionResolution(
   const nextActiveEffects = [...retained, ...appliedEffects].filter(
     (effect) => !expiredIds.has(effect.effectId),
   );
-  const outcome = (() => {
-    if (event.eliminatedTeams.length !== 1) return null;
-    return event.eliminatedTeams[0] === "Drow" ? "Duergar" : "Drow";
-  })();
+  let outcome: MatchOutcome = null;
+  if (event.eliminatedTeams.length === 1) {
+    const [eliminatedTeam] = event.eliminatedTeams;
+    if (eliminatedTeam === "Drow") outcome = "Duergar";
+    if (eliminatedTeam === "Duergar") outcome = "Drow";
+  }
   return {
     ...state,
     sequence: event.sequence,
@@ -215,6 +218,7 @@ function isReversibleEvent(event: MatchEvent): event is ReversibleMatchEvent {
   );
 }
 
+/** @returns The latest reversible event, or null when none remains. */
 function findUndoTarget(
   events: readonly MatchEvent[],
 ): ReversibleMatchEvent | null {
@@ -621,6 +625,7 @@ export function restoreStateFromEvents(
   return current;
 }
 
+/** @returns The undo preview, or null when undo is unavailable. */
 export function getUndoPreview(
   state: MatchState,
   events: readonly MatchEvent[],

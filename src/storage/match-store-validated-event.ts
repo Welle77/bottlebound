@@ -21,10 +21,6 @@ import {
   isRecord,
 } from "./match-store-validated-state";
 import { matchEventSchema } from "./match-store-schemas";
-/**
- * Highest finalized per-character attack damage: a written 1 damage attack
- * plus Hunter's Mark and Hex, for a maximum of 3.
- */
 const MAX_STACKED_ATTACK_DAMAGE = 3;
 function isUnknownArray(value: unknown): value is readonly unknown[] {
   return Array.isArray(value);
@@ -282,19 +278,21 @@ function assertAttackLegTargets(
   }
   return affectedCharacterIds;
 }
+/** @returns Valid character ids, or null when the value is malformed. */
 function characterIdsFrom(value: unknown): readonly CharacterId[] | null {
   if (!Array.isArray(value)) return null;
-  return value.reduce<readonly CharacterId[] | null>((ids, characterId) => {
+  const characterIds: CharacterId[] = [];
+  for (const characterId of value) {
     if (
-      ids === null ||
       typeof characterId !== "string" ||
       !isCharacterId(characterId) ||
       !MATCH_CONFIGURATION.characters.some(({ id }) => id === characterId)
     ) {
       return null;
     }
-    return [...ids, characterId];
-  }, []);
+    characterIds.push(characterId);
+  }
+  return characterIds;
 }
 function affectedIdsForLeg(
   value: Record<string, unknown>,

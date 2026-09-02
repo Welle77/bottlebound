@@ -143,10 +143,14 @@ function assertValidatedInitiative(value: MatchState): void {
   ) {
     throw new Error("The validated initiative result is structurally invalid.");
   }
-  value.initiative.reduce<InitiativeValidationState>(
-    assertValidatedInitiativeEntry,
-    { seen: new Set<CharacterId>(), previousTotal: Number.POSITIVE_INFINITY },
-  );
+  if (
+    value.initiative.reduce<InitiativeValidationState>(
+      assertValidatedInitiativeEntry,
+      { seen: new Set<CharacterId>(), previousTotal: Number.POSITIVE_INFINITY },
+    ).seen.size !== value.initiative.length
+  ) {
+    throw new Error("The validated initiative result is structurally invalid.");
+  }
 }
 
 type InitiativeValidationState = {

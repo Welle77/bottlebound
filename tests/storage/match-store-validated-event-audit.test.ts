@@ -18,6 +18,12 @@ import type { MatchEvent } from "../../src/domain/match";
 import { assertValidatedEvent } from "../../src/storage/match-store-validated-event";
 import { assertValidatedState } from "../../src/storage/match-store-validated-state";
 
+function withoutRangePaces(leg: ActionResolvedEvent["attackLegs"][number]) {
+  return Object.fromEntries(
+    Object.entries(leg).filter(([key]) => key !== "rangePaces"),
+  );
+}
+
 /**
  * Rules coverage audit (ticket T04): stacked character-based damage
  * (Hunter's Mark / Hex, rules §11 and §15 cards) widens the validated effect
@@ -202,8 +208,9 @@ describe("validated Action Resolution recorded Ability Override", () => {
 
   it("rejects persisted events that omit the recorded Override field", () => {
     const base = overriddenResolution() as Record<string, unknown>;
-    const { abilityOverride, ...legacyWithoutOverride } = base;
-    void abilityOverride;
+    const legacyWithoutOverride = Object.fromEntries(
+      Object.entries(base).filter(([key]) => key !== "abilityOverride"),
+    );
     const legacy = legacyWithoutOverride as MatchEvent;
     expect(() => {
       assertValidatedEvent(legacy);
@@ -223,8 +230,11 @@ describe("validated Action Resolution recorded Ability Override", () => {
 
 describe("validated Ability attack metadata", () => {
   it("admits an historic Ability resolution without optional abilityId", () => {
-    const { abilityId, ...historicEvent } = overriddenResolution();
-    void abilityId;
+    const historicEvent = Object.fromEntries(
+      Object.entries(overriddenResolution()).filter(
+        ([key]) => key !== "abilityId",
+      ),
+    );
 
     expect(() => {
       assertValidatedEvent(historicEvent);
@@ -266,8 +276,9 @@ describe("validated Ability attack metadata", () => {
 
   it("accepts omitted and null historical optional Ability ids", () => {
     const event = overriddenResolution();
-    const { abilityId, ...omitted } = event;
-    void abilityId;
+    const omitted = Object.fromEntries(
+      Object.entries(event).filter(([key]) => key !== "abilityId"),
+    );
 
     expect(() => {
       assertValidatedEvent(omitted);
@@ -278,18 +289,17 @@ describe("validated Ability attack metadata", () => {
   it("rejects an Action Resolution without current metadata", () => {
     const historicalRulesVersion = "BB-retired";
     const withoutCurrentMetadata = (event: ActionResolvedEvent) => {
-      const { attackType, rangePaces, damage, ...historical } = event;
-      void attackType;
-      void rangePaces;
-      void damage;
+      const historical = Object.fromEntries(
+        Object.entries(event).filter(
+          ([key]) => !["attackType", "rangePaces", "damage"].includes(key),
+        ),
+      );
       return {
         ...historical,
         configurationVersion: historicalRulesVersion,
-        attackLegs: historical.attackLegs.map((leg) => {
-          const { rangePaces: legRangePaces, ...withoutRange } = leg;
-          void legRangePaces;
-          return withoutRange;
-        }),
+        attackLegs: (historical as ActionResolvedEvent).attackLegs.map(
+          withoutRangePaces,
+        ),
       };
     };
 

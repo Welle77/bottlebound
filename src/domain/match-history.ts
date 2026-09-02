@@ -30,7 +30,7 @@ function orderedJsonValue(value: unknown): unknown {
   if (isRecord(value)) {
     return Object.fromEntries(
       Object.keys(value)
-        .sort()
+        .sort((left, right) => left.localeCompare(right))
         .map((key) => [key, orderedJsonValue(value[key])]),
     );
   }

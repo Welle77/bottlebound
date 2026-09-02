@@ -224,7 +224,7 @@ describe("Active Match commands", () => {
       },
       "2026-08-22T14:03:00.000Z",
     );
-    expect("rulesSourceAnchor" in attack.event).toBe(false);
+    expect(Object.hasOwn(attack.event, "rulesSourceAnchor")).toBe(false);
     const historicalVersion = "BB-prior-release";
     const history = [setup.event, generated.event, started.event].map(
       (event) => ({ ...event, configurationVersion: historicalVersion }),

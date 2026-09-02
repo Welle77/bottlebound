@@ -1,32 +1,32 @@
+import { applyUtilityAbility } from "./match-ability-utility";
+import {
+  AUTOMATED_REACTION_NAMES,
+  protectiveReactionWarnings,
+} from "./match-combat";
 import {
   MATCH_CONFIGURATION,
   MATCH_CONFIGURATION_VERSION,
   type MatchConfigurationAbility,
 } from "./match-configuration";
-import {
-  AUTOMATED_REACTION_NAMES,
-  protectiveReactionWarnings,
-} from "./match-combat";
 import { applyDownedCleanup } from "./match-turn";
-import { applyUtilityAbility } from "./match-ability-utility";
-import { nextActionCount } from "./match-types";
 import type {
   AbilityId,
   ActionEffect,
   ActionResolvedEvent,
   ActiveEffect,
   ActiveMatchState,
-  EndedMatchState,
   AttackLeg,
   CharacterId,
   CommandResult,
+  EndedMatchState,
+  MatchCharacter,
   MatchOutcome,
   ProtectiveReactionInput,
   ProtectiveReactionOperation,
   ProtectiveReactionResolution,
-  MatchCharacter,
   Team,
 } from "./match-types";
+import { nextActionCount } from "./match-types";
 
 export type AbilityInput = {
   readonly abilityId: AbilityId;
@@ -51,7 +51,11 @@ export type AbilityInput = {
  * carry their printed card range; anything else is an automation contract
  * error.
  */
-function attackRangePaces(ability: MatchConfigurationAbility): 2 | 6 | 8 {
+type AbilityAttackRange = 2 | 6 | 8;
+
+function attackRangePaces(
+  ability: MatchConfigurationAbility,
+): AbilityAttackRange {
   const parsed = /^(\d+) paces$/.exec(ability.range);
   const value = parsed ? Number(parsed[1]) : NaN;
   if (value === 2 || value === 6 || value === 8) return value;
@@ -88,8 +92,11 @@ type ActiveEffectLedger = {
   readonly expiredEffects: readonly ActiveEffect[];
 };
 
+/** @returns The trimmed override, or null when no override was supplied. */
 function normalizedOverride(value: string | null | undefined): string | null {
-  return value?.trim() || null;
+  if (value === null || value === undefined) return null;
+  const normalized = value.trim();
+  return normalized === "" ? null : normalized;
 }
 
 function assertAbilityOwnerIsActive(
@@ -522,9 +529,15 @@ function resultingEliminations(
   return [...new Set([...state.eliminatedTeams, ...newlyEliminated])];
 }
 
+/** @returns The winning team, or null when elimination has not decided it. */
 function matchOutcome(eliminatedTeams: readonly Team[]): MatchOutcome {
-  if (eliminatedTeams.length !== 1) return null;
-  return eliminatedTeams[0] === "Drow" ? "Duergar" : "Drow";
+  let outcome: string | null = null;
+  if (eliminatedTeams.length === 1) {
+    const [eliminatedTeam] = eliminatedTeams;
+    if (eliminatedTeam === "Drow") outcome = "Duergar";
+    if (eliminatedTeam === "Duergar") outcome = "Drow";
+  }
+  return outcome as MatchOutcome;
 }
 
 function initialAbilityAttackLeg(
@@ -568,11 +581,10 @@ function buildAbilityAttackLegs(context: {
   );
   const mapped = (attackLegsInput ?? [{ affectedCharacterIds }]).map<AttackLeg>(
     (leg, index) => {
-      const towardCharacterId = (() => {
-        if (index === 0) return null;
-        if (redirectReaction?.ownerCharacterId) return ability.ownerCharacterId;
-        return null;
-      })();
+      const towardCharacterId =
+        index > 0 && redirectReaction?.ownerCharacterId
+          ? ability.ownerCharacterId
+          : null;
       return {
         sequence: index + 1,
         kind: index === 0 ? "initial" : "redirected",

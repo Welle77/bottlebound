@@ -1,5 +1,34 @@
-import type { MatchConfigurationReaction } from "./match-configuration/types";
-import type { ActiveMatchState, CharacterId } from "./match-types";
+import {
+  MATCH_CONFIGURATION,
+  type MatchConfigurationReaction,
+} from "./match-configuration";
+import type {
+  ActiveMatchState,
+  CharacterId,
+  ProtectiveReactionInput,
+} from "./match-types";
+
+type ProtectiveReaction = (typeof MATCH_CONFIGURATION.reactions)[number];
+
+export function isAvoidanceConflict(context: {
+  readonly selection: ProtectiveReactionInput;
+  readonly protectedCharacterId: CharacterId;
+  readonly alreadySelected: boolean;
+  readonly reaction: ProtectiveReaction;
+}): boolean {
+  const { selection, protectedCharacterId, alreadySelected, reaction } =
+    context;
+  if (selection.protectedCharacterId !== protectedCharacterId) return false;
+  const selectedReaction = MATCH_CONFIGURATION.reactions.find(
+    ({ id }) => id === selection.reactionId,
+  );
+  return (
+    !alreadySelected &&
+    selectedReaction !== undefined &&
+    isAttackAvoidanceReaction(reaction) !==
+      isAttackAvoidanceReaction(selectedReaction)
+  );
+}
 
 export function isDamageBlockReaction(
   reaction: MatchConfigurationReaction,

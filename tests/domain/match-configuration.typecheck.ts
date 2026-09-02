@@ -37,20 +37,22 @@ const invalidReactionTrigger: ReactionTrigger = "when-convenient";
 // @ts-expect-error Invented Reaction operations must not compile.
 const invalidReactionOperation: ReactionOperationType = "call-handler";
 
-void validActionType;
-void validInteraction;
-void validOperation;
-void validCardinality;
-void validLifeState;
-void validRelation;
-void validCheck;
-void validReactionTrigger;
-void validReactionOperation;
-void configuration;
-void invalidActionType;
-void invalidInteraction;
-void invalidOperation;
-void invalidCardinality;
-void invalidCheck;
-void invalidReactionTrigger;
-void invalidReactionOperation;
+export {
+  validActionType,
+  validInteraction,
+  validOperation,
+  validCardinality,
+  validLifeState,
+  validRelation,
+  validCheck,
+  validReactionTrigger,
+  validReactionOperation,
+  configuration,
+  invalidActionType,
+  invalidInteraction,
+  invalidOperation,
+  invalidCardinality,
+  invalidCheck,
+  invalidReactionTrigger,
+  invalidReactionOperation,
+};

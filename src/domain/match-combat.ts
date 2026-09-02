@@ -6,6 +6,7 @@ import {
 import { resolveAttackDamageAgainstCharacter } from "./match-ability-effects";
 import {
   damageBlockCapacity,
+  isAvoidanceConflict,
   isAttackAvoidanceReaction,
   isDamageBlockReaction,
   isVanishProtected,
@@ -39,7 +40,6 @@ type ReactionChoiceOptions = {
   readonly physicalAttack?: boolean;
 };
 type ReactionInputList = readonly ProtectiveReactionInput[];
-
 type ValidatedBasicAttack = {
   readonly attack: BasicAttack;
   readonly inputLegs: readonly BasicAttackLegInput[];
@@ -146,20 +146,14 @@ export function getProtectiveReactionChoices(
                   "Vanish prevents protective Reactions for this physically ignored character.",
                 ]
               : [];
-          const avoidanceConflict = selectedReactions.some((selection) => {
-            if (selection.protectedCharacterId !== protectedCharacterId) {
-              return false;
-            }
-            const selectedReaction = MATCH_CONFIGURATION.reactions.find(
-              ({ id }) => id === selection.reactionId,
-            );
-            return (
-              !alreadySelected &&
-              selectedReaction !== undefined &&
-              isAttackAvoidanceReaction(reaction) !==
-                isAttackAvoidanceReaction(selectedReaction)
-            );
-          });
+          const avoidanceConflict = selectedReactions.some((selection) =>
+            isAvoidanceConflict({
+              selection,
+              protectedCharacterId,
+              alreadySelected,
+              reaction,
+            }),
+          );
           const conflictWarning = avoidanceConflict
             ? [
                 "Attack Avoidance cannot combine with another protective Reaction against this character.",
@@ -452,6 +446,7 @@ function resolveProtectiveReactions(context: {
   ).results;
 }
 
+/** @returns The redirect reaction, or undefined when no redirect was selected. */
 function redirectReactionForAttack(
   inputLegs: readonly BasicAttackLegInput[],
   reactions: readonly ProtectiveReactionResolution[],
@@ -677,9 +672,15 @@ function resultingEliminations(
   return [...new Set([...state.eliminatedTeams, ...newlyEliminated])];
 }
 
+/** @returns The winning team, or null when elimination has not decided it. */
 function matchOutcome(eliminatedTeams: readonly Team[]): MatchOutcome {
-  if (eliminatedTeams.length !== 1) return null;
-  return eliminatedTeams[0] === "Drow" ? "Duergar" : "Drow";
+  let outcome: string | null = null;
+  if (eliminatedTeams.length === 1) {
+    const [eliminatedTeam] = eliminatedTeams;
+    if (eliminatedTeam === "Drow") outcome = "Duergar";
+    if (eliminatedTeam === "Duergar") outcome = "Drow";
+  }
+  return outcome as MatchOutcome;
 }
 
 function buildAttackLegs(context: {
@@ -690,11 +691,10 @@ function buildAttackLegs(context: {
 }): ActionResolvedEvent["attackLegs"] {
   const { inputLegs, sourceCharacterId, attack, redirectReaction } = context;
   return inputLegs.map((leg, index) => {
-    const towardCharacterId = (() => {
-      if (index === 0) return null;
-      if (redirectReaction?.ownerCharacterId) return sourceCharacterId;
-      return null;
-    })();
+    const towardCharacterId =
+      index > 0 && redirectReaction?.ownerCharacterId
+        ? sourceCharacterId
+        : null;
     return {
       sequence: index + 1,
       kind: index === 0 ? "initial" : "redirected",

@@ -14,12 +14,62 @@ import {
 } from "../../src/domain/match";
 
 const persistedRecordSchema = z.record(z.string(), z.unknown());
+type UnknownValueList = readonly unknown[];
+
+function rewriteStoreRecords(
+  transaction: IDBTransaction,
+  storeName: string,
+  configurationVersion: string,
+): void {
+  const store = transaction.objectStore(storeName);
+  const request = store.getAll();
+  request.addEventListener("success", () => {
+    for (const value of persistedRecordSchema.array().parse(request.result)) {
+      const rewritten = { ...value, configurationVersion };
+      if (storeName === "metadata") store.put(rewritten, "current-match");
+      else store.put(rewritten);
+    }
+  });
+}
+
+function rewriteRetiredSnapshots(
+  store: IDBObjectStore,
+  request: IDBRequest,
+): void {
+  request.addEventListener("success", () => {
+    const retiredKeys = new Set([
+      "spentReactionIds",
+      "majorActionUsed",
+      "eliminatedTeams",
+      "acknowledgedEliminations",
+      "outcome",
+    ]);
+    const snapshots = request.result as UnknownValueList;
+    for (const rawSnapshot of snapshots) {
+      const source = rawSnapshot as Record<string, unknown>;
+      const retiredSchemaSnapshot = Object.fromEntries(
+        Object.entries(source).filter(([key]) => !retiredKeys.has(key)),
+      );
+      store.put({ ...retiredSchemaSnapshot, schemaVersion: 2 });
+    }
+  });
+}
+
+function requestResults(
+  requests: readonly { readonly result: unknown }[],
+): readonly unknown[] {
+  return requests.map((request) => {
+    const { result } = request;
+    return result;
+  });
+}
 
 function createQueueCursor(values: readonly number[]) {
   let position = 0;
   return {
-    take(): number | undefined {
+    take(): number {
       const value = values[position];
+      if (value === undefined) throw new Error("Missing test random value.");
       position += 1;
       return value;
     },
@@ -30,9 +80,7 @@ export function randomQueue(values: readonly number[]): RandomSource {
   const cursor = createQueueCursor(values);
   return {
     nextUint32: () => {
-      const value = cursor.take();
-      if (value === undefined) throw new Error("Missing test random value.");
-      return value;
+      return cursor.take();
     },
   };
 }
@@ -103,25 +151,9 @@ export function rewriteStoredConfigurationVersion(
           ["metadata", "snapshots", "events"],
           "readwrite",
         );
-        const rewriteAll = (storeName: string) => {
-          const store = transaction.objectStore(storeName);
-          const request = store.getAll();
-          request.addEventListener("success", () => {
-            for (const value of persistedRecordSchema
-              .array()
-              .parse(request.result)) {
-              const rewritten = { ...value, configurationVersion };
-              if (storeName === "metadata") {
-                store.put(rewritten, "current-match");
-              } else {
-                store.put(rewritten);
-              }
-            }
-          });
-        };
-        rewriteAll("metadata");
-        rewriteAll("snapshots");
-        rewriteAll("events");
+        rewriteStoreRecords(transaction, "metadata", configurationVersion);
+        rewriteStoreRecords(transaction, "snapshots", configurationVersion);
+        rewriteStoreRecords(transaction, "events", configurationVersion);
         transaction.addEventListener(
           "complete",
           () => {
@@ -182,25 +214,7 @@ export function rewriteCurrentSnapshotAsRetiredSchema(
         });
         const snapshots = transaction.objectStore("snapshots");
         const snapshotRequest = snapshots.getAll();
-        snapshotRequest.addEventListener("success", () => {
-          // Retired schema-2 combat keys are omitted by rebuilding instead of
-          // mutating the parsed record.
-          const retiredKeys: ReadonlySet<string> = new Set([
-            "spentReactionIds",
-            "majorActionUsed",
-            "eliminatedTeams",
-            "acknowledgedEliminations",
-            "outcome",
-          ]);
-          for (const rawSnapshot of snapshotRequest.result) {
-            const source = rawSnapshot as Record<string, unknown>;
-            const retiredSchemaSnapshot: Record<string, unknown> =
-              Object.fromEntries(
-                Object.entries(source).filter(([key]) => !retiredKeys.has(key)),
-              );
-            snapshots.put({ ...retiredSchemaSnapshot, schemaVersion: 2 });
-          }
-        });
+        rewriteRetiredSnapshots(snapshots, snapshotRequest);
         transaction.addEventListener(
           "complete",
           () => {
@@ -316,8 +330,7 @@ export function readRawMatch(
         transaction.addEventListener(
           "complete",
           () => {
-            const results = requests.map(({ result }): unknown => result);
-            resolve(results);
+            resolve(requestResults(requests));
           },
           { once: true },
         );

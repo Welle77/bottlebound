@@ -203,13 +203,19 @@ test("the Setup controls and layout meet browser usability checks", async ({
   expect(checks.every(({ contrast }) => contrast >= 4.5)).toBe(true);
 
   const visibleButtonCount = await page.locator("button:visible").count();
+  type FocusedButton = {
+    readonly id: string | null;
+    readonly hasVisibleOutline: boolean;
+  };
   const keyboardFocusedButtons = new Set<string>();
   await page.locator("body").click({ position: { x: 1, y: 1 } });
   for (let index = 0; index < 20; index += 1) {
     await page.keyboard.press("Tab");
-    const focusedButton = await page.evaluate(() => {
+    const focusedButton = await page.evaluate<FocusedButton>(() => {
       const element = document.activeElement;
-      if (!(element instanceof HTMLButtonElement)) return null;
+      if (!(element instanceof HTMLButtonElement)) {
+        return { id: null, hasVisibleOutline: false };
+      }
       const style = getComputedStyle(element);
       return {
         id: element.id,
@@ -217,7 +223,7 @@ test("the Setup controls and layout meet browser usability checks", async ({
           style.outlineStyle !== "none" && parseFloat(style.outlineWidth) >= 4,
       };
     });
-    if (focusedButton) {
+    if (focusedButton.id !== null) {
       keyboardFocusedButtons.add(focusedButton.id);
       expect(focusedButton.hasVisibleOutline).toBe(true);
     }

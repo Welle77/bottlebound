@@ -86,9 +86,11 @@ describe("resolveAbility override-recording branches", () => {
       },
       stamp(1),
     );
-    const { abilityId: omittedAbilityId, ...legacyEvent } =
-      asResolution(resolved);
-    void omittedAbilityId;
+    const legacyEvent = Object.fromEntries(
+      Object.entries(asResolution(resolved)).filter(
+        ([key]) => key !== "abilityId",
+      ),
+    ) as Omit<ActionResolvedEvent, "abilityId">;
 
     expect(restoreStateFromEvents([...run.events, legacyEvent])).toEqual(
       resolved.state,

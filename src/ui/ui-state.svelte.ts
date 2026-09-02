@@ -76,7 +76,7 @@ export function createUiState(): UIStateStore {
 
   return {
     get state(): UIState {
-      void revision.value;
+      String(revision.value);
       return snapshot;
     },
     requestConfirmation(confirmation: Exclude<UiConfirmation, null>): void {
