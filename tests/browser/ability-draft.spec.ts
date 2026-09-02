@@ -318,7 +318,10 @@ test("utility ability resolves several policy-allowed targets in one resolution"
     page.getByText("Selections are filtered by the ability's target policy"),
   ).toBeVisible();
   await page.getByLabel(/Wizard · Drow/).check();
-  await page.getByLabel(/Ranger · Duergar/).check();
+  await expect(
+    page.locator("[data-eligible-targets]").getByLabel(/Ranger · Duergar/),
+  ).toHaveCount(0);
+  await page.getByLabel(/Paladin · Drow/).check();
   const record = page.getByRole("button", { name: "Record Action Resolution" });
   await expect(record).toBeEnabled();
   await record.click();
@@ -328,11 +331,11 @@ test("utility ability resolves several policy-allowed targets in one resolution"
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Wizard" }),
   ).toContainText("3/3");
-  // Battle Hymn records buffs without dealing damage: the Ranger stays
-  // unwounded at their printed 3 HP.
+  // Battle Hymn records buffs without dealing damage: the Paladin stays
+  // unwounded at their printed 5 HP.
   await expect(
-    page.locator("[data-active-order-row]", { hasText: "Ranger" }),
-  ).toContainText("3/3");
+    page.locator("[data-active-order-row]", { hasText: "Paladin" }),
+  ).toContainText("5/5");
 });
 
 test("downing the Active Character skips its slot and advances to usable controls", async ({

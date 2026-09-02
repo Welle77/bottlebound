@@ -73,7 +73,7 @@ describe("application-owned Match Configuration", () => {
       ownerCharacterId: "drow-bard",
       interaction: "ally",
       targetPolicy: {
-        relation: "any",
+        relation: "ally",
         cardinality: "all-in-range",
         lifeState: "active",
       },

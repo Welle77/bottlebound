@@ -234,7 +234,7 @@ export const abilities = [
     attackType: "None",
     interaction: "ally",
     targetPolicy: {
-      relation: "any",
+      relation: "ally",
       cardinality: "all-in-range",
       lifeState: "active",
     },

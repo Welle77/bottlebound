@@ -418,8 +418,8 @@
             </dd>
           </div>
           <div>
-            <dt>Slot</dt>
-            <dd>{view.activeSlot}</dd>
+            <dt>Movement</dt>
+            <dd>2 paces</dd>
           </div>
         </dl>
         <div

@@ -37,6 +37,9 @@ test("the referee starts, advances, wraps, and restores an Active Match", async 
   await expect(
     page.locator('[data-surface-order="actions"] button'),
   ).toHaveText(["Move", "Basic Attack", "Use Ability"]);
+  await expect(page.locator("[data-active-character]")).toContainText(
+    "2 paces",
+  );
   await expect(page.locator(".active-order thead th")).toHaveText([
     "Character",
     "Team",
