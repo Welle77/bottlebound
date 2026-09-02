@@ -91,8 +91,9 @@ describe("IndexedDbMatchStore", () => {
           progress.current,
           {
             sourceCharacterId: initiativeCharacterId(started.state, 0),
-            affectedCharacterIds: started.state.characters
+            affectedCharacterIds: progress.current.characters
               .filter(({ characterId }) => characterId.startsWith("duergar-"))
+              .filter(({ hp }) => hp !== 0)
               .map(({ characterId }) => characterId),
             physicalConfirmations: {
               range: true,

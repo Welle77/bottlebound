@@ -13,6 +13,7 @@ import {
 } from "./match-reaction-rules";
 import { applyDownedCleanup } from "./match-turn";
 import { nextActionCount } from "./match-types";
+import { buildAttackLegs } from "./match-combat-event";
 import type {
   ActionEffect,
   ActionResolvedEvent,
@@ -691,32 +692,6 @@ function matchOutcome(eliminatedTeams: readonly Team[]): MatchOutcome {
     if (eliminatedTeam === "Duergar") outcome = "Drow";
   }
   return outcome as MatchOutcome;
-}
-
-function buildAttackLegs(context: {
-  readonly inputLegs: readonly BasicAttackLegInput[];
-  readonly sourceCharacterId: CharacterId;
-  readonly attack: BasicAttack;
-  readonly redirectReaction: ProtectiveReactionResolution | undefined;
-}): ActionResolvedEvent["attackLegs"] {
-  const { inputLegs, sourceCharacterId, attack, redirectReaction } = context;
-  return inputLegs.map((leg, index) => {
-    const towardCharacterId =
-      index > 0 && redirectReaction?.ownerCharacterId
-        ? sourceCharacterId
-        : null;
-    return {
-      sequence: index + 1,
-      kind: index === 0 ? "initial" : "redirected",
-      sourceCharacterId,
-      attackId: attack.id,
-      rangePaces: attack.rangePaces,
-      redirectedByReactionId:
-        index === 0 ? null : (redirectReaction?.reactionId ?? null),
-      towardCharacterId,
-      affectedCharacterIds: [...leg.affectedCharacterIds],
-    };
-  });
 }
 
 export function resolveBasicAttack(

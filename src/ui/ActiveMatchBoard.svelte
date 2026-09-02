@@ -10,10 +10,8 @@
   } from "../domain/match";
   import { MATCH_CONFIGURATION } from "../domain/match";
   import CharacterName from "./CharacterName.svelte";
-  import ConfirmationDialog from "./ConfirmationDialog.svelte";
+  import ActiveMatchBoardFooter from "./ActiveMatchBoardFooter.svelte";
   import { outcomeLabel } from "./format";
-  import PriorSummaryCard from "./PriorSummaryCard.svelte";
-  import UndoConfirmation from "./UndoConfirmation.svelte";
   import {
     activeEffectStatuses,
     downedEffectStatus,
@@ -792,33 +790,10 @@
         </tbody>
       </table>
     </div>
-    {#if view.showEndGameControl}
-      <section
-        class="end-game-control"
-        aria-labelledby="end-game-heading"
-        data-surface-order="end-game"
-      >
-        <h3 id="end-game-heading">End Game</h3>
-        <p>Close the Match with the calculated winner and Decision Basis.</p>
-        <button
-          id="request-end-game"
-          class="secondary-action"
-          type="button"
-          onclick={requestEndGame}
-        >
-          End Game
-        </button>
-      </section>
-    {/if}
-    {#if view.summary}
-      <PriorSummaryCard />
-    {/if}
-    {#if uiState.state.confirmation === "undo"}
-      <UndoConfirmation />
-    {:else}
-      <!-- Converted confirmations (T08): the End Game preview and generic
-           dialogs as real markup. -->
-      <ConfirmationDialog />
-    {/if}
+    <ActiveMatchBoardFooter
+      showEndGameControl={view.showEndGameControl}
+      hasSummary={view.summary !== null}
+      {requestEndGame}
+    />
   </section>
 {/if}

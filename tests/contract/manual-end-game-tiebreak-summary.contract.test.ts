@@ -362,9 +362,6 @@ describe("Manual End Game Decision Basis contract", () => {
     const started = startMatch(generated.state, "2026-08-23T15:02:00.000Z");
     // Create elimination via 5 consecutive Basic Attacks against all Duergar (proven valid in store tests)
     const source = initiativeCharacterId(started.state, 0);
-    const duergarIds = MATCH_CONFIGURATION.characters
-      .filter((c) => c.team === "Duergar")
-      .map((c) => c.id);
     let current = started.state;
     const elimEvents: MatchEvent[] = [];
     for (let i = 0; i < 5; i += 1) {
@@ -372,7 +369,14 @@ describe("Manual End Game Decision Basis contract", () => {
         current,
         {
           sourceCharacterId: source,
-          affectedCharacterIds: duergarIds,
+          affectedCharacterIds: MATCH_CONFIGURATION.characters
+            .filter(({ team }) => team === "Duergar")
+            .filter(
+              ({ id }) =>
+                current.characters.find(({ characterId }) => characterId === id)
+                  ?.hp !== 0,
+            )
+            .map(({ id }) => id),
           physicalConfirmations: {
             range: true,
             lineOfSight: true,

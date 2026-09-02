@@ -25,6 +25,17 @@ import {
   simultaneousEliminationRun,
 } from "./match-test-support";
 
+function activeDuergarIds(state: ActiveMatchState): CharacterId[] {
+  return MATCH_CONFIGURATION.characters
+    .filter(({ team }) => team === "Duergar")
+    .filter(
+      ({ id }) =>
+        state.characters.find(({ characterId }) => characterId === id)?.hp !==
+        0,
+    )
+    .map(({ id }) => id);
+}
+
 describe("Active Match commands", () => {
   it("needs a complete initiative order and starts Round 1 at slot 1", () => {
     const setup = createSetup("match-1", "2026-08-22T14:00:00.000Z");
@@ -298,15 +309,7 @@ describe("Active Match commands", () => {
           progress.current,
           {
             sourceCharacterId,
-            affectedCharacterIds: MATCH_CONFIGURATION.characters
-              .filter(
-                ({ team, id }) =>
-                  team === "Duergar" &&
-                  progress.current.characters.find(
-                    ({ characterId }) => characterId === id,
-                  )?.hp !== 0,
-              )
-              .map(({ id }) => id),
+            affectedCharacterIds: activeDuergarIds(progress.current),
             physicalConfirmations: {
               range: true,
               lineOfSight: true,

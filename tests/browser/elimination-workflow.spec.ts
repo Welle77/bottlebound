@@ -3,6 +3,18 @@ import { expect, test, type Page } from "@playwright/test";
 type TeamName = "Drow" | "Duergar";
 type CharacterName = keyof typeof CHARACTER_BY_NAME;
 
+async function checkAvailableTargets(
+  page: Page,
+  targets: readonly string[],
+): Promise<void> {
+  for (const characterId of targets) {
+    const target = page.locator(
+      `[data-hit-character="${characterId}"]:not(:disabled)`,
+    );
+    if ((await target.count()) > 0) await target.check();
+  }
+}
+
 const TEAM_CHARACTERS = {
   Drow: [
     "drow-rogue",
@@ -58,9 +70,7 @@ async function eliminateOpposingTeam(page: Page): Promise<{
 
   for (let attack = 0; attack < 5; attack += 1) {
     await page.getByRole("button", { name: "Basic Attack" }).click();
-    for (const characterId of targets) {
-      await page.locator(`[data-hit-character="${characterId}"]`).check();
-    }
+    await checkAvailableTargets(page, targets);
     for (const label of [
       "Range is legal",
       "Line of Sight is legal",
@@ -81,9 +91,7 @@ async function eliminateOpposingTeam(page: Page): Promise<{
 
 async function recordAttack(page: Page, targets: readonly string[]) {
   await page.getByRole("button", { name: "Basic Attack", exact: true }).click();
-  for (const characterId of targets) {
-    await page.locator(`[data-hit-character="${characterId}"]`).check();
-  }
+  await checkAvailableTargets(page, targets);
   for (const label of [
     "Range is legal",
     "Line of Sight is legal",
