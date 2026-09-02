@@ -46,6 +46,8 @@ test("the referee starts, advances, wraps, and restores an Active Match", async 
     "HP",
     "Effects",
   ]);
+  await expect(page.locator('.active-order img[alt="Drow"]')).toHaveCount(6);
+  await expect(page.locator('.active-order img[alt="Duergar"]')).toHaveCount(6);
   await expect(page.locator('.active-order [data-label="Slot"]')).toHaveCount(
     0,
   );

@@ -299,7 +299,13 @@ describe("Active Match commands", () => {
           {
             sourceCharacterId,
             affectedCharacterIds: MATCH_CONFIGURATION.characters
-              .filter(({ team }) => team === "Duergar")
+              .filter(
+                ({ team, id }) =>
+                  team === "Duergar" &&
+                  progress.current.characters.find(
+                    ({ characterId }) => characterId === id,
+                  )?.hp !== 0,
+              )
               .map(({ id }) => id),
             physicalConfirmations: {
               range: true,

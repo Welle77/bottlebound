@@ -296,6 +296,12 @@ function validatePhysicalTargets(
         "Physical ability references an unknown affected character.",
       );
     }
+    const character = state.characters.find(
+      (candidate) => candidate.characterId === characterId,
+    );
+    if (character?.hp === 0) {
+      throw new Error("A physical Ability cannot target a Downed character.");
+    }
   }
 }
 

@@ -229,10 +229,12 @@ test("targeted-attack ability picks exactly one enemy and records Reactions atom
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Ranger" }),
   ).toContainText("3/3");
-  await page.getByRole("button", { name: "Use Ability" }).click();
   await expect(
-    page.locator("[data-ability-option]", { hasText: "Arcane Bolt" }),
-  ).toHaveCount(0);
+    page.getByRole("button", { name: "Use Ability" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Use Ability" }),
+  ).toHaveAttribute("title", "No abilities remaining");
 });
 
 test("physical-attack ability honors the confirmation toggle and skips every manual check when OFF", async ({
@@ -535,4 +537,18 @@ test("Rampage uses both normal actions without a referee override", async ({
   await expect(
     page.getByRole("button", { name: "Use Ability" }),
   ).toBeDisabled();
+});
+
+test("a Powerful Ability cannot be selected after a Basic Attack", async ({
+  page,
+}) => {
+  await startMatch(page);
+  await activateCharacter(page, "Rogue");
+  await page.getByRole("button", { name: "Basic Attack" }).click();
+  await page.getByLabel(/Ranger · Duergar/).check();
+  await completePhysicalChecks(page);
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
+
+  await page.getByRole("button", { name: "Use Ability" }).click();
+  await expect(page.getByRole("button", { name: "Use Vanish" })).toBeDisabled();
 });

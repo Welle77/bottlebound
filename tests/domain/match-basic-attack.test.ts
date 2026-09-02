@@ -201,6 +201,47 @@ describe("Active Match commands", () => {
     ).toThrow("Downed");
   });
 
+  it("rejects a Basic Attack against a Downed character", () => {
+    const setup = createSetup(
+      "match-downed-target",
+      "2026-08-22T14:00:00.000Z",
+    );
+    const generated = generateInitiative(
+      setup.state,
+      queuedRandom(19, 19, 18, 18, 17, 14, 12, 11, 12, 11, 11, 10),
+      "2026-08-22T14:01:00.000Z",
+    );
+    const started = startMatch(generated.state, "2026-08-22T14:02:00.000Z");
+    const sourceCharacterId = initiativeCharacterId(started.state, 0);
+    const downedTargetId = "duergar-ranger" as const;
+    const state = {
+      ...started.state,
+      characters: started.state.characters.map((character) =>
+        character.characterId === downedTargetId
+          ? { ...character, hp: 0 }
+          : character,
+      ),
+    };
+
+    expect(() =>
+      resolveBasicAttack(
+        state,
+        {
+          sourceCharacterId,
+          affectedCharacterIds: [downedTargetId],
+          physicalConfirmations: {
+            range: true,
+            lineOfSight: true,
+            legalBottleContact: true,
+            terrainContact: true,
+          },
+          majorActionOverride: null,
+        },
+        "2026-08-22T14:03:00.000Z",
+      ),
+    ).toThrow("cannot target a Downed character");
+  });
+
   it("replays an unavailable-version Action Resolution from its recorded evidence", () => {
     const setup = createSetup("match-historical", "2026-08-22T14:00:00.000Z");
     const generated = generateInitiative(

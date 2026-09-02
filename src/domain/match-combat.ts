@@ -136,6 +136,7 @@ export function getProtectiveReactionChoices(
             reaction.id,
             protectedCharacterId,
           );
+          const alreadySpent = state.spentReactionIds.includes(reaction.id);
           const alreadySelected = selectedReactions.some(
             ({ reactionId, protectedCharacterId: selectedId }) =>
               reactionId === reaction.id && selectedId === protectedCharacterId,
@@ -161,6 +162,7 @@ export function getProtectiveReactionChoices(
             : [];
           const capacityWarning =
             isDamageBlockReaction(reaction) &&
+            !alreadySpent &&
             !alreadySelected &&
             (selectedBlocks.get(protectedCharacterId) ?? 0) >=
               damageBlockCapacity(state, protectedCharacterId)
@@ -233,6 +235,16 @@ function resolveAttackContacts(
     )
   ) {
     throw new Error("Basic Attack references an unknown affected character.");
+  }
+  if (
+    affectedCharacterIds.some(
+      (characterId) =>
+        state.characters.find(
+          (character) => character.characterId === characterId,
+        )?.hp === 0,
+    )
+  ) {
+    throw new Error("A Basic Attack cannot target a Downed character.");
   }
   return { inputLegs, affectedCharacterIds };
 }

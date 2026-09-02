@@ -27,18 +27,41 @@
       ({ id }) => id === draft.sourceCharacterId,
     );
     if (!attackingCharacter) return null;
+    const deflectingPalmSelected = draft.reactions.some(
+      ({ reactionId }) => reactionId === "duergar-monk-deflecting-palm",
+    );
+    const redirectedAttacker = deflectingPalmSelected
+      ? MATCH_CONFIGURATION.characters.find(
+          ({ id }) => id === "duergar-monk",
+        )
+      : null;
+    const attackingTeam =
+      activeLegIndex > 0 && redirectedAttacker
+        ? redirectedAttacker.team
+        : attackingCharacter.team;
     const opposingTeam: Team =
-      attackingCharacter.team === "Drow" ? "Duergar" : "Drow";
+      attackingTeam === "Drow" ? "Duergar" : "Drow";
     const closedCharacterIds = new Set(
       draft.attackLegs.slice(0, activeLegIndex).flatMap((leg) => leg),
+    );
+    const hpByCharacter = new Map(
+      match.characters.map(({ characterId, hp }) => [characterId, hp]),
+    );
+    const maxHpByCharacter = new Map(
+      match.characters.map(({ characterId, currentMaxHp }) => [
+        characterId,
+        currentMaxHp,
+      ]),
     );
     return {
       draft,
       activeLegIndex,
       activeLeg,
       closedCharacterIds,
-      attackingTeam: attackingCharacter.team,
-      teamOrder: [opposingTeam, attackingCharacter.team] as const,
+      hpByCharacter,
+      maxHpByCharacter,
+      attackingTeam,
+      teamOrder: [opposingTeam, attackingTeam] as const,
     };
   });
 
@@ -104,14 +127,17 @@
                     .slice(0, model.activeLegIndex)
                     .findIndex((leg) => leg.includes(character.id)) + 1
                 : 0}
-              <label class="contact-control">
+              <label
+                class="contact-control"
+                class:contact-unavailable={model.hpByCharacter.get(character.id) === 0}
+              >
                 <!-- Single-line runs: getByLabel(REGEX) probes receive raw label
                      text, so every spec-matched phrase stays contiguous. -->
                 <input
                   type="checkbox"
                   data-hit-character={character.id}
                   checked={order >= 0}
-                  disabled={duplicate}
+                  disabled={duplicate || model.hpByCharacter.get(character.id) === 0}
                   onchange={handleContactChange(character.id)}
                 />
                 <!-- Single-line runs; interpolated separators keep their spaces
@@ -120,7 +146,7 @@
                   ><CharacterName
                     {character}
                     displayNames={match.displayNames}
-                  /> · {character.team}{#if duplicate}{DUPLICATE_SUFFIX}{closedLegIndex}{/if}</span
+                  /> · {character.team} · HP {model.hpByCharacter.get(character.id)}/{model.maxHpByCharacter.get(character.id)}{#if duplicate}{DUPLICATE_SUFFIX}{closedLegIndex}{/if}</span
                 >
               </label>
             {/each}

@@ -1,6 +1,7 @@
 import { MATCH_CONFIGURATION } from "../domain/match";
 import type { ActiveEffect, CharacterId } from "../domain/match";
 import shieldCheckIcon from "@phosphor-icons/core/bold/shield-check-bold.svg?url";
+import skullIcon from "@phosphor-icons/core/bold/skull-bold.svg?url";
 import warningOctagonIcon from "@phosphor-icons/core/bold/warning-octagon-bold.svg?url";
 
 export type ActiveEffectStatus = {
@@ -74,4 +75,14 @@ export function activeEffectStatuses(
       },
     ];
   });
+}
+
+export function downedEffectStatus(): ActiveEffectStatus {
+  return {
+    effectId: "downed",
+    name: "Downed",
+    summary: "This character is Downed and cannot take a turn.",
+    tone: "debuff",
+    icon: skullIcon,
+  };
 }

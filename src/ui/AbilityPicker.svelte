@@ -26,6 +26,9 @@
     return rulesCharacterOf(entry.characterId);
   });
   const abilities = $derived(unspentAbilities(match));
+  const actionsUsed = $derived(
+    match.actionsUsed ?? (match.majorActionUsed ? 1 : 0),
+  );
 
   function abilityMeta(ability: MatchConfigurationAbility): string {
     const label = ability.actionType === "powerful"
@@ -149,7 +152,8 @@
               class="secondary-action"
               type="button"
               data-open-ability={ability.id}
-              disabled={application.state.saving}
+              disabled={application.state.saving ||
+                (ability.actionType === "powerful" && actionsUsed > 0)}
               onclick={() => void openAbilityDraft(ability.id)}
             >
               {application.state.saving ? "Saving…" : `Use ${ability.name}`}

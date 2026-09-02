@@ -14,8 +14,16 @@
   import { outcomeLabel } from "./format";
   import PriorSummaryCard from "./PriorSummaryCard.svelte";
   import UndoConfirmation from "./UndoConfirmation.svelte";
-  import { activeEffectStatuses, type ActiveEffectStatus } from "./effect-status";
+  import {
+    activeEffectStatuses,
+    downedEffectStatus,
+    type ActiveEffectStatus,
+  } from "./effect-status";
+  import { unspentAbilities } from "./ability-draft";
   import { createPhysicalConfirmations } from "./ui-state";
+  import drowTeamIcon from "@phosphor-icons/core/bold/leaf-bold.svg?url";
+  import duergarTeamIcon from "@phosphor-icons/core/bold/mountains-bold.svg?url";
+  import abilityUnavailableIcon from "@phosphor-icons/core/bold/prohibit-bold.svg?url";
 
   const { application, uiState } = useConsoleContext();
 
@@ -107,6 +115,10 @@
     return hp;
   }
 
+  function teamIconOf(team: Team): string {
+    return team === "Drow" ? drowTeamIcon : duergarTeamIcon;
+  }
+
   function buildBoardRows(
     match: ActiveMatchState,
     nextSlot: number,
@@ -134,10 +146,10 @@
         team: character.team,
         hp,
         maxHp: characterState.currentMaxHp,
-        effectStatuses: activeEffectStatuses(
-          match.activeEffects,
-          entry.characterId,
-        ),
+        effectStatuses: [
+          ...(hp === 0 ? [downedEffectStatus()] : []),
+          ...activeEffectStatuses(match.activeEffects, entry.characterId),
+        ],
         turnLabel,
         turnKey: turnLabel.toLowerCase(),
       };
@@ -226,6 +238,7 @@
     const activeHp = requireHp(hpByCharacter, activeEntry.characterId);
     const nextHp = requireHp(hpByCharacter, nextEntry.characterId);
     const actionsUsed = match.actionsUsed ?? (match.majorActionUsed ? 1 : 0);
+    const abilitiesAvailable = unspentAbilities(match).length > 0;
     return {
       match,
       activeSlot: activeEntry.slot,
@@ -239,6 +252,7 @@
       nextMaxHp: requireHp(maxHpByCharacter, nextEntry.characterId),
       activeDowned,
       actionsUsed,
+      abilitiesAvailable,
       moveAvailable: moveIsAvailable(match, saving, activeDowned),
       rows,
       saving,
@@ -508,6 +522,7 @@
           disabled={view.saving ||
             !view.combatAvailable ||
             view.activeDowned ||
+            !view.abilitiesAvailable ||
             (view.match.actionsUsed ?? (view.match.majorActionUsed ? 1 : 0)) >=
               2 ||
             view.match.eliminatedTeams.length === 2}
@@ -515,8 +530,14 @@
             ? undefined
             : "combat-version-status"}
           onclick={openAbilityPicker}
+          title={view.abilitiesAvailable ? undefined : "No abilities remaining"}
         >
-          Use Ability
+          Use Ability{#if !view.abilitiesAvailable}<img
+              class="action-button-icon"
+              src={abilityUnavailableIcon}
+              alt=""
+              aria-hidden="true"
+            />{/if}
         </button>
       </div>
     {/if}
@@ -721,7 +742,16 @@
                   displayNames={view.match.displayNames}
                 />
               </th>
-              <td data-label="Team">{row.team}</td>
+              <td data-label="Team" aria-label={row.team}>
+                <img
+                  class="team-icon"
+                  class:team-icon-drow={row.team === "Drow"}
+                  class:team-icon-duergar={row.team === "Duergar"}
+                  src={teamIconOf(row.team)}
+                  alt={row.team}
+                  title={row.team}
+                />
+              </td>
               <td data-label="HP" class:critical-hp={row.hp === 1}
                 >{row.hp}/{row.maxHp}</td
               >

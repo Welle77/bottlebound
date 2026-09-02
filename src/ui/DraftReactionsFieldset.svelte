@@ -35,7 +35,7 @@
       readonly id: CharacterId;
       readonly name: string;
     };
-    readonly warning: string;
+    readonly warnings: readonly string[];
     readonly override: boolean;
     readonly disabled: boolean;
     readonly selected: boolean;
@@ -50,9 +50,11 @@
     readonly lineOfSight: string;
     readonly rulesText: string;
     readonly rows: readonly ReactionRow[];
+    readonly unavailable: boolean;
   };
 
   const DEFLECTING_PALM_REACTION_ID = "duergar-monk-deflecting-palm";
+  const ATTACK_AVOIDANCE_WARNING = "Attack Avoidance cannot combine";
   let openReactionId = $state<ReactionId | null>(null);
 
   const model = $derived.by(() => {
@@ -71,13 +73,18 @@
         ({ id }) => id === choice.reactionId,
       );
       if (!reaction) return null;
+      const visibleWarnings = choice.warnings.filter(
+        (warning) => !warning.startsWith(ATTACK_AVOIDANCE_WARNING),
+      );
       return {
         reactionId: choice.reactionId,
         protectedCharacterId: choice.protectedCharacterId,
         protectedCharacter: rulesCharacterOf(choice.protectedCharacterId),
-        warning: choice.warnings.join(" "),
+        warnings: visibleWarnings,
         override: override && choice.overrideAllowed,
-        disabled: !choice.overrideAllowed,
+        disabled:
+          !choice.overrideAllowed ||
+          choice.warnings.some((warning) => warning.endsWith("is already spent.")),
         selected: draft.reactions.some(
           ({ reactionId, protectedCharacterId }) =>
             reactionId === choice.reactionId &&
@@ -92,7 +99,12 @@
         return row ? [row] : [];
       });
     const overrides = choices
-      .filter(({ eligible, overrideAllowed }) => !eligible && overrideAllowed)
+      .filter(
+        ({ eligible, overrideAllowed, warnings }) =>
+          !eligible &&
+          overrideAllowed &&
+          !warnings.some((warning) => warning.endsWith("is already spent.")),
+      )
       .flatMap((choice) => {
         const row = rowOf(choice, true);
         return row ? [row] : [];
@@ -108,11 +120,25 @@
         const row = rowOf(choice, false);
         return row ? [row] : [];
       });
+    const spent = choices
+      .filter(
+        ({ eligible, warnings }) =>
+          !eligible &&
+          warnings.some((warning) => warning.endsWith("is already spent.")),
+      )
+      .flatMap((choice) => {
+        const row = rowOf(choice, false);
+        return row ? [row] : [];
+      });
     const groupsOf = (rows: readonly ReactionRow[]): readonly ReactionGroup[] =>
       MATCH_CONFIGURATION.reactions.flatMap((reaction) => {
-        const groupRows = rows.filter(
-          ({ reactionId }) => reactionId === reaction.id,
-        );
+        const groupRows = [
+          ...new Map(
+            rows
+              .filter(({ reactionId }) => reactionId === reaction.id)
+              .map((row) => [row.protectedCharacterId, row]),
+          ).values(),
+        ];
         if (groupRows.length === 0) return [];
         const owner = MATCH_CONFIGURATION.characters.find(
           ({ id }) => id === reaction.ownerCharacterId,
@@ -128,11 +154,12 @@
             lineOfSight: reaction.lineOfSight,
             rulesText: reaction.rulesText,
             rows: groupRows,
+            unavailable: groupRows.every(({ disabled }) => disabled),
           },
         ];
       });
     return {
-      eligible: groupsOf([...eligible, ...avoidanceConflicts]),
+      eligible: groupsOf([...eligible, ...avoidanceConflicts, ...spent]),
       overrides: groupsOf(overrides),
     };
   });
@@ -198,16 +225,16 @@
     <span>Protect <CharacterName
         character={row.protectedCharacter}
         displayNames={match.displayNames}
-      />{#if row.warning}<small
-          >{row.warning} Override records the referee decision.</small
-        >{/if}</span
+      />{#if row.warnings.length > 0}{#each row.warnings as warning (warning)}<small
+          >{warning.endsWith("is already spent.") ? "Already used." : warning}{row.override ? " Override records the referee decision." : ""}</small
+        >{/each}{/if}</span
     >
   </label>
 {/snippet}
 
 {#snippet reactionGroup(group: ReactionGroup)}
   <section
-    class="reaction-group"
+    class="reaction-group{group.unavailable ? ' reaction-unavailable' : ''}"
     role="group"
     aria-labelledby={`reaction-group-${group.reactionId}`}
   >

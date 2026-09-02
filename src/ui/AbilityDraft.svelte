@@ -137,7 +137,6 @@
       overridden: rows.filter(
         (row) => !row.candidate.blocked && row.candidate.reasons.length > 0,
       ),
-      blockedCount: rows.filter((row) => row.candidate.blocked).length,
       continueLabel:
         b.ability.interaction === "targeted-attack"
           ? "Choose Reactions"
@@ -490,14 +489,6 @@
             {/each}
           </div>
         </details>
-      {/if}
-      {#if targeting.blockedCount > 0}
-        <!-- Single-line run: this sentence stays one contiguous phrase. -->
-        <p class="device-note">
-          {targeting.blockedCount} character{targeting.blockedCount === 1
-            ? " is"
-            : "s are"} unavailable because an absolute rule blocks the selection.
-        </p>
       {/if}
       <div class="match-actions">
         <button

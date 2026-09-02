@@ -408,30 +408,33 @@ test("Attack Avoidance conflict stays disabled until the referee deselects it", 
   await expect(divineShield).toBeChecked();
 });
 
-test("a spent protective Reaction needs a clear recorded Override", async ({
+test("a spent protective Reaction stays visible but disabled", async ({
   page,
 }) => {
   await startMatch(page);
-  for (let attack = 1; attack <= 2; attack += 1) {
-    await page.getByRole("button", { name: "Basic Attack" }).click();
-    await page.getByLabel(/Ranger · Duergar/).check();
-    if (attack === 2) {
-      await expect(
-        reactionChoice(page, "Divine Shield · Paladin", "Ranger"),
-      ).toBeHidden();
-      await page
-        .getByText("Override unavailable Reactions", { exact: true })
-        .click();
-    }
-    await reactionChoice(page, "Divine Shield · Paladin", "Ranger").check();
-    await completePhysicalChecks(page);
-    if (attack === 2) {
-      await expect(page.getByLabel(/Record referee override/)).toHaveCount(0);
-    }
-    await page
-      .getByRole("button", { name: "Record Action Resolution" })
-      .click();
-  }
+  await page.getByRole("button", { name: "Basic Attack" }).click();
+  await page.getByLabel(/Ranger · Duergar/).check();
+  await reactionChoice(page, "Divine Shield · Paladin", "Ranger").check();
+  await completePhysicalChecks(page);
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
+
+  await page.getByRole("button", { name: "Basic Attack" }).click();
+  await page.getByLabel(/Ranger · Duergar/).check();
+  const spentDivineShield = reactionChoice(
+    page,
+    "Divine Shield · Paladin",
+    "Ranger",
+  );
+  await expect(spentDivineShield).toBeVisible();
+  await expect(spentDivineShield).toBeDisabled();
+  await expect(
+    page.getByRole("group", { name: "Divine Shield · Paladin" }),
+  ).toContainText("Already used.");
+  await expect(
+    page.getByText("Override unavailable Reactions", { exact: true }),
+  ).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Cancel draft" }).click();
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Ranger" }),
   ).toContainText("3/3");
@@ -441,11 +444,7 @@ test("Deflecting Palm closes the first leg and records later unique contacts", a
   page,
 }) => {
   await startMatch(page);
-  if (
-    (await page.locator("[data-active-character] h3").textContent()) === "Monk"
-  ) {
-    await page.getByRole("button", { name: "Finish Turn" }).click();
-  }
+  await activateCharacter(page, "Rogue");
   await page.getByRole("button", { name: "Basic Attack" }).click();
   const sourceName = (
     (await page.locator(".attack-profile p").first().textContent()) ?? ""
@@ -460,6 +459,12 @@ test("Deflecting Palm closes the first leg and records later unique contacts", a
   await expect(
     page.getByRole("heading", { name: "Redirected Attack Leg 2" }),
   ).toBeVisible();
+  await expect(page.locator('[data-contact-team="Duergar"] h3')).toContainText(
+    "Your team",
+  );
+  await expect(page.locator('[data-contact-team="Drow"] h3')).toContainText(
+    "Opposing team",
+  );
   await expect(page.locator("[data-closed-attack-leg]")).toContainText("Monk");
   await expect(page.locator("[data-redirect-evidence]")).toContainText(
     new RegExp(
