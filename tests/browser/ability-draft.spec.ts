@@ -104,6 +104,80 @@ test("self ability confirms in one step, spends, persists, and undoes exactly", 
   ).toBeVisible();
 });
 
+test("active effect icons open spell details over the initiative list", async ({
+  page,
+}) => {
+  await startMatch(page);
+  await activateCharacter(page, "Fighter");
+  await page.getByRole("button", { name: "Use Ability" }).click();
+  await page.getByRole("button", { name: "Use Hold the Line" }).click();
+  const recipients = page
+    .getByRole("group", { name: "Targets in range" })
+    .getByRole("checkbox");
+  for (let index = 0; index < (await recipients.count()); index += 1) {
+    await recipients.nth(index).check();
+  }
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
+
+  const fighterRow = page.locator("[data-active-order-row]", {
+    hasText: "Fighter",
+  });
+  const icon = fighterRow.getByRole("button", {
+    name: "Buff: Hold the Line",
+  });
+  await expect(icon).toBeVisible();
+  await expect(icon.locator(".effect-status-glyph")).toBeVisible();
+  const before = await page.locator(".active-order").evaluate((table) => ({
+    height: table.getBoundingClientRect().height,
+    rows: table.querySelectorAll("tbody tr").length,
+  }));
+
+  await icon.click();
+  const tooltip = page.getByRole("tooltip", { name: "Hold the Line" });
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toContainText(
+    "The next attack against this character deals 1 less damage.",
+  );
+  const tooltipBounds = await tooltip.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    return { right: bounds.right, width: bounds.width, viewport: innerWidth };
+  });
+  expect(tooltipBounds.right).toBeLessThanOrEqual(tooltipBounds.viewport);
+  expect(tooltipBounds.width).toBeLessThanOrEqual(240);
+  expect(
+    await tooltip.locator("p").evaluate((paragraph) => {
+      return paragraph.scrollWidth <= paragraph.clientWidth;
+    }),
+  ).toBe(true);
+  await expect(page.locator(".active-order")).toHaveJSProperty(
+    "offsetHeight",
+    before.height,
+  );
+  await expect(page.locator(".active-order tbody tr")).toHaveCount(before.rows);
+});
+
+test("debuff effect icons identify the active spell", async ({ page }) => {
+  await startMatch(page);
+  await activateCharacter(page, "Ranger");
+  await page.getByRole("button", { name: "Use Ability" }).click();
+  await page.getByRole("button", { name: "Use Hunter’s Mark" }).click();
+  await page.getByLabel(/Paladin · Drow/).check();
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
+
+  const paladinRow = page.locator("[data-active-order-row]", {
+    hasText: "Paladin",
+  });
+  const icon = paladinRow.getByRole("button", {
+    name: "Debuff: Hunter’s Mark",
+  });
+  await expect(icon).toBeVisible();
+  await expect(icon.locator(".effect-status-glyph")).toBeVisible();
+  await icon.click();
+  await expect(
+    page.getByRole("tooltip", { name: "Hunter’s Mark" }),
+  ).toContainText("The next successful damaging attack deals +1 damage.");
+});
+
 test("Shapeshift confirmation closes the draft and applies its result", async ({
   page,
 }) => {

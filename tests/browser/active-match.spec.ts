@@ -44,6 +44,7 @@ test("the referee starts, advances, wraps, and restores an Active Match", async 
     "Character",
     "Team",
     "HP",
+    "Effects",
   ]);
   await expect(page.locator('.active-order [data-label="Slot"]')).toHaveCount(
     0,

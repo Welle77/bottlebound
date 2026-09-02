@@ -363,6 +363,77 @@ dd {
   background: #211f1c;
 }
 
+.active-order th:last-child,
+.effect-status-cell {
+  width: 4.5rem;
+  text-align: center;
+}
+
+.effect-status-list {
+  display: inline-flex;
+  max-width: 4rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+.effect-status-icon {
+  display: inline-grid;
+  width: 1.75rem;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  min-height: 1.75rem;
+  place-items: center;
+  border: 0.125rem solid currentColor;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.effect-status-glyph {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.effect-status-buff {
+  color: #0e291a;
+  background: var(--ready);
+}
+
+.effect-status-debuff {
+  color: #3b0b05;
+  background: var(--danger);
+}
+
+.effect-status-tooltip {
+  position: fixed;
+  z-index: 2;
+  width: min(14rem, calc(100vw - 1rem));
+  border: 0.125rem solid var(--accent);
+  border-radius: 0.5rem;
+  padding: var(--space-2);
+  color: #fff;
+  background: var(--surface);
+  box-shadow: 0 0.75rem 1.5rem rgb(0 0 0 / 40%);
+  transform: translate(-50%, -100%);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.effect-status-tooltip h3,
+.effect-status-tooltip p:last-child {
+  margin-bottom: 0;
+}
+
+.effect-status-tooltip h3 {
+  font-size: 1rem;
+}
+
+.effect-status-tooltip p {
+  margin-bottom: var(--space-2);
+}
+
 .elimination-result,
 .ended-result,
 .elimination-acknowledged {

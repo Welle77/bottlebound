@@ -14,6 +14,7 @@
   import { outcomeLabel } from "./format";
   import PriorSummaryCard from "./PriorSummaryCard.svelte";
   import UndoConfirmation from "./UndoConfirmation.svelte";
+  import { activeEffectStatuses, type ActiveEffectStatus } from "./effect-status";
   import { createPhysicalConfirmations } from "./ui-state";
 
   const { application, uiState } = useConsoleContext();
@@ -32,6 +33,7 @@
     readonly team: Team;
     readonly hp: number;
     readonly maxHp: number;
+    readonly effectStatuses: readonly ActiveEffectStatus[];
     readonly turnLabel: string;
     readonly turnKey: string;
   };
@@ -132,6 +134,10 @@
         team: character.team,
         hp,
         maxHp: characterState.currentMaxHp,
+        effectStatuses: activeEffectStatuses(
+          match.activeEffects,
+          entry.characterId,
+        ),
         turnLabel,
         turnKey: turnLabel.toLowerCase(),
       };
@@ -254,6 +260,26 @@
     const { match } = application.state;
     return match?.phase === "active" ? buildActiveMatchView(match) : null;
   });
+
+  let openEffectId = $state<string | null>(null);
+  let effectTooltipPosition = $state({ left: 0, top: 0 });
+
+  function toggleEffectTooltip(effectId: string, event: MouseEvent): void {
+    if (openEffectId === effectId) {
+      openEffectId = null;
+      return;
+    }
+    if (!(event.currentTarget instanceof HTMLButtonElement)) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    openEffectId = effectId;
+    effectTooltipPosition = {
+      left: Math.max(
+        120,
+        Math.min(bounds.left + bounds.width / 2, window.innerWidth - 120),
+      ),
+      top: Math.max(100, bounds.top - 8),
+    };
+  }
 
   async function recordMove(): Promise<void> {
     await application.recordMove();
@@ -683,6 +709,7 @@
             <th>Character</th>
             <th>Team</th>
             <th>HP</th>
+            <th>Effects</th>
           </tr>
         </thead>
         <tbody>
@@ -698,6 +725,38 @@
               <td data-label="HP" class:critical-hp={row.hp === 1}
                 >{row.hp}/{row.maxHp}</td
               >
+              <td data-label="Effects" class="effect-status-cell">
+                <span class="effect-status-list">
+                  {#each row.effectStatuses as effect (effect.effectId)}
+                    <button
+                      class="effect-status-icon"
+                      class:effect-status-buff={effect.tone === "buff"}
+                      class:effect-status-debuff={effect.tone === "debuff"}
+                      type="button"
+                      aria-label={`${effect.tone === "buff" ? "Buff" : "Debuff"}: ${effect.name}`}
+                      aria-controls={`effect-tooltip-${effect.effectId}`}
+                      aria-expanded={openEffectId === effect.effectId}
+                      onclick={(event) => toggleEffectTooltip(effect.effectId, event)}
+                    ><img
+                      class="effect-status-glyph"
+                      src={effect.icon}
+                      alt=""
+                    /></button>
+                    {#if openEffectId === effect.effectId}
+                      <div
+                        id={`effect-tooltip-${effect.effectId}`}
+                        class="effect-status-tooltip"
+                        role="tooltip"
+                        aria-label={effect.name}
+                        style={`left: ${String(effectTooltipPosition.left)}px; top: ${String(effectTooltipPosition.top)}px;`}
+                      >
+                        <h3>{effect.name}</h3>
+                        <p>{effect.summary}</p>
+                      </div>
+                    {/if}
+                  {/each}
+                </span>
+              </td>
             </tr>
           {/each}
         </tbody>
