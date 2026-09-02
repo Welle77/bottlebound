@@ -2,6 +2,7 @@
   import { useConsoleContext } from "./console-context";
   import {
     MATCH_CONFIGURATION,
+    vanishMovementPaces,
     type AbilityId,
     type CharacterId,
     type Team,
@@ -391,7 +392,7 @@
         : MATCH_CONFIGURATION.labels.standardAbility}
     </p>
     <p><strong>Range:</strong> {b.ability.range}</p>
-    <p><strong>Effect:</strong> {b.ability.rulesText}</p>
+    <p><strong>Effect:</strong> {b.ability.name === "Vanish" ? b.ability.rulesText.replace("up to twice the Rogue’s current Move allowance plus 2 paces", `up to ${String(vanishMovementPaces(b.match, b.sourceCharacter.id))} paces`) : b.ability.rulesText}</p>
   </div>
 {/snippet}
 

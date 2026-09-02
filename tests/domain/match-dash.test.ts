@@ -6,15 +6,43 @@ import {
   endMatch,
   finishTurn,
   generateInitiative,
+  normalMovementPaces,
   reopenMatch,
   resolveBasicAttack,
   restoreStateFromEvents,
   startMatch,
   undoLastEvent,
+  vanishMovementPaces,
 } from "../../src/domain/match";
+import {
+  advanceTo,
+  cast,
+  startedAuditMatch,
+} from "./match-rules-audit-fixtures";
 import { queuedRandom } from "./match-test-support";
 
 describe("Move", () => {
+  it("calculates movement modifiers and Vanish from the current Move allowance", () => {
+    const hymnRun = startedAuditMatch("movement-hymn");
+    cast(hymnRun, "drow-bard", {
+      abilityName: "Battle Hymn",
+      input: { targetCharacterIds: ["drow-rogue"] },
+      step: 1,
+    });
+    const hymnRogue = advanceTo(hymnRun, "drow-rogue");
+    expect(normalMovementPaces(hymnRogue, "drow-rogue")).toBe(3);
+    expect(vanishMovementPaces(hymnRogue, "drow-rogue")).toBe(8);
+
+    const frostbindRun = startedAuditMatch("movement-frostbind");
+    cast(frostbindRun, "drow-wizard", {
+      abilityName: "Frostbind",
+      input: { targetCharacterIds: ["duergar-ranger"] },
+      step: 1,
+    });
+    expect(normalMovementPaces(frostbindRun.state, "duergar-ranger")).toBe(1);
+    expect(vanishMovementPaces(frostbindRun.state, "duergar-ranger")).toBe(4);
+  });
+
   it("spends one of two actions and the active character's full movement", () => {
     const setup = createSetup("dash-match", "2026-08-31T07:32:00.000Z");
     const generated = generateInitiative(

@@ -2,6 +2,7 @@
   import { useConsoleContext } from "./console-context";
   import {
     getUndoPreview,
+    normalMovementPaces,
     type ActiveMatchState,
     type CharacterId,
     type InitiativeEntry,
@@ -227,6 +228,7 @@
       nextCharacter,
       activeHp,
       activeMaxHp: requireHp(maxHpByCharacter, activeEntry.characterId),
+      movementPaces: normalMovementPaces(match, activeEntry.characterId),
       nextHp,
       nextMaxHp: requireHp(maxHpByCharacter, nextEntry.characterId),
       activeDowned,
@@ -419,7 +421,7 @@
           </div>
           <div>
             <dt>Movement</dt>
-            <dd>2 paces</dd>
+            <dd>{view.movementPaces} paces</dd>
           </div>
         </dl>
         <div

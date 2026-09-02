@@ -290,7 +290,7 @@ HP 3 • Initiative +3 • Basic Attack: Melee — 2 paces
 | **Range**         | Self                                                                                                                                                                                                                                 |
 | **Line of Sight** | N/A                                                                                                                                                                                                                                  |
 | **Ball Required** | No                                                                                                                                                                                                                                   |
-| **Effect**        | Move the Rogue and bottle up to 4 paces as part of the ability. Until the beginning of the Rogue’s next turn, the Rogue cannot be affected by physically thrown balls. Vanish does not protect against non-physical Ability Attacks. |
+| **Effect**        | Move the Rogue and bottle up to twice the Rogue’s current Move allowance plus 2 paces as part of the ability. Until the beginning of the Rogue’s next turn, the Rogue cannot be affected by physically thrown balls. Vanish does not protect against non-physical Ability Attacks. |
 | **Duration**      | Until the beginning of the Rogue’s next turn.                                                                                                                                                                                        |
 
 #### Druid — Skirmisher

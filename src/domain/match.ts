@@ -60,7 +60,9 @@ export {
   acknowledgeElimination,
   dash,
   finishTurn,
+  normalMovementPaces,
   ruleSimultaneousElimination,
+  vanishMovementPaces,
 } from "./match-turn";
 
 export { endMatch, getEndGamePreview, reopenMatch } from "./match-endgame";

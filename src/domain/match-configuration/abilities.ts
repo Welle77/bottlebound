@@ -47,7 +47,7 @@ export const abilities = [
     lineOfSight: "N/A",
     ballRequired: "No",
     rulesText:
-      "Move the Rogue and bottle up to 4 paces as part of the ability. Until the beginning of the Rogue’s next turn, the Rogue cannot be affected by physically thrown balls. Vanish does not protect against non-physical Ability Attacks.",
+      "Move the Rogue and bottle up to twice the Rogue’s current Move allowance plus 2 paces as part of the ability. Until the beginning of the Rogue’s next turn, the Rogue cannot be affected by physically thrown balls. Vanish does not protect against non-physical Ability Attacks.",
     duration: "Until the beginning of the Rogue’s next turn.",
     manualChecks: [],
     operations: ["manual-movement-instruction"],

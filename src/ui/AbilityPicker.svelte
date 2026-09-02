@@ -3,6 +3,7 @@
   import type { AbilityId, CharacterId, MatchState } from "../domain/match";
   import {
     MATCH_CONFIGURATION,
+    vanishMovementPaces,
     type MatchConfigurationAbility,
   } from "../domain/match";
   import { rulesCharacterOf, unspentAbilities } from "./ability-draft";
@@ -27,6 +28,14 @@
 
   function abilityMeta(ability: MatchConfigurationAbility): string {
     return `${ability.actionType === "powerful" ? MATCH_CONFIGURATION.labels.powerfulAbility : MATCH_CONFIGURATION.labels.standardAbility} · Range ${ability.range}${ability.targetPolicy.lifeState === "active" ? " · Active targets" : ""}`;
+  }
+
+  function abilityRulesText(ability: MatchConfigurationAbility): string {
+    if (ability.name !== "Vanish") return ability.rulesText;
+    return ability.rulesText.replace(
+      "up to twice the Rogue’s current Move allowance plus 2 paces",
+      `up to ${String(vanishMovementPaces(match, activeRules.id))} paces`,
+    );
   }
 
   function findAbilityDraftContext(abilityId: AbilityId): {
@@ -121,7 +130,7 @@
           <div>
             <h3>{ability.name}</h3>
             <p class="ability-meta">{abilityMeta(ability)}</p>
-            <p class="ability-effect">{ability.rulesText}</p>
+            <p class="ability-effect">{abilityRulesText(ability)}</p>
           </div>
           <div class="match-actions">
             <button

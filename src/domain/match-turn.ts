@@ -31,6 +31,43 @@ type EffectBoundaryContext = {
   readonly stateSequence: number;
 };
 
+export type NormalMovementPaces = 1 | 2 | 3;
+
+/** Returns the active character's normal Move allowance before spending it. */
+export function normalMovementPaces(
+  state: ActiveMatchState,
+  characterId: CharacterId,
+): NormalMovementPaces {
+  const movementEffects = state.activeEffects.filter(
+    (effect) =>
+      effect.kind === "movement-cap" &&
+      effect.affectedCharacterId === characterId,
+  );
+  const restricted = movementEffects.some(
+    ({ abilityId }) =>
+      abilityId === "drow-wizard-frostbind" ||
+      abilityId === "duergar-warlock-hex",
+  );
+  if (restricted) return 1;
+  const enhanced = movementEffects.some(
+    ({ abilityId }) =>
+      abilityId === "drow-bard-battle-hymn" ||
+      abilityId === "duergar-cleric-blessing-of-battle",
+  );
+  return enhanced ? 3 : 2;
+}
+
+/** Returns Vanish's ability-granted movement from the current Move allowance. */
+export function vanishMovementPaces(
+  state: ActiveMatchState,
+  characterId: CharacterId,
+): 4 | 6 | 8 {
+  const movement = normalMovementPaces(state, characterId);
+  if (movement === 1) return 4;
+  if (movement === 2) return 6;
+  return 8;
+}
+
 function isSimultaneousEliminationOutcome(value: unknown): boolean {
   return value === "draw" || (typeof value === "string" && isTeam(value));
 }
