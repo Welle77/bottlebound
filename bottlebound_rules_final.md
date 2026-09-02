@@ -63,7 +63,7 @@ Roles are descriptive labels only. They do not grant extra rules, bonuses, damag
 
 **Round:** A full pass through the fixed initiative order. Downed characters are skipped. A revived character returns to its original initiative position.
 
-**Action:** One of two things a character may do on its turn. A Basic Attack, Standard Ability, Powerful Ability, or Move uses one action.
+**Action:** One of two things a character may do on its turn. A Basic Attack, Move, or Standard Ability uses one action. A Powerful Ability uses both actions.
 
 **Line of Sight: Bottle-to-bottle visibility, as judged by the referee. Partial natural cover may still allow Line of Sight; complete or insufficient visibility blocks it. There is no fixed percentage test.**
 
@@ -93,7 +93,7 @@ Active: A character that is not Downed.
 
 ## 7. Turn Structure & Movement
 
-**On each turn, a character has two actions. A Move, Basic Attack, Standard Ability, or Powerful Ability uses one action. Any two actions may be taken in either order.**
+**On each turn, a character has two actions. A Move, Basic Attack, or Standard Ability uses one action. A Powerful Ability uses both actions and must be the first action of the turn. Any two one-action choices may be taken in either order.**
 
 - Normal movement may be 0, 1, or 2 natural walking paces and may change direction between paces.
 
@@ -107,7 +107,7 @@ Normal movement must follow a safe legal path. A bottle may not finish outside t
 
 - A character may use any two valid actions, including two Basic Attacks, two Abilities, two Moves, or any combination of them.
 
-- A Powerful Ability uses one action. It does not grant normal movement unless its card explicitly says so. Movement explicitly granted by the Powerful Ability itself is still allowed.
+- A Powerful Ability uses both actions and is available only before the character spends an action. It does not grant normal movement unless its card explicitly says so. Movement explicitly granted by the Powerful Ability itself is still allowed.
 
 - A character may take zero, one, or two actions.
 
@@ -169,7 +169,7 @@ If a temporary effect is written to expire on the source character’s next turn
 
 3\. A projectile-redirection Reaction interrupts the ball at the moment of contact. The redirected ball then continues as the same attack, with the same source, hard range, and attached ball effects; later legal hits are resolved normally.
 
-4\. For each affected character, calculate all applicable damage increases and attached effects, then apply selected Damage Blocks, Rage, and Attack Avoidance.
+4\. For each affected character, calculate all applicable damage increases and attached effects, then apply selected Damage Blocks, Hold the Line, and Attack Avoidance.
 
 5\. Finalize damage and effects separately for each affected character.
 
@@ -183,7 +183,7 @@ If a temporary effect is written to expire on the source character’s next turn
 
 2\. Allow legal Reactions.
 
-3\. Calculate increases, selected Damage Blocks, Rage, and Attack Avoidance.
+3\. Calculate increases, selected Damage Blocks, Hold the Line, and Attack Avoidance.
 
 4\. Finalize damage and effects.
 
@@ -199,7 +199,7 @@ If a temporary effect is written to expire on the source character’s next turn
 
 - Partial damage reduction is legal. Final damage cannot be below 0.
 
-- A Damage Block reduces one point of an affected character’s remaining damage. Calculate useful Damage Block capacity from incoming damage after all increases and before Rage, independently for each character. Current HP and overkill do not reduce that capacity. A Damage Block preserves the legal hit and its attached effects.
+- A Damage Block reduces one point of an affected character’s remaining damage. Calculate useful Damage Block capacity from incoming damage after all increases and before Hold the Line, independently for each character. Current HP and overkill do not reduce that capacity. A Damage Block preserves the legal hit and its attached effects.
 
 - Attack Avoidance prevents damage and attached effects against its owner after its trigger. Attack Avoidance and Damage Blocks cannot both protect one character from the same attack.
 
@@ -383,7 +383,7 @@ HP 3 • Initiative +0 • Basic Attack: Ranged — 6 paces
 
 ##### \[ \] Arcane Bolt
 
-| **Type**          | Powerful                                                                                                                                                                                                                |
+| **Type**          | Standard                                                                                                                                                                                                                |
 |-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Target**        | 1 enemy character                                                                                                                                                                                                       |
 | **Attack Type**   | Ability Attack                                                                                                                                                                                                          |
@@ -430,8 +430,8 @@ HP 3 • Initiative +2 • Basic Attack: Ranged — 6 paces
 | **Range**         | 4 paces                                                                                                                                                                                                                                                                           |
 | **Line of Sight** | No                                                                                                                                                                                                                                                                                |
 | **Ball Required** | No                                                                                                                                                                                                                                                                                |
-| **Effect**        | At activation, every living Drow ally within 4 paces, including the Bard, receives the buff. Each affected character may move up to 3 paces with a Move action instead of 2 on its next turn. This does not grant an extra action. Characters who later enter the radius do not gain the buff. |
-| **Duration**      | Each affected character’s next turn.                                                                                                                                                                                                                                              |
+| **Effect**        | At activation, every living Drow ally within 4 paces, including the Bard, receives +1 Move for the rest of the Match unless that character becomes Downed. This does not grant an extra action. Characters who later enter the radius do not gain the buff. A Downed character loses this bonus and Revival does not restore it. If a movement restriction applies, the more restrictive allowance wins. |
+| **Duration**      | Until the recipient becomes Downed.                                                                                                                                                                                                                                              |
 
 ### DUERGAR
 
@@ -453,7 +453,7 @@ HP 3 • Initiative +3 • Basic Attack: Ranged — 6 paces
 
 ##### \[ \] Deadeye
 
-| **Type**          | Powerful                                                                                                                                                                                                                |
+| **Type**          | Standard                                                                                                                                                                                                                |
 |-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Target**        | 1 enemy character                                                                                                                                                                                                       |
 | **Attack Type**   | Ability Attack                                                                                                                                                                                                          |
@@ -495,17 +495,17 @@ HP 4 • Initiative +3 • Basic Attack: Melee — 2 paces
 
 HP 4 • Initiative +1 • Basic Attack: Melee — 2 paces
 
-##### \[ \] Second Wind
+##### \[ \] Hold the Line
 
-| **Type**          | Standard                                           |
+| **Type**          | Powerful                                           |
 |-------------------|----------------------------------------------------|
-| **Target**        | Self                                               |
+| **Target**        | Fighter and every living Duergar ally within 2 paces |
 | **Attack Type**   | None                                               |
-| **Range**         | Self                                               |
+| **Range**         | 2 paces                                            |
 | **Line of Sight** | N/A                                                |
 | **Ball Required** | No                                                 |
-| **Effect**        | Restore 1 HP, up to the Fighter’s maximum of 4 HP. Second Wind cannot be activated at full HP. |
-| **Duration**      | Immediate.                                         |
+| **Effect**        | At activation, fixed recipients reduce the first attack’s remaining damage against each of them by 1 until the beginning of the Fighter’s next turn. Legal hits and attached effects still resolve. The effect ends separately when a recipient becomes Downed and Revival does not restore it. |
+| **Duration**      | Until the beginning of the Fighter’s next turn or until used. |
 
 ##### \[ \] Shield Wall
 
@@ -535,17 +535,17 @@ HP 5 • Initiative +1 • Basic Attack: Melee — 2 paces
 | **Effect**        | Make one physical throw. Each legal bottle hit takes 1 damage and is forced up to 2 paces directly away from the Barbarian, stopping at the furthest legal position. After Reactions are resolved, apply the forced movement before checking whether Brutal Shove’s finalized damage Downs that character; if it reaches 0 HP, lay the bottle flat at its new position. Forced movement does not consume the target’s normal movement and is not modified by movement bonuses or restrictions. Bottles may not overlap or leave the battlefield. An already-Downed bottle is never moved by Brutal Shove. |
 | **Duration**      | Immediate.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
-##### \[ \] Rage
+##### \[ \] Rampage
 
-| **Type**          | Standard                                                                                                                                                                                                                                                                                                                                                  |
+| **Type**          | Powerful                                                                                                                                                                                                                                                                                                                                                  |
 |-------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Target**        | Self                                                                                                                                                                                                                                                                                                                                                      |
-| **Attack Type**   | None                                                                                                                                                                                                                                                                                                                                                      |
-| **Range**         | Self                                                                                                                                                                                                                                                                                                                                                      |
+| **Attack Type**   | Melee                                                                                                                                                                                                                                                                                                                                                      |
+| **Range**         | 2 paces                                                                                                                                                                                                                                                                                                                                                      |
 | **Line of Sight** | N/A                                                                                                                                                                                                                                                                                                                                                       |
-| **Ball Required** | No                                                                                                                                                                                                                                                                                                                                                        |
-| **Effect**        | Until the beginning of the Barbarian’s next turn, watch the first attack that would still deal at least 1 damage to the Barbarian after all damage increases and other prevention or reductions are applied. Reduce that remaining damage by 1, then consume Rage. If another effect reduces the attack to 0 before Rage is needed, Rage is not consumed. |
-| **Duration**      | Until the beginning of the Barbarian’s next turn or until used.                                                                                                                                                                                                                                                                                           |
+| **Ball Required** | Yes                                                                                                                                                                                                                                                                                                                                                       |
+| **Effect**        | Move the Barbarian up to twice its current Move allowance, then make one physical melee throw from the new position. Each legal bottle hit takes 1 damage and is pushed up to 2 paces directly away from the Barbarian under the Brutal Shove movement rules. A Rampage with no legal bottle hit remains valid and spent. Movement restrictions and bonuses affect the movement allowance. |
+| **Duration**      | Immediate.                                                                                                                                                                                                                                                                                                                                                  |
 
 #### Warlock — Spellcaster
 
@@ -565,7 +565,7 @@ HP 3 • Initiative +0 • Basic Attack: Ranged — 6 paces
 
 ##### \[ \] Eldritch Blast
 
-| **Type**          | Powerful                                                                                                                                                                                                                |
+| **Type**          | Standard                                                                                                                                                                                                                |
 |-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Target**        | 1 enemy character                                                                                                                                                                                                       |
 | **Attack Type**   | Ability Attack                                                                                                                                                                                                          |
@@ -588,12 +588,12 @@ HP 3 • Initiative +0 • Basic Attack: Ranged — 6 paces
 | **Range**         | 4 paces                                                                                                                                                                                                         |
 | **Line of Sight** | No                                                                                                                                                                                                              |
 | **Ball Required** | No                                                                                                                                                                                                              |
-| **Effect**        | The target may move up to 3 paces instead of 2 with a Move action on its next turn. This does not grant an additional action. If the target is also subject to a movement restriction, the more restrictive maximum applies. |
-| **Duration**      | The target’s next turn.                                                                                                                                                                                         |
+| **Effect**        | The target receives +1 Move for the rest of the Match unless the target becomes Downed. If a movement restriction applies, the more restrictive allowance wins. Revival does not restore this bonus. |
+| **Duration**      | Until the recipient becomes Downed.                                                                                                                                                                                         |
 
 ##### \[ \] Revivify
 
-| **Type**          | Powerful                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **Type**          | Standard                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 |-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Target**        | 1 Downed ally                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | **Attack Type**   | None                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -607,14 +607,14 @@ HP 3 • Initiative +0 • Basic Attack: Ranged — 6 paces
 
 | Rule                 | Summary                                                                                                                                                              |
 |----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Turn**             | Two actions. Move, Basic Attack, Standard Ability, or Powerful Ability each use one action. Any two actions may be combined. |
+| **Turn**             | Two actions. Move, Basic Attack, or Standard Ability uses one action; a Powerful Ability uses both and must be first. Any two one-action choices may be combined. |
 | **Move**             | Move up to 2 paces. A character may Move twice in one turn. |
-| **Powerful**         | Uses one action. It does not grant normal movement unless its card says so. |
+| **Powerful**         | Uses both actions and is available only before an action is spent. It does not grant normal movement unless its card says so. |
 | **Basic Melee**      | Physical throw, 1 damage, hard max 2 paces.                                                                                                                          |
 | **Basic Ranged**     | Physical throw, 1 damage, hard max 6 paces.                                                                                                                          |
 | **Physical throws**  | No declared target. Every legal bottle hit takes the attack’s damage/effects; any bottle contact counts. Terrain contact or leaving the battlefield ends the attack. |
 | **Reaction**         | Outside turn economy. One Reaction per character per triggering attack; ally-protection Reactions may trigger even if the reactor was not hit.                       |
-| **Damage**           | Add all increases → Damage Blocks → Rage → Attack Avoidance → finalize → subtract HP. Minimum 0.                                                                    |
+| **Damage**           | Add all increases → Damage Blocks → Hold the Line → Attack Avoidance → finalize → subtract HP. Minimum 0.                                                                    |
 | **Combos**           | Different legal effects stack. No universal total-damage cap.                                                                                                        |
 | **Downed**           | 0 HP immediately. Lay bottle flat; remove temporary effects on that character.                                                                                       |
 | **Revival**          | 1 HP, same position, original initiative. Act later this round only if that initiative slot has not passed; spent abilities stay spent.                              |

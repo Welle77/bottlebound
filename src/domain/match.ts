@@ -61,6 +61,7 @@ export {
   dash,
   finishTurn,
   normalMovementPaces,
+  rampageMovementPaces,
   ruleSimultaneousElimination,
   vanishMovementPaces,
 } from "./match-turn";

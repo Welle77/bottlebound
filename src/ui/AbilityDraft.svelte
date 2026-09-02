@@ -388,8 +388,8 @@
     <p>
       <strong>{MATCH_CONFIGURATION.labels.ability}:</strong>
       {b.ability.name} · {b.ability.actionType === "powerful"
-        ? MATCH_CONFIGURATION.labels.powerfulAbility
-        : MATCH_CONFIGURATION.labels.standardAbility}
+        ? `${MATCH_CONFIGURATION.labels.powerfulAbility} · 2 actions`
+        : `${MATCH_CONFIGURATION.labels.standardAbility} · 1 action`}
     </p>
     <p><strong>Range:</strong> {b.ability.range}</p>
     <p><strong>Effect:</strong> {b.ability.name === "Vanish" ? b.ability.rulesText.replace("up to twice the Rogue’s current Move allowance plus 2 paces", `up to ${String(vanishMovementPaces(b.match, b.sourceCharacter.id))} paces`) : b.ability.rulesText}</p>

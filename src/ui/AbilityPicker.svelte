@@ -3,6 +3,7 @@
   import type { AbilityId, CharacterId, MatchState } from "../domain/match";
   import {
     MATCH_CONFIGURATION,
+    rampageMovementPaces,
     vanishMovementPaces,
     type MatchConfigurationAbility,
   } from "../domain/match";
@@ -27,15 +28,26 @@
   const abilities = $derived(unspentAbilities(match));
 
   function abilityMeta(ability: MatchConfigurationAbility): string {
-    return `${ability.actionType === "powerful" ? MATCH_CONFIGURATION.labels.powerfulAbility : MATCH_CONFIGURATION.labels.standardAbility} · Range ${ability.range}${ability.targetPolicy.lifeState === "active" ? " · Active targets" : ""}`;
+    const label = ability.actionType === "powerful"
+      ? `${MATCH_CONFIGURATION.labels.powerfulAbility} · 2 actions`
+      : `${MATCH_CONFIGURATION.labels.standardAbility} · 1 action`;
+    return `${label} · Range ${ability.range}${ability.targetPolicy.lifeState === "active" ? " · Active targets" : ""}`;
   }
 
   function abilityRulesText(ability: MatchConfigurationAbility): string {
-    if (ability.name !== "Vanish") return ability.rulesText;
-    return ability.rulesText.replace(
-      "up to twice the Rogue’s current Move allowance plus 2 paces",
-      `up to ${String(vanishMovementPaces(match, activeRules.id))} paces`,
-    );
+    if (ability.name === "Vanish") {
+      return ability.rulesText.replace(
+        "up to twice the Rogue’s current Move allowance plus 2 paces",
+        `up to ${String(vanishMovementPaces(match, activeRules.id))} paces`,
+      );
+    }
+    if (ability.name === "Rampage") {
+      return ability.rulesText.replace(
+        "up to twice its current Move allowance",
+        `up to ${String(rampageMovementPaces(match, activeRules.id))} paces`,
+      );
+    }
+    return ability.rulesText;
   }
 
   function findAbilityDraftContext(abilityId: AbilityId): {

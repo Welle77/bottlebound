@@ -9,6 +9,7 @@ import {
 import {
   cast,
   CONFIRMATIONS,
+  advanceTo,
   play,
   startedAuditMatch,
 } from "./match-rules-audit-fixtures";
@@ -101,27 +102,20 @@ describe("Damage Blocks", () => {
     });
   });
 
-  it("applies Damage Blocks before Rage and preserves physical attached effects", () => {
-    const run = startedAuditMatch("damage-block-rage-effects");
-    const raged = cast(run, "duergar-barbarian", {
-      abilityName: "Rage",
+  it("applies Hold the Line before damage and preserves the legal hit", () => {
+    const run = startedAuditMatch("damage-block-hold-the-line");
+    cast(run, "duergar-fighter", {
+      abilityName: "Hold the Line",
       step: 1,
     });
     const markedAttack = play(
       run,
       resolveBasicAttack(
-        raged,
+        advanceTo(run, "duergar-ranger"),
         {
-          sourceCharacterId: "duergar-barbarian",
-          affectedCharacterIds: ["duergar-barbarian"],
+          sourceCharacterId: "duergar-ranger",
+          affectedCharacterIds: ["duergar-fighter"],
           physicalConfirmations: CONFIRMATIONS,
-          reactions: [
-            {
-              reactionId: "drow-paladin-divine-shield",
-              protectedCharacterId: "duergar-barbarian",
-              override: null,
-            },
-          ],
           majorActionOverride: null,
         },
         "2026-08-24T09:03:00.000Z",
@@ -131,13 +125,13 @@ describe("Damage Blocks", () => {
       MatchEvent,
       { readonly type: "ActionResolved" }
     >;
-    expect(markedEvent.effects[0]).toMatchObject({ damage: 0, hpAfter: 5 });
-    expect(markedEvent.expiredEffects.map(({ kind }) => kind)).not.toContain(
-      "rage",
+    expect(markedEvent.effects[0]).toMatchObject({ damage: 0, hpAfter: 4 });
+    expect(markedEvent.expiredEffects.map(({ kind }) => kind)).toContain(
+      "hold-the-line",
     );
-    expect(markedAttack.activeEffects.some(({ kind }) => kind === "rage")).toBe(
-      true,
-    );
+    expect(
+      markedAttack.activeEffects.some(({ kind }) => kind === "hold-the-line"),
+    ).toBe(false);
 
     const effectRun = startedAuditMatch("damage-block-attached-effect");
     const backstab = cast(effectRun, "drow-rogue", {

@@ -23,10 +23,10 @@ export type AbilityName =
   | "Deadeye"
   | "Stunning Strike"
   | "Deflecting Palm"
-  | "Second Wind"
+  | "Hold the Line"
   | "Shield Wall"
   | "Brutal Shove"
-  | "Rage"
+  | "Rampage"
   | "Hex"
   | "Eldritch Blast"
   | "Blessing of Battle"
@@ -156,7 +156,7 @@ export type MatchConfigurationRefereeInstructions = {
   readonly manualPhysicalConfirmations: string;
 };
 
-export type MatchConfigurationVersion = "BB20260902A1";
+export type MatchConfigurationVersion = "BB20260902A3";
 
 export type MatchConfiguration = {
   readonly version: MatchConfigurationVersion;

@@ -68,6 +68,17 @@ export function vanishMovementPaces(
   return 8;
 }
 
+/** Returns Rampage's ability-granted movement from the current Move allowance. */
+export function rampageMovementPaces(
+  state: ActiveMatchState,
+  characterId: CharacterId,
+): 2 | 4 | 6 {
+  const movement = normalMovementPaces(state, characterId);
+  if (movement === 1) return 2;
+  if (movement === 2) return 4;
+  return 6;
+}
+
 function isSimultaneousEliminationOutcome(value: unknown): boolean {
   return value === "draw" || (typeof value === "string" && isTeam(value));
 }
@@ -171,62 +182,91 @@ function effectAnchorId(effect: ActiveEffect): CharacterId {
     : effect.affectedCharacterId;
 }
 
+function expiresAtBeginningOfNextTurn(
+  effect: ActiveEffect,
+  context: EffectBoundaryContext,
+): boolean {
+  const anchorSlot = characterSlot(
+    context.slotToCharacter,
+    effectAnchorId(effect),
+  );
+  if (effect.duration.anchor === "affected") {
+    return (
+      characterSlot(context.slotToCharacter, effect.affectedCharacterId) ===
+      context.activeSlot
+    );
+  }
+  return anchorSlot !== undefined && context.pathSlots.includes(anchorSlot);
+}
+
+function expiresAtEndOfNextTurn(
+  effect: ActiveEffect,
+  context: EffectBoundaryContext,
+): boolean {
+  if (effect.duration.anchor !== "affected") return false;
+  const affectedSlot = characterSlot(
+    context.slotToCharacter,
+    effect.affectedCharacterId,
+  );
+  // The effect outlives the turn in which it was applied and expires at the
+  // end of the affected character's NEXT turn. A self-hit or self-buff
+  // therefore survives this finish.
+  const appliedInThisTurn =
+    effect.appliedSequence === context.stateSequence &&
+    affectedSlot === context.fromSlot;
+  return affectedSlot === context.fromSlot && !appliedInThisTurn;
+}
+
+function expiresAtBeginningOfNextScheduledSlot(
+  effect: ActiveEffect,
+  context: EffectBoundaryContext,
+): boolean {
+  if (effect.duration.anchor !== "source") return false;
+  const anchorSlot = characterSlot(
+    context.slotToCharacter,
+    effectAnchorId(effect),
+  );
+  return anchorSlot !== undefined && context.pathSlots.includes(anchorSlot);
+}
+
+function expiresAtEndOfNextScheduledSlot(
+  effect: ActiveEffect,
+  context: EffectBoundaryContext,
+): boolean {
+  if (effect.duration.anchor !== "source") return false;
+  const anchorSlot = characterSlot(
+    context.slotToCharacter,
+    effectAnchorId(effect),
+  );
+  // Hunter's Mark and Hex expire when the source's next scheduled position
+  // ends or is skipped, never during the turn in which they were applied.
+  const appliedInThisTurn =
+    effect.appliedSequence === context.stateSequence &&
+    context.fromSlot === anchorSlot;
+  const positionEnds =
+    anchorSlot !== undefined &&
+    (context.fromSlot === anchorSlot ||
+      context.skippedSlots.includes(anchorSlot));
+  return positionEnds && !appliedInThisTurn;
+}
+
 function effectExpiresAtBoundary(
   effect: ActiveEffect,
   context: EffectBoundaryContext,
 ): boolean {
-  const {
-    activeSlot,
-    fromSlot,
-    skippedSlots,
-    pathSlots,
-    slotToCharacter,
-    stateSequence,
-  } = context;
-  const trigger = effect.duration.boundaryTrigger;
-  const anchorId = effectAnchorId(effect);
-  const anchorSlot = characterSlot(slotToCharacter, anchorId);
-  if (trigger === undefined) return false;
-  if (
-    trigger === "beginning-of-next-turn" &&
-    effect.duration.anchor === "affected"
-  ) {
-    return (
-      characterSlot(slotToCharacter, effect.affectedCharacterId) === activeSlot
-    );
+  switch (effect.duration.boundaryTrigger) {
+    case "beginning-of-next-turn":
+      return expiresAtBeginningOfNextTurn(effect, context);
+    case "end-of-next-turn":
+      return expiresAtEndOfNextTurn(effect, context);
+    case "beginning-of-next-scheduled-slot":
+      return expiresAtBeginningOfNextScheduledSlot(effect, context);
+    case "end-of-next-scheduled-slot":
+      return expiresAtEndOfNextScheduledSlot(effect, context);
+    case undefined:
+    default:
+      return false;
   }
-  if (trigger === "end-of-next-turn" && effect.duration.anchor === "affected") {
-    const affectedSlot = characterSlot(
-      slotToCharacter,
-      effect.affectedCharacterId,
-    );
-    // The effect outlives the turn in which it was applied and expires at the
-    // end of the affected character's NEXT turn. A self-hit or self-buff
-    // therefore survives this finish.
-    const appliedInThisTurn =
-      effect.appliedSequence === stateSequence && affectedSlot === fromSlot;
-    return affectedSlot === fromSlot && !appliedInThisTurn;
-  }
-  if (
-    trigger === "beginning-of-next-scheduled-slot" &&
-    effect.duration.anchor === "source"
-  ) {
-    return anchorSlot !== undefined && pathSlots.includes(anchorSlot);
-  }
-  if (
-    trigger === "end-of-next-scheduled-slot" &&
-    effect.duration.anchor === "source"
-  ) {
-    // Hunter's Mark and Hex expire when the source's next scheduled position
-    // ends or is skipped, never during the turn in which they were applied.
-    const appliedInThisTurn =
-      effect.appliedSequence === stateSequence && fromSlot === anchorSlot;
-    const positionEnds =
-      anchorSlot !== undefined &&
-      (fromSlot === anchorSlot || skippedSlots.includes(anchorSlot));
-    return positionEnds && !appliedInThisTurn;
-  }
-  return false;
 }
 
 function partitionEffectsAtBoundary(

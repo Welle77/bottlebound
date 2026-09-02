@@ -17,7 +17,7 @@
   // react to the runes store instead of being swapped as the legacy
   // actionDraftPanel() template. Review rows run through the shared damage
   // pipeline via the unchanged attackPreviewRow() helper, so a marked,
-  // raged, Vanished, or protected contact shows exactly the finalized damage
+  // marked, Vanished, or protected contact shows exactly the finalized damage
   // and effect consumption that confirming records. Since T10 they render as
   // real markup through CharacterName instead of hosted template strings.
   type ActiveView = Extract<MatchState, { readonly phase: "active" }>;
@@ -107,7 +107,7 @@
     if (!b || b.draft.step !== "review") return null;
     const { match, draft, attack } = b;
     const affectedCharacterIds = draft.attackLegs.flat();
-    // Review rows run through the shared damage pipeline, so a marked, raged,
+    // Review rows run through the shared damage pipeline, so a marked,
     // Vanished, or protected contact shows exactly the finalized damage and
     // effect consumption that confirming records.
     const hitRows = draft.attackLegs.flatMap((leg, legIndex) =>

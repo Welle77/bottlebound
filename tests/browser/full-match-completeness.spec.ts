@@ -117,20 +117,10 @@ test("one named Match mixes Basic Attack, every ability interaction, undo, and E
     ).toContainText("2/3");
   };
 
-  const rageSelfAbility: Script = async (workingPage) => {
-    await workingPage.getByRole("button", { name: "Use Ability" }).click();
-    await workingPage.getByRole("button", { name: "Use Rage" }).click();
-    // Self abilities record in one step from the picker.
-    await expect(
-      workingPage.locator("[data-active-order-row]", { hasText: "Barbarian" }),
-    ).toContainText("5/5");
-  };
-
   const pendingRoundOne: [string, Script][] = [
     ["Silk", silkBackstab],
     ["Vesper", vesperBlessing],
     ["Stone", stoneBasicAttack],
-    ["Barbarian", rageSelfAbility],
   ];
   for (
     let attempt = 0;

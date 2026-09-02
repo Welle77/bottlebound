@@ -194,22 +194,22 @@ QUICK_TEXT = {
     "Divine Shield": ("REACTION • SELF / ALLY • 3 PACES", "Damage Block: reduce that character’s remaining damage by 1. The hit and attached effects still resolve."),
     "Frostbind": ("STANDARD • ENEMY • 6 PACES • LOS", "On the target’s next turn, all movement is limited to 1 pace. They still take actions normally."),
     "Misty Escape": ("REACTION • SELF", "Attack Avoidance: take no damage or attached effects from the attack, then immediately move up to 2 paces."),
-    "Arcane Bolt": ("POWERFUL • ENEMY • 6 PACES • LOS", "Deal 1 automatic damage. No throw. Reactions can still prevent or modify it."),
+    "Arcane Bolt": ("STANDARD • ENEMY • 6 PACES • LOS", "Deal 1 automatic damage. No throw. Reactions can still prevent or modify it."),
     "Mirror Veil": ("REACTION • SELF", "Attack Avoidance: take no damage or attached effects from the attack against you."),
     "Inspiring Words": ("STANDARD • SELF / ALLY • 4 PACES", "Restore 1 HP. Cannot target a Downed character. No Line of Sight needed."),
-    "Battle Hymn": ("POWERFUL • ALL DROW • 4 PACES", "Every living Drow ally currently in range may move up to 3 paces with a Move action next turn."),
+    "Battle Hymn": ("POWERFUL • ALL DROW • 4 PACES", "Every living Drow ally currently in range receives +1 Move for the rest of the Match. Downing removes the bonus; Revival does not restore it."),
     "Hunter’s Mark": ("STANDARD • ENEMY • 6 PACES • LOS", "The next damaging attack against the target deals +1 damage. Expires at your next initiative if unused."),
-    "Deadeye": ("POWERFUL • ENEMY • 8 PACES • LOS", "Deal 1 automatic damage. No throw. Reactions can still prevent or modify it."),
+    "Deadeye": ("STANDARD • ENEMY • 8 PACES • LOS", "Deal 1 automatic damage. No throw. Reactions can still prevent or modify it."),
     "Stunning Strike": ("STANDARD • THROW • 2 PACES", "Hit bottles take 1 damage and cannot use a Powerful Ability next turn. Allies can be hit too."),
     "Deflecting Palm": ("REACTION • SELF • PHYSICAL HIT", "Attack Avoidance: take no damage or attached effects, then redirect that same ball toward the thrower."),
-    "Second Wind": ("STANDARD • SELF", "Restore 1 HP, up to your maximum of 4 HP."),
+    "Hold the Line": ("POWERFUL • FIGHTER + DUERGAR • 2 PACES", "At activation, fixed recipients reduce the first attack’s remaining damage against each of them by 1 until the Fighter’s next turn. Downing removes protection; Revival does not restore it."),
     "Shield Wall": ("REACTION • SELF / ALLY • 2 PACES", "Damage Block: reduce that character’s remaining damage by 1. The hit and attached effects still resolve."),
     "Brutal Shove": ("STANDARD • THROW • 2 PACES", "Hit bottles take 1 damage and are pushed up to 2 paces directly away. Allies can be hit too."),
-    "Rage": ("STANDARD • SELF", "Until your next turn, reduce the first attack that would damage you by 1."),
+    "Rampage": ("POWERFUL • THROW • 2 PACES", "Move up to twice your current Move, then throw. Hit bottles take 1 damage and are pushed up to 2 paces directly away."),
     "Hex": ("STANDARD • ENEMY • 6 PACES • LOS", "The next damaging attack against the target deals +1 damage; then their movement is capped at 1 pace next turn. Expires at your next initiative if unused."),
-    "Eldritch Blast": ("POWERFUL • ENEMY • 6 PACES • LOS", "Deal 1 automatic damage. No throw. Reactions can still prevent or modify it."),
-    "Blessing of Battle": ("STANDARD • ALLY • 4 PACES", "On their next turn, the ally may move up to 3 paces with a Move action. No Line of Sight needed."),
-    "Revivify": ("POWERFUL • DOWNED ALLY • 3 PACES", "Revive the ally at 1 HP. They return at their normal initiative; no immediate extra turn."),
+    "Eldritch Blast": ("STANDARD • ENEMY • 6 PACES • LOS", "Deal 1 automatic damage. No throw. Reactions can still prevent or modify it."),
+    "Blessing of Battle": ("STANDARD • ALLY • 4 PACES", "The ally receives +1 Move for the rest of the Match. Downing removes the bonus; Revival does not restore it. No Line of Sight needed."),
+    "Revivify": ("STANDARD • DOWNED ALLY • 3 PACES", "Revive the ally at 1 HP. They return at their normal initiative; no immediate extra turn."),
 }
 
 
@@ -232,6 +232,12 @@ def portrait_path(character: dict) -> Path:
 
 def add_ability(cell, ability: dict, palette: dict) -> None:
     meta_text, cue_text = QUICK_TEXT[ability["name"]]
+    if ability.get("Type") == "Standard":
+        meta_text = f"{meta_text} • 1 ACTION"
+    elif ability.get("Type") == "Powerful":
+        meta_text = f"{meta_text} • 2 ACTIONS"
+    else:
+        meta_text = f"{meta_text} • NO ACTION"
     heading = cell.add_paragraph()
     configure_paragraph(heading, before=3.5, after=1.1, line=1.0, keep=True)
     name_run = heading.add_run(f"[ ] {ability['name'].upper()}")

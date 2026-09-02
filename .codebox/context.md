@@ -65,6 +65,19 @@ _Avoid_: Finished game, archived Match
 An ability that a character legally activated during the Match; it stays unavailable for the rest of the Match, including after Revival.
 _Avoid_: Used ability, consumed ability
 
+**Standard Ability**:
+An Ability that costs one of the Active Character's two actions.
+_Avoid_: Normal Ability, one-slot Ability
+
+**Powerful Ability**:
+An Ability that costs both of the Active Character's actions. The character
+cannot use it after spending an action on that turn.
+_Avoid_: Two-slot Ability, ultimate
+
+**Reaction**:
+An Ability used in response to its written trigger. It does not cost an action.
+_Avoid_: Free Action, interrupt Ability
+
 **Display Name**:
 An optional referee-assigned name for one fixed Ruleset character inside one
 Match. It replaces the Ruleset name in displays while the Ruleset name stays

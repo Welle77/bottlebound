@@ -15,7 +15,7 @@ function expectDeeplyFrozen(value: unknown): void {
 
 describe("application-owned Match Configuration", () => {
   it("publishes the fixed roster, attacks, abilities, and Reactions", () => {
-    expect(MATCH_CONFIGURATION.version).toBe("BB20260902A1");
+    expect(MATCH_CONFIGURATION.version).toBe("BB20260902A3");
     expect(MATCH_CONFIGURATION.roster).toHaveLength(12);
     expect(MATCH_CONFIGURATION.roster[0]).toEqual({
       id: "drow-rogue",
@@ -54,7 +54,7 @@ describe("application-owned Match Configuration", () => {
     ).toMatchObject({
       id: "duergar-ranger-deadeye",
       ownerCharacterId: "duergar-ranger",
-      actionType: "powerful",
+      actionType: "standard",
       attackType: "Ability Attack",
       interaction: "targeted-attack",
       targetPolicy: {

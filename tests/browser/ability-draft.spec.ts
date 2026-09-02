@@ -51,33 +51,14 @@ test("self ability confirms in one step, spends, persists, and undoes exactly", 
   page,
 }) => {
   await startMatch(page);
-  // A Fighter-first initiative would aim the opening attack at the Fighter on
-  // their own turn, spending that turn's Major Action so Second Wind becomes
-  // an override-gated second Major Action. Move past such a start first so
-  // the flow stays deterministic whatever slot order was drawn.
-  const activeHeading = page.locator("[data-active-character] h3");
-  const firstName = ((await activeHeading.textContent()) ?? "").trim();
-  if (firstName.startsWith("Fighter")) {
-    await page.getByRole("button", { name: "Finish Turn" }).click();
-    await expect(activeHeading).not.toHaveText(firstName);
-  }
-
-  await page.getByRole("button", { name: "Basic Attack" }).click();
-  await page.getByLabel(/Fighter · Duergar/).check();
-  await completePhysicalChecks(page);
-  await page.getByRole("button", { name: "Record Action Resolution" }).click();
-  await expect(
-    page.locator("[data-active-order-row]", { hasText: "Fighter" }),
-  ).toContainText("3/4");
-
   await activateCharacter(page, "Fighter");
   await page.getByRole("button", { name: "Use Ability" }).click();
   await expect(
     page.getByRole("heading", { name: "Choose an Ability" }),
   ).toBeVisible();
   await expect(
-    page.locator("[data-ability-option]", { hasText: "Second Wind" }),
-  ).toContainText("Self");
+    page.locator("[data-ability-option]", { hasText: "Hold the Line" }),
+  ).toContainText("2 paces");
   await expect(page.locator(".ability-list .rules-context-link")).toHaveCount(
     0,
   );
@@ -85,11 +66,18 @@ test("self ability confirms in one step, spends, persists, and undoes exactly", 
     page.locator("[data-ability-option]", { hasText: "Shield Wall" }),
   ).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Use Second Wind" }).click();
+  await page.getByRole("button", { name: "Use Hold the Line" }).click();
+  const recipients = page
+    .getByRole("group", { name: "Targets in range" })
+    .getByRole("checkbox");
+  for (let index = 0; index < (await recipients.count()); index += 1) {
+    await recipients.nth(index).check();
+  }
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
   await expect(
     page.getByRole("heading", { name: "Active Match" }),
   ).toBeVisible();
-  await expect(page.getByText("Review Second Wind")).toHaveCount(0);
+  await expect(page.getByText("Review Hold the Line")).toHaveCount(0);
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Fighter" }),
   ).toContainText("4/4");
@@ -99,15 +87,9 @@ test("self ability confirms in one step, spends, persists, and undoes exactly", 
     page.locator("[data-active-order-row]", { hasText: "Fighter" }),
   ).toContainText("4/4");
 
-  await page.getByRole("button", { name: "Use Ability" }).click();
   await expect(
-    page.locator("[data-ability-option]", { hasText: "Second Wind" }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByText("Every non-Reaction Ability of Fighter is spent."),
-  ).toBeVisible();
-
-  await page.getByRole("button", { name: "Back" }).click();
+    page.getByRole("button", { name: "Use Ability" }),
+  ).toBeDisabled();
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(
     page.getByText(/Are you sure you want to undo this action/),
@@ -115,10 +97,10 @@ test("self ability confirms in one step, spends, persists, and undoes exactly", 
   await page.getByRole("button", { name: "Confirm Undo" }).click();
   await expect(
     page.locator("[data-active-order-row]", { hasText: "Fighter" }),
-  ).toContainText("3/4");
+  ).toContainText("4/4");
   await page.getByRole("button", { name: "Use Ability" }).click();
   await expect(
-    page.locator("[data-ability-option]", { hasText: "Second Wind" }),
+    page.locator("[data-ability-option]", { hasText: "Hold the Line" }),
   ).toBeVisible();
 });
 
@@ -455,22 +437,14 @@ test("an Arcane Bolt downs a 1 HP enemy whose initiative slot is then skipped", 
   }
 });
 
-test("two Abilities use both normal actions without a referee override", async ({
+test("Rampage uses both normal actions without a referee override", async ({
   page,
 }) => {
   await startMatch(page);
   await activateCharacter(page, "Barbarian");
 
   await page.getByRole("button", { name: "Use Ability" }).click();
-  await page.getByRole("button", { name: "Use Rage" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Active Match" }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Use Ability" })).toBeEnabled();
-
-  await page.getByRole("button", { name: "Use Ability" }).click();
-  await page.getByRole("button", { name: "Use Brutal Shove" }).click();
-  await page.getByLabel(/Ranger · Duergar/).check();
+  await page.getByRole("button", { name: "Use Rampage" }).click();
   await completePhysicalChecks(page);
   const confirm = page.getByRole("button", {
     name: "Record Action Resolution",
@@ -481,9 +455,6 @@ test("two Abilities use both normal actions without a referee override", async (
   await expect(
     page.getByRole("heading", { name: "Active Match" }),
   ).toBeVisible();
-  await expect(
-    page.locator("[data-active-order-row]", { hasText: "Ranger" }),
-  ).toContainText("2/3");
   await expect(
     page.getByRole("button", { name: "Basic Attack" }),
   ).toBeDisabled();

@@ -104,9 +104,9 @@ describe("IndexedDbMatchStore combined Display Name and Ability persistence", ()
     const turn6 = finishTurn(turn5.state, "2026-08-24T08:12:00.000Z");
     const turn7 = finishTurn(turn6.state, "2026-08-24T08:13:00.000Z");
     const turn8 = finishTurn(turn7.state, "2026-08-24T08:14:00.000Z");
-    const healed = resolveAbility(
+    const protectedState = resolveAbility(
       turn8.state,
-      { abilityId: "duergar-fighter-second-wind" },
+      { abilityId: "duergar-fighter-hold-the-line" },
       "2026-08-24T08:15:00.000Z",
     );
 
@@ -125,10 +125,10 @@ describe("IndexedDbMatchStore combined Display Name and Ability persistence", ()
       turn6,
       turn7,
       turn8,
-      healed,
+      protectedState,
     ] as const;
 
-    const finalState = healed.state;
+    const finalState = protectedState.state;
 
     expect(finalState.displayNames).toEqual({
       "duergar-fighter": "Stone",
@@ -136,7 +136,7 @@ describe("IndexedDbMatchStore combined Display Name and Ability persistence", ()
     });
     expect(finalState.spentAbilityIds).toEqual([
       "duergar-ranger-hunter-s-mark",
-      "duergar-fighter-second-wind",
+      "duergar-fighter-hold-the-line",
     ]);
     expect(
       finalState.activeEffects.some(
@@ -146,10 +146,17 @@ describe("IndexedDbMatchStore combined Display Name and Ability persistence", ()
       ),
     ).toBe(true);
     expect(
+      finalState.activeEffects.some(
+        (effect) =>
+          effect.kind === "hold-the-line" &&
+          effect.affectedCharacterId === "duergar-fighter",
+      ),
+    ).toBe(true);
+    expect(
       finalState.characters.find(
         ({ characterId }) => characterId === "duergar-fighter",
       )?.hp,
-    ).toBe(4);
+    ).toBe(3);
 
     for (const result of results) {
       await firstStore.commit(result.event, result.state);
@@ -168,7 +175,7 @@ describe("IndexedDbMatchStore combined Display Name and Ability persistence", ()
       "duergar-ranger-hunter-s-mark",
     );
     expect(restored.state.spentAbilityIds).toContain(
-      "duergar-fighter-second-wind",
+      "duergar-fighter-hold-the-line",
     );
     expect(
       restored.state.activeEffects.some(
@@ -178,10 +185,17 @@ describe("IndexedDbMatchStore combined Display Name and Ability persistence", ()
       ),
     ).toBe(true);
     expect(
+      restored.state.activeEffects.some(
+        (effect) =>
+          effect.kind === "hold-the-line" &&
+          effect.affectedCharacterId === "duergar-fighter",
+      ),
+    ).toBe(true);
+    expect(
       restored.state.characters.find(
         ({ characterId }) => characterId === "duergar-fighter",
       )?.hp,
-    ).toBe(4);
+    ).toBe(3);
 
     const undone = undoLastEvent(restored.state, restored.events, {
       occurredAt: "2026-08-24T08:16:00.000Z",
@@ -201,7 +215,7 @@ describe("IndexedDbMatchStore combined Display Name and Ability persistence", ()
       )?.hp,
     ).toBe(3);
     expect(afterUndo.state.spentAbilityIds).not.toContain(
-      "duergar-fighter-second-wind",
+      "duergar-fighter-hold-the-line",
     );
     expect(afterUndo.state.spentAbilityIds).toContain(
       "duergar-ranger-hunter-s-mark",

@@ -247,45 +247,6 @@ describe("rules coverage audit: Basic Attacks carry character-based effects", ()
       true,
     );
   });
-
-  it("reduces the first damaging Basic Attack by Rage's written 1 and consumes Rage", () => {
-    const run = startedAuditMatch("audit-rage-basic");
-    cast(run, "duergar-barbarian", { abilityName: "Rage", step: 1 });
-
-    const attacked = advanceTo(run, "duergar-ranger");
-    play(
-      run,
-      resolveBasicAttack(
-        attacked,
-        {
-          sourceCharacterId: "duergar-ranger",
-          affectedCharacterIds: ["duergar-barbarian"],
-          physicalConfirmations: CONFIRMATIONS,
-          majorActionOverride: null,
-        },
-        stamp(2),
-      ),
-    );
-
-    const resolution = run.events.at(-1) as Extract<
-      MatchEvent,
-      { readonly type: "ActionResolved" }
-    >;
-    expect(resolution.effects).toEqual([
-      {
-        characterId: "duergar-barbarian",
-        damage: 0,
-        hpBefore: 5,
-        hpAfter: 5,
-        downedBefore: false,
-        downedAfter: false,
-      },
-    ]);
-    expect(resolution.expiredEffects.map(({ kind }) => kind)).toEqual(["rage"]);
-    expect(run.state.activeEffects.some(({ kind }) => kind === "rage")).toBe(
-      false,
-    );
-  });
 });
 
 describe("rules coverage audit: card life-state gates", () => {
@@ -354,7 +315,7 @@ describe("rules coverage audit: card life-state gates", () => {
     ).toMatchObject({ hp: 3 });
   });
 
-  it("rejects healing effects when the character is already at current maximum HP", () => {
+  it("allows Hold the Line while the Fighter is at full HP", () => {
     const targetedRun = startedAuditMatch("audit-heal-full-target");
     advanceTo(targetedRun, "drow-druid");
     expect(() =>
@@ -370,13 +331,19 @@ describe("rules coverage audit: card life-state gates", () => {
 
     const selfRun = startedAuditMatch("audit-heal-full-self");
     advanceTo(selfRun, "duergar-fighter");
-    expect(() =>
-      resolveAbility(
-        selfRun.state,
-        { abilityId: abilityId("duergar-fighter", "Second Wind") },
-        stamp(2),
-      ),
-    ).toThrow("full HP");
+    const protectedRun = resolveAbility(
+      selfRun.state,
+      { abilityId: abilityId("duergar-fighter", "Hold the Line") },
+      stamp(2),
+    );
+    expect(protectedRun.state.activeEffects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "hold-the-line",
+          affectedCharacterId: "duergar-fighter",
+        }),
+      ]),
+    );
   });
 
   it("requires Revivify's target to be a Downed ally", () => {
@@ -443,7 +410,7 @@ describe("rules coverage audit: Powerful prohibition and expiry boundaries", () 
     const stunning = cast(run, "duergar-monk", {
       abilityName: "Stunning Strike",
       input: {
-        attackLegs: [{ affectedCharacterIds: ["drow-sorcerer"] }],
+        attackLegs: [{ affectedCharacterIds: ["drow-bard"] }],
         physicalConfirmations: CONFIRMATIONS,
       },
       step: 1,
@@ -459,13 +426,13 @@ describe("rules coverage audit: Powerful prohibition and expiry boundaries", () 
       "prohibit-powerful",
     ]);
 
-    const prohibited = advanceTo(run, "drow-sorcerer");
+    const prohibited = advanceTo(run, "drow-bard");
     expect(() =>
       resolveAbility(
         prohibited,
         {
-          abilityId: abilityId("drow-sorcerer", "Arcane Bolt"),
-          targetCharacterIds: ["duergar-ranger"],
+          abilityId: abilityId("drow-bard", "Battle Hymn"),
+          targetCharacterIds: ["drow-bard"],
         },
         stamp(2),
       ),
@@ -477,13 +444,13 @@ describe("rules coverage audit: Powerful prohibition and expiry boundaries", () 
       endedProhibitedTurn.event.expiredEffects.map(({ kind }) => kind),
     ).toEqual(["prohibit-powerful"]);
 
-    const followingTurn = advanceTo(run, "drow-sorcerer");
+    const followingTurn = advanceTo(run, "drow-bard");
     expect(() =>
       resolveAbility(
         followingTurn,
         {
-          abilityId: abilityId("drow-sorcerer", "Arcane Bolt"),
-          targetCharacterIds: ["duergar-ranger"],
+          abilityId: abilityId("drow-bard", "Battle Hymn"),
+          targetCharacterIds: ["drow-bard"],
         },
         stamp(4),
       ),
@@ -495,7 +462,7 @@ describe("rules coverage audit: Powerful prohibition and expiry boundaries", () 
     cast(run, "drow-rogue", {
       abilityName: "Backstab",
       input: {
-        attackLegs: [{ affectedCharacterIds: ["drow-sorcerer"] }],
+        attackLegs: [{ affectedCharacterIds: ["drow-bard"] }],
         physicalConfirmations: CONFIRMATIONS,
       },
       step: 1,
@@ -504,13 +471,13 @@ describe("rules coverage audit: Powerful prohibition and expiry boundaries", () 
       "prohibit-powerful",
     ]);
 
-    const prohibited = advanceTo(run, "drow-sorcerer");
+    const prohibited = advanceTo(run, "drow-bard");
     expect(() =>
       resolveAbility(
         prohibited,
         {
-          abilityId: abilityId("drow-sorcerer", "Arcane Bolt"),
-          targetCharacterIds: ["duergar-ranger"],
+          abilityId: abilityId("drow-bard", "Battle Hymn"),
+          targetCharacterIds: ["drow-bard"],
         },
         stamp(2),
       ),
@@ -523,22 +490,19 @@ describe("rules coverage audit: Powerful prohibition and expiry boundaries", () 
       endedProhibitedTurn.event.expiredEffects.map(({ kind }) => kind),
     ).toEqual(["prohibit-powerful"]);
 
-    const freed = advanceTo(run, "drow-sorcerer");
-    const bolt = resolveAbility(
+    const freed = advanceTo(run, "drow-bard");
+    const hymn = resolveAbility(
       freed,
       {
-        abilityId: abilityId("drow-sorcerer", "Arcane Bolt"),
-        targetCharacterIds: ["duergar-ranger"],
+        abilityId: abilityId("drow-bard", "Battle Hymn"),
+        targetCharacterIds: ["drow-bard"],
       },
       stamp(4),
     );
-    expect(bolt.event.effects[0]).toMatchObject({
-      characterId: "duergar-ranger",
-      damage: 1,
-    });
+    expect(hymn.event.abilityId).toBe("drow-bard-battle-hymn");
   });
 
-  it("keeps Battle Hymn's self-buff beyond the casting turn and expires it after the Bard's next turn", () => {
+  it("keeps Battle Hymn recipients' movement bonuses until Downing", () => {
     const run = startedAuditMatch("audit-hymn-self");
     cast(run, "drow-bard", {
       abilityName: "Battle Hymn",
@@ -556,8 +520,8 @@ describe("rules coverage audit: Powerful prohibition and expiry boundaries", () 
     expect(firstResolution.expiredEffects).toEqual([]);
     expect(current.activeEffects).toHaveLength(2);
 
-    // Advance through the Wizard's next turn; her buff expires at its end
-    // while the Bard's own buff waits for her next turn's end.
+    // Advance through the Wizard's next turn; both recipients retain the
+    // persistent bonus because neither character is Downed.
     const findWizardEnded = (
       candidate: ReturnType<typeof finishTurn>,
     ): ReturnType<typeof finishTurn> => {
@@ -577,16 +541,12 @@ describe("rules coverage audit: Powerful prohibition and expiry boundaries", () 
     expect(wizardEnded.event.activeSlot).toBe(2);
 
     const endsHisNextTurn = finishTurn(wizardEnded.state, stamp(4));
-    expect(
-      endsHisNextTurn.event.expiredEffects.map(
-        ({ affectedCharacterId }) => affectedCharacterId,
-      ),
-    ).toEqual(["drow-wizard"]);
+    expect(endsHisNextTurn.event.expiredEffects).toEqual([]);
     expect(
       endsHisNextTurn.state.activeEffects.map(
         ({ affectedCharacterId }) => affectedCharacterId,
       ),
-    ).toEqual(["drow-bard"]);
+    ).toEqual(["drow-bard", "drow-wizard"]);
   });
 
   it("keeps Hunter's Mark alive through the end of the Ranger's next scheduled position", () => {

@@ -89,10 +89,12 @@ export type AbilityId =
   | "duergar-ranger-deadeye"
   | "duergar-monk-stunning-strike"
   | "duergar-monk-deflecting-palm"
+  | "duergar-fighter-hold-the-line"
+  /** Legacy persisted identifier retained only for schema validation diagnostics. */
   | "duergar-fighter-second-wind"
   | "duergar-fighter-shield-wall"
   | "duergar-barbarian-brutal-shove"
-  | "duergar-barbarian-rage"
+  | "duergar-barbarian-rampage"
   | "duergar-warlock-hex"
   | "duergar-warlock-eldritch-blast"
   | "duergar-cleric-blessing-of-battle"
@@ -140,10 +142,10 @@ export const ABILITY_IDS = [
   "duergar-ranger-deadeye",
   "duergar-monk-stunning-strike",
   "duergar-monk-deflecting-palm",
-  "duergar-fighter-second-wind",
+  "duergar-fighter-hold-the-line",
   "duergar-fighter-shield-wall",
   "duergar-barbarian-brutal-shove",
-  "duergar-barbarian-rage",
+  "duergar-barbarian-rampage",
   "duergar-warlock-hex",
   "duergar-warlock-eldritch-blast",
   "duergar-cleric-blessing-of-battle",
@@ -218,6 +220,16 @@ export function nextActionCount(
   return currentCount >= 1 ? 2 : 1;
 }
 
+/** Consume the declared number of actions for one resolved action. */
+export function consumeActionCount(
+  actionsUsed: 0 | 1 | 2 | undefined,
+  majorActionUsed: boolean,
+  cost: 1 | 2,
+): 1 | 2 {
+  if (cost === 2) return 2;
+  return nextActionCount(actionsUsed, majorActionUsed);
+}
+
 export function isActionKind(value: string): value is ActionKind {
   return isMember(ACTION_KINDS, value);
 }
@@ -274,7 +286,9 @@ export function isEffectDurationKind(
 export const ACTIVE_EFFECT_KINDS = [
   "hunters-mark",
   "hex",
+  /** Legacy persisted effect kind retained for structural compatibility. */
   "rage",
+  "hold-the-line",
   "vanish",
   "shapeshift",
   "prohibit-powerful",

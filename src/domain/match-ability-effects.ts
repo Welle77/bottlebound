@@ -69,24 +69,22 @@ function buildNamedAbilityEffects(
   const { name } = ability;
   const abilityName: string = name;
   switch (abilityName) {
-    case "Rage": {
-      return [
-        {
-          effectId: `${ability.id}-${anchorId}-${String(sequence)}`,
-          abilityId: ability.id,
-          kind: "rage",
-          anchorCharacterId: anchorId,
-          affectedCharacterId: anchorId,
-          duration: {
-            kind: "until-trigger-or-boundary",
-            boundaryTrigger: "beginning-of-next-turn",
-            anchor: "affected",
-            removeWhenAffectedDowned: true,
-          },
-          operations: ["reduce-remaining-damage"],
-          appliedSequence: sequence,
+    case "Hold the Line": {
+      return affectedIds.map((targetId) => ({
+        effectId: `${ability.id}-${targetId}-${String(sequence)}`,
+        abilityId: ability.id,
+        kind: "hold-the-line",
+        anchorCharacterId: anchorId,
+        affectedCharacterId: targetId,
+        duration: {
+          kind: "until-boundary",
+          boundaryTrigger: "beginning-of-next-turn",
+          anchor: "source",
+          removeWhenAffectedDowned: true,
         },
-      ];
+        operations: ["reduce-remaining-damage"],
+        appliedSequence: sequence,
+      }));
     }
     case "Vanish": {
       return [
@@ -148,6 +146,8 @@ function buildNamedAbilityEffects(
     case "Frostbind":
     case "Battle Hymn":
     case "Blessing of Battle": {
+      const persistentMovementBlessing =
+        abilityName === "Battle Hymn" || abilityName === "Blessing of Battle";
       return affectedIds.map((targetId) => ({
         effectId: `${ability.id}-${targetId}-${String(sequence)}`,
         abilityId: ability.id,
@@ -155,8 +155,12 @@ function buildNamedAbilityEffects(
         anchorCharacterId: anchorId,
         affectedCharacterId: targetId,
         duration: {
-          kind: "until-boundary",
-          boundaryTrigger: "end-of-next-turn",
+          kind: persistentMovementBlessing
+            ? "while-condition"
+            : "until-boundary",
+          ...(persistentMovementBlessing
+            ? {}
+            : { boundaryTrigger: "end-of-next-turn" as const }),
           anchor: "affected",
           removeWhenAffectedDowned: true,
         },
@@ -325,8 +329,7 @@ function selfDefaultTargetIds(
   ability: MatchConfigurationAbility,
 ): readonly CharacterId[] {
   if (
-    ability.name === "Second Wind" ||
-    ability.name === "Rage" ||
+    ability.name === "Hold the Line" ||
     ability.name === "Vanish" ||
     ability.name === "Shapeshift"
   ) {
@@ -548,8 +551,7 @@ export type AttackDamageResolution = {
  * calculate all applicable damage increases first (character-based effects
  * such as Hunter's Mark or Hex add their written +1 each and stack, §11),
  * then apply legal Reactions, reductions, and prevention, then finalize.
- * Rage reduces remaining damage by exactly 1 and is consumed only when it was
- * actually needed; Hunter's Mark and Hex are consumed by the first successful
+ * Hunter's Mark and Hex are consumed by the first successful
  * damaging attack and survive an attack finalized at 0 damage.
  */
 function resolveAttackDamageAgainstCharacter(
@@ -577,26 +579,33 @@ function resolveAttackDamageAgainstCharacter(
         effect.kind === "vanish" &&
         effect.affectedCharacterId === affectedCharacterId,
     );
-  const rage = activeEffects.find(
+  const holdTheLine = activeEffects.find(
     (effect) =>
-      effect.kind === "rage" &&
+      effect.kind === "hold-the-line" &&
       effect.affectedCharacterId === affectedCharacterId,
   );
   const unmitigated = prevented || vanished ? 0 : baseDamage + marks.length;
   const afterBlocks = Math.max(0, unmitigated - damageBlocks);
-  const finalDamage = rage && afterBlocks >= 1 ? afterBlocks - 1 : afterBlocks;
-  const expiredRage: readonly ActiveEffect[] =
-    rage && afterBlocks >= 1 ? [rage] : [];
+  const afterHoldTheLine = holdTheLine
+    ? Math.max(0, afterBlocks - 1)
+    : afterBlocks;
+  const finalDamage = afterHoldTheLine;
+  const expiredHoldTheLine =
+    holdTheLine && afterBlocks >= 1 ? [holdTheLine] : [];
   if (finalDamage >= 1) {
     return {
       finalDamage,
-      expired: [...expiredRage, ...marks],
+      expired: [...expiredHoldTheLine, ...marks],
       applied: marks
         .filter((mark) => mark.kind === "hex")
         .map((mark) => hexTriggeredMovementCap(mark, sequence)),
     };
   }
-  return { finalDamage, expired: expiredRage, applied: [] };
+  return {
+    finalDamage,
+    expired: [...expiredHoldTheLine],
+    applied: [],
+  };
 }
 
 export {

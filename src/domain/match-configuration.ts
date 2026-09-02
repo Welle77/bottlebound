@@ -64,7 +64,7 @@ export function isAbilityName(value: string): value is AbilityName {
 }
 
 export const MATCH_CONFIGURATION_VERSION: MatchConfigurationVersion =
-  "BB20260902A1";
+  "BB20260902A3";
 
 const physicalChecks: readonly PhysicalAttackCheck[] = [
   "range",

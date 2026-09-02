@@ -25,6 +25,48 @@ function startedMatchWithActiveDruid() {
 }
 
 describe("Ability resolution", () => {
+  it("consumes one action for Standard and both actions for Powerful abilities", () => {
+    const { started } = startedMatchWithActiveDruid();
+    const standard = resolveAbility(
+      started.state,
+      { abilityId: "drow-druid-shapeshift" },
+      "2026-08-22T14:03:00.000Z",
+    );
+    expect(standard.state.actionsUsed).toBe(1);
+
+    const powerfulState = {
+      ...started.state,
+      initiative: started.state.initiative.map((entry, index) =>
+        index === 0 ? { ...entry, characterId: "drow-rogue" as const } : entry,
+      ),
+    };
+    const powerful = resolveAbility(
+      powerfulState,
+      { abilityId: "drow-rogue-vanish" },
+      "2026-08-22T14:04:00.000Z",
+    );
+    expect(powerful.state.actionsUsed).toBe(2);
+  });
+
+  it("rejects a Powerful Ability after one action without an Override", () => {
+    const { started } = startedMatchWithActiveDruid();
+    const state = {
+      ...started.state,
+      initiative: started.state.initiative.map((entry, index) =>
+        index === 0 ? { ...entry, characterId: "drow-rogue" as const } : entry,
+      ),
+      actionsUsed: 1 as const,
+      majorActionUsed: true,
+    };
+    expect(() =>
+      resolveAbility(
+        state,
+        { abilityId: "drow-rogue-vanish" },
+        "2026-08-22T14:04:00.000Z",
+      ),
+    ).toThrow("A Powerful Ability needs both unused actions");
+  });
+
   it("resolves the Druid's Shapeshift as one reversible Match Event", () => {
     const { started } = startedMatchWithActiveDruid();
     expect(started.state.initiative[0]?.characterId).toBe("drow-druid");

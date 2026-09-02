@@ -26,7 +26,7 @@ import type {
   ProtectiveReactionResolution,
   Team,
 } from "./match-types";
-import { nextActionCount } from "./match-types";
+import { consumeActionCount } from "./match-types";
 
 export type AbilityInput = {
   readonly abilityId: AbilityId;
@@ -136,14 +136,18 @@ function assertAbilitySourceCanAct(
 
 function assertAbilityActionAvailable(
   state: ActiveMatchState,
+  ability: MatchConfigurationAbility,
   majorActionOverride: string | null,
 ): void {
+  const actionsUsed = state.actionsUsed ?? (state.majorActionUsed ? 1 : 0);
   if (
-    (state.actionsUsed ?? (state.majorActionUsed ? 1 : 0)) >= 2 &&
+    (ability.actionType === "powerful" ? actionsUsed >= 1 : actionsUsed >= 2) &&
     majorActionOverride === null
   ) {
     throw new Error(
-      "Ability needs an unused action or a recorded referee override.",
+      ability.actionType === "powerful"
+        ? "A Powerful Ability needs both unused actions or a recorded referee override."
+        : "Ability needs an unused action or a recorded referee override.",
     );
   }
 }
@@ -179,7 +183,7 @@ function validateAbilityUse(context: {
   ) {
     throw new Error("ability-already-spent");
   }
-  assertAbilityActionAvailable(state, majorActionOverride);
+  assertAbilityActionAvailable(state, ability, majorActionOverride);
   assertPowerfulAbilityAllowed(state, ability);
 }
 
@@ -737,7 +741,11 @@ export function resolveAbility(
     state: {
       ...state,
       sequence,
-      actionsUsed: nextActionCount(state.actionsUsed, state.majorActionUsed),
+      actionsUsed: consumeActionCount(
+        state.actionsUsed,
+        state.majorActionUsed,
+        ability.actionType === "powerful" ? 2 : 1,
+      ),
       majorActionUsed: true,
       spentAbilityIds: [...new Set([...state.spentAbilityIds, ability.id])],
       spentReactionIds: [

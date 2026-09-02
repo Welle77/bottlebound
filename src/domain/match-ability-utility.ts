@@ -96,8 +96,7 @@ export function applyUtilityAbility(
       candidates.find((candidate) => candidate.characterId === targetId);
     if (
       isAbilityNamed(ability, "Nature’s Renewal") ||
-      abilityName === "Inspiring Words" ||
-      abilityName === "Second Wind"
+      abilityName === "Inspiring Words"
     ) {
       return (character) => healTarget(character, targetId);
     }

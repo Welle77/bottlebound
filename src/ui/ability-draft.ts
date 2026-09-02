@@ -382,7 +382,6 @@ export function effectPreviewRow(
   const heals =
     ability.name === "Nature’s Renewal" ||
     ability.name === "Inspiring Words" ||
-    ability.name === "Second Wind" ||
     ability.name === "Shapeshift";
   const revives =
     (ability.name === "Lay on Hands" && hp === 0) ||

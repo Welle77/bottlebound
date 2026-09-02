@@ -522,7 +522,7 @@ function resolveAttackEffects(context: {
     if (!character)
       throw new Error("Basic Attack references an unknown character.");
     // A Basic Attack is a damaging attack and a physically thrown ball, so
-    // character-based damage effects (Hunter's Mark, Hex), Rage's reduction,
+    // character-based damage effects (Hunter's Mark and Hex),
     // and Vanish's physical immunity all apply to it exactly as they do to
     // ability attacks (rules §8, §10(4), §11, §15 cards).
     const resolved = resolveAttackDamageAgainstCharacter({
