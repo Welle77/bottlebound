@@ -55,6 +55,8 @@ The guide is still useful when its sections are reordered and renumbered.
     expect(reference.records).toHaveLength(reference.headings.length);
     expect(reference.html).toContain("BOTTLEBOUND");
     expect(reference.html).toContain("Backstab");
+    expect(reference.html).toContain("use Attack Avoidance");
+    expect(reference.html).toContain("Deflecting Palm");
     expect(reference.html).toContain("Referee Quick Reference");
     expect(Object.keys(reference)).toEqual([
       "version",

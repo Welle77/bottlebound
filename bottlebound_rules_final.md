@@ -169,7 +169,7 @@ If a temporary effect is written to expire on the source character’s next turn
 
 3\. A projectile-redirection Reaction interrupts the ball at the moment of contact. The redirected ball then continues as the same attack, with the same source, hard range, and attached ball effects; later legal hits are resolved normally.
 
-4\. For each affected character, calculate all applicable damage increases and attached effects, then apply legal Reactions, reductions, and prevention.
+4\. For each affected character, calculate all applicable damage increases and attached effects, then apply selected Damage Blocks, Rage, and Attack Avoidance.
 
 5\. Finalize damage and effects separately for each affected character.
 
@@ -183,7 +183,7 @@ If a temporary effect is written to expire on the source character’s next turn
 
 2\. Allow legal Reactions.
 
-3\. Calculate increases, reductions, and prevention.
+3\. Calculate increases, selected Damage Blocks, Rage, and Attack Avoidance.
 
 4\. Finalize damage and effects.
 
@@ -198,6 +198,10 @@ If a temporary effect is written to expire on the source character’s next turn
 - If multiple legal Reactions are declared, they are declared before damage is finalized and resolved consistently by the referee.
 
 - Partial damage reduction is legal. Final damage cannot be below 0.
+
+- A Damage Block reduces one point of an affected character’s remaining damage. Calculate useful Damage Block capacity from incoming damage after all increases and before Rage, independently for each character. Current HP and overkill do not reduce that capacity. A Damage Block preserves the legal hit and its attached effects.
+
+- Attack Avoidance prevents damage and attached effects against its owner after its trigger. Attack Avoidance and Damage Blocks cannot both protect one character from the same attack.
 
 - Overkill damage has no additional effect. HP cannot fall below 0.
 
@@ -342,7 +346,7 @@ HP 5 • Initiative +1 • Basic Attack: Melee — 2 paces
 | **Range**         | 3 paces                                                                                                                                                                               |
 | **Line of Sight** | No                                                                                                                                                                                    |
 | **Ball Required** | No                                                                                                                                                                                    |
-| **Effect**        | When an attack would affect the chosen character, prevent all damage and effects from that attack against that character. The same attack may still affect other characters normally. |
+| **Effect**        | When an attack would affect the chosen character, reduce that character’s remaining damage by 1. The legal hit and its attached effects still resolve; the same attack may still affect other characters normally. |
 | **Duration**      | Immediate.                                                                                                                                                                            |
 
 #### Wizard — Controller
@@ -370,7 +374,7 @@ HP 3 • Initiative +0 • Basic Attack: Ranged — 6 paces
 | **Range**         | Self                                                                                                                                                                                                                                                                                                                                |
 | **Line of Sight** | N/A                                                                                                                                                                                                                                                                                                                                 |
 | **Ball Required** | No                                                                                                                                                                                                                                                                                                                                  |
-| **Effect**        | When an attack would affect the Wizard, prevent all damage and effects from that attack against the Wizard. The Wizard may then immediately move up to 2 paces. This is ability-granted movement and does not consume the Wizard’s next turn movement, but existing movement restrictions still apply unless explicitly overridden. |
+| **Effect**        | When an attack would affect the Wizard, use Attack Avoidance to prevent all damage and effects from that attack against the Wizard. The Wizard may then immediately move up to 2 paces. This is ability-granted movement and does not consume the Wizard’s next turn movement, but existing movement restrictions still apply unless explicitly overridden. |
 | **Duration**      | Immediate.                                                                                                                                                                                                                                                                                                                          |
 
 #### Sorcerer — Spellcaster
@@ -398,7 +402,7 @@ HP 3 • Initiative +0 • Basic Attack: Ranged — 6 paces
 | **Range**         | Self                                                                                                                                                                   |
 | **Line of Sight** | N/A                                                                                                                                                                    |
 | **Ball Required** | No                                                                                                                                                                     |
-| **Effect**        | When an attack would affect the Sorcerer, prevent all damage and effects from that attack against the Sorcerer. The attack may still affect other characters normally. |
+| **Effect**        | When an attack would affect the Sorcerer, use Attack Avoidance to prevent all damage and effects from that attack against the Sorcerer. The attack may still affect other characters normally. |
 | **Duration**      | Immediate.                                                                                                                                                             |
 
 #### Bard — Support
@@ -484,7 +488,7 @@ HP 4 • Initiative +3 • Basic Attack: Melee — 2 paces
 | **Range**         | Self                                                                                                                                                                                                                                                                                                                                                                                         |
 | **Line of Sight** | N/A                                                                                                                                                                                                                                                                                                                                                                                          |
 | **Ball Required** | No                                                                                                                                                                                                                                                                                                                                                                                           |
-| **Effect**        | When a physical ball hits the Monk, prevent all damage and effects from that attack against the Monk. The same ball is immediately redirected toward the original thrower’s current bottle position. It remains the same attack: all attached ball effects remain attached, each bottle may still be affected at most once, and the attack keeps its original source and hard maximum range. |
+| **Effect**        | When a physical ball hits the Monk, use Attack Avoidance to prevent all damage and effects from that attack against the Monk. The same ball is immediately redirected toward the original thrower’s current bottle position. It remains the same attack: all attached ball effects remain attached, each bottle may still be affected at most once, and the attack keeps its original source and hard maximum range. |
 | **Duration**      | Immediate.                                                                                                                                                                                                                                                                                                                                                                                   |
 
 #### Fighter — Tank
@@ -512,7 +516,7 @@ HP 4 • Initiative +1 • Basic Attack: Melee — 2 paces
 | **Range**         | 2 paces                                                                                                                                                                                                                             |
 | **Line of Sight** | No                                                                                                                                                                                                                                  |
 | **Ball Required** | No                                                                                                                                                                                                                                  |
-| **Effect**        | When an attack affects the chosen character, reduce all damage from that attack against that character to 0 and prevent its attached effects against that character. Other characters affected by the same attack resolve normally. |
+| **Effect**        | When an attack affects the chosen character, reduce that character’s remaining damage by 1. The legal hit and its attached effects still resolve. Other characters affected by the same attack resolve normally. |
 | **Duration**      | Immediate.                                                                                                                                                                                                                          |
 
 #### Barbarian — Controller
@@ -610,7 +614,7 @@ HP 3 • Initiative +0 • Basic Attack: Ranged — 6 paces
 | **Basic Ranged**     | Physical throw, 1 damage, hard max 6 paces.                                                                                                                          |
 | **Physical throws**  | No declared target. Every legal bottle hit takes the attack’s damage/effects; any bottle contact counts. Terrain contact or leaving the battlefield ends the attack. |
 | **Reaction**         | Outside turn economy. One Reaction per character per triggering attack; ally-protection Reactions may trigger even if the reactor was not hit.                       |
-| **Damage**           | Add all increases → Reactions/reductions → finalize → subtract HP. Minimum 0.                                                                                        |
+| **Damage**           | Add all increases → Damage Blocks → Rage → Attack Avoidance → finalize → subtract HP. Minimum 0.                                                                    |
 | **Combos**           | Different legal effects stack. No universal total-damage cap.                                                                                                        |
 | **Downed**           | 0 HP immediately. Lay bottle flat; remove temporary effects on that character.                                                                                       |
 | **Revival**          | 1 HP, same position, original initiative. Act later this round only if that initiative slot has not passed; spent abilities stay spent.                              |

@@ -64,7 +64,7 @@ export function isAbilityName(value: string): value is AbilityName {
 }
 
 export const MATCH_CONFIGURATION_VERSION: MatchConfigurationVersion =
-  "BB20260822A1";
+  "BB20260902A1";
 
 const physicalChecks: readonly PhysicalAttackCheck[] = [
   "range",
@@ -296,9 +296,9 @@ const reactions = [
     lineOfSight: "No",
     ballRequired: "No",
     rulesText:
-      "When an attack would affect the chosen character, prevent all damage and effects from that attack against that character. The same attack may still affect other characters normally.",
+      "When an attack would affect the chosen character, reduce that character's remaining damage by 1. The legal hit and its attached effects still resolve; the same attack may still affect other characters normally.",
     duration: "Immediate.",
-    operations: [{ type: "prevent-damage-and-effects" }],
+    operations: [{ type: "reduce-remaining-damage" }],
   },
   {
     id: "drow-wizard-misty-escape",
@@ -358,9 +358,9 @@ const reactions = [
     lineOfSight: "No",
     ballRequired: "No",
     rulesText:
-      "When an attack affects the chosen character, reduce all damage from that attack against that character to 0 and prevent its attached effects against that character. Other characters affected by the same attack resolve normally.",
+      "When an attack affects the chosen character, reduce that character's remaining damage by 1. The legal hit and its attached effects still resolve. Other characters affected by the same attack resolve normally.",
     duration: "Immediate.",
-    operations: [{ type: "prevent-damage-and-effects" }],
+    operations: [{ type: "reduce-remaining-damage" }],
   },
 ] as const satisfies readonly MatchConfigurationReaction[];
 
@@ -396,7 +396,7 @@ const operationDeclarations = {
   "add-damage":
     "Add the declared damage increase to the first qualifying attack.",
   "prevent-damage-and-effects":
-    "Prevent damage and attached effects for the protected character.",
+    "Attack Avoidance prevents damage and attached effects for the protected character.",
   "reduce-remaining-damage": "Reduce remaining damage by the declared amount.",
   heal: "Restore the declared HP without exceeding the current maximum.",
   revive: "Restore a Downed character to 1 HP.",

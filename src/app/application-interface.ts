@@ -5,6 +5,7 @@ import type {
   MatchEvent,
   MatchState,
   MatchSummary,
+  ProtectiveReactionInput,
   ProtectiveReactionChoice,
   RandomSource,
   Team,
@@ -95,6 +96,8 @@ export type ApplicationOperations = {
   readonly deleteMatch: (matchId: string) => Promise<boolean>;
   readonly getProtectiveReactionChoices: (
     affectedCharacterIds: readonly CharacterId[],
+    selectedReactions?: readonly ProtectiveReactionInput[],
+    physicalAttack?: boolean,
   ) => readonly ProtectiveReactionChoice[];
   readonly setStorageValidation: (result: StorageValidationResult) => void;
   readonly setNetworkState: (state: NetworkState) => void;

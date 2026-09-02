@@ -120,10 +120,10 @@ export const abilities = [
     lineOfSight: "No",
     ballRequired: "No",
     rulesText:
-      "When an attack would affect the chosen character, prevent all damage and effects from that attack against that character. The same attack may still affect other characters normally.",
+      "When an attack would affect the chosen character, reduce that character's remaining damage by 1. The legal hit and its attached effects still resolve; the same attack may still affect other characters normally.",
     duration: "Immediate.",
     manualChecks: ["range"],
-    operations: ["prevent-damage-and-effects"],
+    operations: ["reduce-remaining-damage"],
   },
   {
     id: "drow-wizard-frostbind",
@@ -162,7 +162,7 @@ export const abilities = [
     lineOfSight: "N/A",
     ballRequired: "No",
     rulesText:
-      "When an attack would affect the Wizard, prevent all damage and effects from that attack against the Wizard. The Wizard may then immediately move up to 2 paces. This is ability-granted movement and does not consume the Wizard’s next turn movement, but existing movement restrictions still apply unless explicitly overridden.",
+      "When an attack would affect the Wizard, use Attack Avoidance to prevent all damage and effects from that attack against the Wizard. The Wizard may then immediately move up to 2 paces. This is ability-granted movement and does not consume the Wizard’s next turn movement, but existing movement restrictions still apply unless explicitly overridden.",
     duration: "Immediate.",
     manualChecks: [],
     operations: ["prevent-damage-and-effects", "manual-movement-instruction"],
@@ -204,7 +204,7 @@ export const abilities = [
     lineOfSight: "N/A",
     ballRequired: "No",
     rulesText:
-      "When an attack would affect the Sorcerer, prevent all damage and effects from that attack against the Sorcerer. The attack may still affect other characters normally.",
+      "When an attack would affect the Sorcerer, use Attack Avoidance to prevent all damage and effects from that attack against the Sorcerer. The attack may still affect other characters normally.",
     duration: "Immediate.",
     manualChecks: [],
     operations: ["prevent-damage-and-effects"],
@@ -323,7 +323,7 @@ export const abilities = [
     lineOfSight: "N/A",
     ballRequired: "No",
     rulesText:
-      "When a physical ball hits the Monk, prevent all damage and effects from that attack against the Monk. The same ball is immediately redirected toward the original thrower’s current bottle position. It remains the same attack: all attached ball effects remain attached, each bottle may still be affected at most once, and the attack keeps its original source and hard maximum range.",
+      "When a physical ball hits the Monk, use Attack Avoidance to prevent all damage and effects from that attack against the Monk. The same ball is immediately redirected toward the original thrower’s current bottle position. It remains the same attack: all attached ball effects remain attached, each bottle may still be affected at most once, and the attack keeps its original source and hard maximum range.",
     duration: "Immediate.",
     manualChecks: [],
     operations: ["prevent-damage-and-effects", "redirect-physical-attack"],
@@ -361,10 +361,10 @@ export const abilities = [
     lineOfSight: "No",
     ballRequired: "No",
     rulesText:
-      "When an attack affects the chosen character, reduce all damage from that attack against that character to 0 and prevent its attached effects against that character. Other characters affected by the same attack resolve normally.",
+      "When an attack affects the chosen character, reduce that character's remaining damage by 1. The legal hit and its attached effects still resolve. Other characters affected by the same attack resolve normally.",
     duration: "Immediate.",
     manualChecks: ["range"],
-    operations: ["prevent-damage-and-effects"],
+    operations: ["reduce-remaining-damage"],
   },
   {
     id: "duergar-barbarian-brutal-shove",

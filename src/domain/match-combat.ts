@@ -4,6 +4,12 @@ import {
   type AbilityName,
 } from "./match-configuration";
 import { resolveAttackDamageAgainstCharacter } from "./match-ability-effects";
+import {
+  damageBlockCapacity,
+  isAttackAvoidanceReaction,
+  isDamageBlockReaction,
+  isVanishProtected,
+} from "./match-reaction-rules";
 import { applyDownedCleanup } from "./match-turn";
 import { nextActionCount } from "./match-types";
 import type {
@@ -28,6 +34,11 @@ import type {
 type BasicAttack = (typeof MATCH_CONFIGURATION.basicAttacks)[number];
 type BasicAttackLegInput = NonNullable<BasicAttackInput["attackLegs"]>[number];
 type ProtectiveReaction = (typeof MATCH_CONFIGURATION.reactions)[number];
+type ReactionChoiceOptions = {
+  readonly selectedReactions?: readonly ProtectiveReactionInput[];
+  readonly physicalAttack?: boolean;
+};
+type ReactionInputList = readonly ProtectiveReactionInput[];
 
 type ValidatedBasicAttack = {
   readonly attack: BasicAttack;
@@ -41,7 +52,6 @@ type ResolvedAttackEffect = {
   readonly expired: readonly ActiveEffect[];
   readonly applied: readonly ActiveEffect[];
 };
-
 type BasicAttackOutcome = {
   readonly actionEffects: readonly ActionEffect[];
   readonly appliedEffects: readonly ActiveEffect[];
@@ -49,7 +59,6 @@ type BasicAttackOutcome = {
   readonly characters: readonly MatchCharacter[];
   readonly activeEffects: readonly ActiveEffect[];
 };
-
 export const AUTOMATED_REACTION_NAMES: ReadonlySet<AbilityName> = new Set([
   "Divine Shield",
   "Misty Escape",
@@ -57,7 +66,6 @@ export const AUTOMATED_REACTION_NAMES: ReadonlySet<AbilityName> = new Set([
   "Deflecting Palm",
   "Shield Wall",
 ]);
-
 export function protectiveReactionWarnings(
   state: ActiveMatchState | EndedMatchState,
   reactionId: ReactionId,
@@ -85,11 +93,32 @@ export function protectiveReactionWarnings(
       : []),
   ];
 }
-
 export function getProtectiveReactionChoices(
   state: ActiveMatchState,
   affectedCharacterIds: readonly CharacterId[],
+  options: ReactionInputList | ReactionChoiceOptions = [],
 ): readonly ProtectiveReactionChoice[] {
+  const selectedReactions: ReactionInputList = Array.isArray(options)
+    ? (options as ReactionInputList)
+    : ((options as ReactionChoiceOptions).selectedReactions ?? []);
+  const physicalAttack = Array.isArray(options)
+    ? true
+    : ((options as ReactionChoiceOptions).physicalAttack ?? true);
+  const selectedBlocks = selectedReactions.reduce<Map<CharacterId, number>>(
+    (counts, selection) => {
+      const reaction = MATCH_CONFIGURATION.reactions.find(
+        ({ id }) => id === selection.reactionId,
+      );
+      if (reaction && isDamageBlockReaction(reaction)) {
+        counts.set(
+          selection.protectedCharacterId,
+          (counts.get(selection.protectedCharacterId) ?? 0) + 1,
+        );
+      }
+      return counts;
+    },
+    new Map<CharacterId, number>(),
+  );
   return MATCH_CONFIGURATION.reactions
     .filter(({ name }) => AUTOMATED_REACTION_NAMES.has(name))
     .flatMap((reaction) =>
@@ -102,16 +131,64 @@ export function getProtectiveReactionChoices(
             characterId === reaction.ownerCharacterId,
         )
         .map((protectedCharacterId) => {
-          const warnings = protectiveReactionWarnings(
+          const baseWarnings = protectiveReactionWarnings(
             state,
             reaction.id,
             protectedCharacterId,
           );
+          const alreadySelected = selectedReactions.some(
+            ({ reactionId, protectedCharacterId: selectedId }) =>
+              reactionId === reaction.id && selectedId === protectedCharacterId,
+          );
+          const vanishWarning =
+            physicalAttack && isVanishProtected(state, protectedCharacterId)
+              ? [
+                  "Vanish prevents protective Reactions for this physically ignored character.",
+                ]
+              : [];
+          const avoidanceConflict = selectedReactions.some((selection) => {
+            if (selection.protectedCharacterId !== protectedCharacterId) {
+              return false;
+            }
+            const selectedReaction = MATCH_CONFIGURATION.reactions.find(
+              ({ id }) => id === selection.reactionId,
+            );
+            return (
+              !alreadySelected &&
+              selectedReaction !== undefined &&
+              isAttackAvoidanceReaction(reaction) !==
+                isAttackAvoidanceReaction(selectedReaction)
+            );
+          });
+          const conflictWarning = avoidanceConflict
+            ? [
+                "Attack Avoidance cannot combine with another protective Reaction against this character.",
+              ]
+            : [];
+          const capacityWarning =
+            isDamageBlockReaction(reaction) &&
+            !alreadySelected &&
+            (selectedBlocks.get(protectedCharacterId) ?? 0) >=
+              damageBlockCapacity(state, protectedCharacterId)
+              ? [
+                  "This Damage Block exceeds the affected character's useful capacity.",
+                ]
+              : [];
+          const warnings = [
+            ...baseWarnings,
+            ...vanishWarning,
+            ...conflictWarning,
+            ...capacityWarning,
+          ];
           return {
             reactionId: reaction.id,
             ownerCharacterId: reaction.ownerCharacterId,
             protectedCharacterId,
             eligible: warnings.length === 0,
+            overrideAllowed:
+              vanishWarning.length === 0 &&
+              conflictWarning.length === 0 &&
+              capacityWarning.length === 0,
             warnings,
           };
         }),
@@ -120,10 +197,18 @@ export function getProtectiveReactionChoices(
       const reaction = MATCH_CONFIGURATION.reactions.find(
         ({ id }) => id === choice.reactionId,
       );
+      if (
+        physicalAttack &&
+        isVanishProtected(state, choice.protectedCharacterId)
+      ) {
+        return false;
+      }
+      if (!physicalAttack && reaction?.name === "Deflecting Palm") {
+        return false;
+      }
       return reaction?.name !== "Deflecting Palm" || choice.eligible;
     });
 }
-
 function resolveAttackContacts(
   state: ActiveMatchState,
   input: BasicAttackInput,
@@ -159,7 +244,6 @@ function resolveAttackContacts(
   }
   return { inputLegs, affectedCharacterIds };
 }
-
 function validateBasicAttack(
   state: ActiveMatchState,
   input: BasicAttackInput,
@@ -176,7 +260,6 @@ function validateBasicAttack(
   assertBasicAttackActionAvailable(state, override);
   return { attack, inputLegs, affectedCharacterIds, override };
 }
-
 function assertBasicAttackConfiguration(state: ActiveMatchState): void {
   if (state.configurationVersion !== MATCH_CONFIGURATION_VERSION) {
     throw new Error(
@@ -184,7 +267,6 @@ function assertBasicAttackConfiguration(state: ActiveMatchState): void {
     );
   }
 }
-
 function assertBasicAttackSourceIsActive(
   state: ActiveMatchState,
   input: BasicAttackInput,
@@ -200,7 +282,6 @@ function assertBasicAttackSourceIsActive(
     throw new Error("A Downed character cannot use Basic Attack.");
   }
 }
-
 function findBasicAttack(sourceCharacterId: CharacterId): BasicAttack {
   const attack = MATCH_CONFIGURATION.basicAttacks.find(
     ({ characterId }) => characterId === sourceCharacterId,
@@ -208,7 +289,6 @@ function findBasicAttack(sourceCharacterId: CharacterId): BasicAttack {
   if (!attack) throw new Error("The active character has no Basic Attack.");
   return attack;
 }
-
 function assertPhysicalConfirmations(input: BasicAttackInput): void {
   if (Object.values(input.physicalConfirmations).some((value) => !value)) {
     throw new Error("Every manual physical confirmation is required.");
@@ -228,7 +308,6 @@ function assertBasicAttackActionAvailable(
     );
   }
 }
-
 function resolveReactionOperations(context: {
   readonly reaction: ProtectiveReaction;
   readonly selection: ProtectiveReactionInput;
@@ -238,6 +317,14 @@ function resolveReactionOperations(context: {
   return reaction.operations.flatMap(
     (operation): readonly ProtectiveReactionOperation[] => {
       if (operation.type === "prevent-damage-and-effects") {
+        return [
+          {
+            type: operation.type,
+            characterId: selection.protectedCharacterId,
+          },
+        ];
+      }
+      if (operation.type === "reduce-remaining-damage") {
         return [
           {
             type: operation.type,
@@ -265,15 +352,20 @@ function resolveReactionOperations(context: {
     },
   );
 }
-
 function resolveProtectiveReactions(context: {
   readonly state: ActiveMatchState;
   readonly sourceCharacterId: CharacterId;
   readonly affectedCharacterIds: readonly CharacterId[];
   readonly selections: readonly ProtectiveReactionInput[];
+  readonly physicalAttack: boolean;
 }): readonly ProtectiveReactionResolution[] {
-  const { state, sourceCharacterId, affectedCharacterIds, selections } =
-    context;
+  const {
+    state,
+    sourceCharacterId,
+    affectedCharacterIds,
+    selections,
+    physicalAttack,
+  } = context;
   return selections.reduce<{
     readonly seen: ReadonlySet<CharacterId>;
     readonly results: readonly ProtectiveReactionResolution[];
@@ -288,9 +380,44 @@ function resolveProtectiveReactions(context: {
       if (!affectedCharacterIds.includes(selection.protectedCharacterId)) {
         throw new Error("A Reaction can protect only an affected character.");
       }
+      if (
+        physicalAttack &&
+        isVanishProtected(state, selection.protectedCharacterId)
+      ) {
+        throw new Error(
+          "Vanish prevents protective Reactions for this physically ignored character.",
+        );
+      }
       if (accumulated.seen.has(reaction.ownerCharacterId)) {
         throw new Error(
           "One character cannot use two Reactions against one attack.",
+        );
+      }
+      const avoidanceConflict = accumulated.results.some(
+        (previous) =>
+          previous.protectedCharacterId === selection.protectedCharacterId &&
+          isAttackAvoidanceReaction(reaction) !==
+            isAttackAvoidanceReaction(
+              MATCH_CONFIGURATION.reactions.find(
+                ({ id }) => id === previous.reactionId,
+              ) as ProtectiveReaction,
+            ),
+      );
+      if (avoidanceConflict) {
+        throw new Error(
+          "Attack Avoidance cannot combine with another protective Reaction against this character.",
+        );
+      }
+      if (
+        isDamageBlockReaction(reaction) &&
+        accumulated.results.filter(
+          ({ protectedCharacterId: targetId, operations }) =>
+            targetId === selection.protectedCharacterId &&
+            operations.some(({ type }) => type === "reduce-remaining-damage"),
+        ).length >= damageBlockCapacity(state, selection.protectedCharacterId)
+      ) {
+        throw new Error(
+          "A Damage Block exceeds the affected character's useful capacity.",
         );
       }
       const warnings = protectiveReactionWarnings(
@@ -364,11 +491,27 @@ function protectedCharacterIds(
   );
 }
 
+function damageBlockCounts(
+  reactions: readonly ProtectiveReactionResolution[],
+): ReadonlyMap<CharacterId, number> {
+  return reactions.reduce<Map<CharacterId, number>>((counts, reaction) => {
+    for (const operation of reaction.operations) {
+      if (operation.type !== "reduce-remaining-damage") continue;
+      counts.set(
+        operation.characterId,
+        (counts.get(operation.characterId) ?? 0) + 1,
+      );
+    }
+    return counts;
+  }, new Map<CharacterId, number>());
+}
+
 function resolveAttackEffects(context: {
   readonly state: ActiveMatchState;
   readonly attack: BasicAttack;
   readonly affectedCharacterIds: readonly CharacterId[];
   readonly protectedCharacterIds: ReadonlySet<CharacterId>;
+  readonly damageBlockCounts: ReadonlyMap<CharacterId, number>;
   readonly sequence: number;
 }): readonly ResolvedAttackEffect[] {
   const {
@@ -376,6 +519,7 @@ function resolveAttackEffects(context: {
     attack,
     affectedCharacterIds,
     protectedCharacterIds: protectedIds,
+    damageBlockCounts: blocks,
     sequence,
   } = context;
   return affectedCharacterIds.map((characterId) => {
@@ -394,6 +538,7 @@ function resolveAttackEffects(context: {
       physicalAttack: true,
       prevented: protectedIds.has(characterId),
       activeEffects: state.activeEffects,
+      damageBlocks: blocks.get(characterId) ?? 0,
       sequence,
     });
     const hpAfter = Math.max(0, character.hp - resolved.finalDamage);
@@ -466,6 +611,7 @@ function resolveBasicAttackOutcome(context: {
   readonly attack: BasicAttack;
   readonly affectedCharacterIds: readonly CharacterId[];
   readonly protectedCharacterIds: ReadonlySet<CharacterId>;
+  readonly damageBlockCounts: ReadonlyMap<CharacterId, number>;
   readonly sequence: number;
 }): BasicAttackOutcome {
   const { state } = context;
@@ -578,15 +724,18 @@ export function resolveBasicAttack(
     sourceCharacterId: input.sourceCharacterId,
     affectedCharacterIds,
     selections: input.reactions ?? [],
+    physicalAttack: true,
   });
   const redirectReaction = redirectReactionForAttack(inputLegs, reactions);
   const protectedIds = protectedCharacterIds(reactions);
+  const blocks = damageBlockCounts(reactions);
   const sequence = state.sequence + 1;
   const attackOutcome = resolveBasicAttackOutcome({
     state,
     attack,
     affectedCharacterIds,
     protectedCharacterIds: protectedIds,
+    damageBlockCounts: blocks,
     sequence,
   });
   const eliminatedTeams = resultingEliminations(

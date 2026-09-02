@@ -287,8 +287,19 @@ export function attackPreviewRow(
   const character = rulesCharacterOf(characterId);
   const hp = hpByIdMap(match).get(characterId) ?? 0;
   const prevented = draft.reactions.some(
-    ({ protectedCharacterId }) => protectedCharacterId === characterId,
+    ({ reactionId, protectedCharacterId }) =>
+      protectedCharacterId === characterId &&
+      MATCH_CONFIGURATION.reactions
+        .find(({ id }) => id === reactionId)
+        ?.operations.some(({ type }) => type === "prevent-damage-and-effects"),
   );
+  const damageBlocks = draft.reactions.filter(
+    ({ reactionId, protectedCharacterId }) =>
+      protectedCharacterId === characterId &&
+      MATCH_CONFIGURATION.reactions
+        .find(({ id }) => id === reactionId)
+        ?.operations.some(({ type }) => type === "reduce-remaining-damage"),
+  ).length;
   // The commit path resolves with the next sequence number; previews never
   // render the hex movement cap it can attach.
   const resolved = resolveAttackDamageAgainstCharacter({
@@ -296,6 +307,7 @@ export function attackPreviewRow(
     affectedCharacterId: characterId,
     physicalAttack,
     prevented,
+    damageBlocks,
     activeEffects: match.activeEffects,
     sequence: match.sequence + 1,
   });
@@ -319,6 +331,9 @@ export function attackPreviewRow(
         effect.kind === "vanish" && effect.affectedCharacterId === characterId,
     );
   const notes = [
+    ...(damageBlocks > 0
+      ? [`${String(damageBlocks)} Damage Block applied`]
+      : []),
     ...consumedNames.map((name) => `${name} consumed`),
     ...(vanishRetained ? ["Vanish retained"] : []),
   ];
@@ -330,7 +345,7 @@ export function attackPreviewRow(
     // across its interpolated halves.
     damageText: [
       String(damage),
-      damage === 0 ? " (prevented)" : "",
+      damage === 0 && prevented ? " (prevented)" : "",
       notes.length > 0 ? ` · ${notes.join(" · ")}` : "",
     ].join(""),
     hpText: `${String(hp)} → ${String(after)}`,

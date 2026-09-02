@@ -33,6 +33,14 @@ _Avoid_: Action result, combat log entry
 One ordered segment of a physical attack, from its original throw or a Reaction redirection through its later legal bottle contacts.
 _Avoid_: Throw segment, hit group
 
+**Damage Block**:
+A Reaction effect that reduces an attack's remaining damage without erasing a legal hit or its attached effects.
+_Avoid_: Attack prevention, hit avoidance
+
+**Attack Avoidance**:
+A Reaction effect that prevents an attack's damage and attached effects from resolving against one character after its trigger occurs.
+_Avoid_: Damage block, cancelled contact
+
 **Team Elimination**:
 The permanent Match State condition that starts when all six characters on one team are Downed at the same time.
 _Avoid_: Team loss, defeat flag
