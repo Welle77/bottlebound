@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createApplication,
@@ -16,6 +16,10 @@ import {
   type RandomSource,
 } from "../../src/domain/match";
 import type { MatchStore, RestoredMatch } from "../../src/storage/match-store";
+import type {
+  ValidatedStorageProbe,
+  ValidatedStorageProbeResult,
+} from "../../src/storage/validated-storage-probe";
 
 type StoreOptions = {
   readonly restored?: RestoredMatch | null;
@@ -92,26 +96,44 @@ function createRandom(...values: readonly number[]): RandomSource {
   };
 }
 
+type TestApplicationOptions = {
+  readonly clock?: ApplicationClock;
+  readonly randomSource?: RandomSource;
+  readonly storageProbe?: ValidatedStorageProbe;
+};
+
+function readyStorageProbe(): ValidatedStorageProbe {
+  return (): Promise<ValidatedStorageProbeResult> =>
+    Promise.resolve({ status: "ready" });
+}
+
 function createTestApplication(
   store: MatchStore,
-  clock: ApplicationClock = createClock("2026-09-01T10:00:00.000Z"),
-  randomSource: RandomSource = createRandom(0),
+  options: TestApplicationOptions = {},
 ): Application {
-  return createApplication({ matchStore: store, clock, randomSource });
+  return createApplication({
+    matchStore: store,
+    clock: options.clock ?? createClock("2026-09-01T10:00:00.000Z"),
+    randomSource: options.randomSource ?? createRandom(0),
+    storageProbe: options.storageProbe ?? readyStorageProbe(),
+  });
 }
 
 describe("application interface", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("creates and starts a Match with deterministic time and randomness", async () => {
     const store = createStore();
-    const application = createTestApplication(
-      store,
-      createClock(
+    const application = createTestApplication(store, {
+      clock: createClock(
         "2026-09-01T10:00:00.000Z",
         "2026-09-01T10:01:00.000Z",
         "2026-09-01T10:02:00.000Z",
       ),
-      createRandom(19, 18, 17, 16, 15, 12, 10, 9, 8, 10, 7, 6),
-    );
+      randomSource: createRandom(19, 18, 17, 16, 15, 12, 10, 9, 8, 10, 7, 6),
+    });
 
     expect(await application.createMatch("application-match")).toBe(true);
     expect(await application.generateInitiative()).toBe(true);
@@ -203,6 +225,54 @@ describe("application interface", () => {
     });
   });
 
+  it("uses an injected ready storage probe without ambient IndexedDB access", async () => {
+    vi.stubGlobal("indexedDB", undefined);
+    const application = createTestApplication(createStore(), {
+      storageProbe: readyStorageProbe(),
+    });
+
+    await expect(application.probeStorage()).resolves.toBe(true);
+    expect(application.state.validation.storage).toBe("ready");
+    expect(application.state.readiness.matchCreation).toBe("available");
+    vi.unstubAllGlobals();
+  });
+
+  it("exposes an injected failed storage probe through application readiness", async () => {
+    const application = createTestApplication(createStore(), {
+      storageProbe: (): Promise<ValidatedStorageProbeResult> =>
+        Promise.resolve({
+          status: "failed",
+          reason: "Injected storage failure.",
+        }),
+    });
+
+    await expect(application.probeStorage()).resolves.toBe(false);
+    expect(application.state.validation.storage).toBe("failed");
+    expect(application.state.errors.validation).toBe(
+      "Injected storage failure.",
+    );
+    expect(application.state.readiness.matchCreation).toBe("blocked");
+  });
+
+  it("keeps Match creation unavailable when the injected probe cannot access storage", async () => {
+    const application = createTestApplication(createStore(), {
+      storageProbe: (): Promise<ValidatedStorageProbeResult> =>
+        Promise.resolve({
+          status: "failed",
+          reason: "IndexedDB is unavailable in this host.",
+        }),
+    });
+
+    await expect(application.probeStorage()).resolves.toBe(false);
+    expect(application.state.validation.storage).toBe("failed");
+    expect(application.state.validation.storageDetail).toBe(
+      "IndexedDB is unavailable in this host. The shell remains safe. Retry this check.",
+    );
+    expect(application.state.readiness.blockingReason).toBe(
+      "Validated storage is unavailable. Retry the storage check before you create a Match.",
+    );
+  });
+
   it("records a deterministic End Game summary through the application seam", async () => {
     const setup = createSetup("summary-match", "2026-09-01T12:00:00.000Z");
     const generated = generateInitiative(
@@ -225,11 +295,10 @@ describe("application interface", () => {
         summary: null,
       },
     });
-    const application = createTestApplication(
-      store,
-      createClock("2026-09-01T12:02:00.000Z"),
-      createRandom(0),
-    );
+    const application = createTestApplication(store, {
+      clock: createClock("2026-09-01T12:02:00.000Z"),
+      randomSource: createRandom(0),
+    });
 
     expect(await application.load()).toBe(true);
     expect(application.previewEndGame()?.coinFlipResult).toBe("Drow");

@@ -21,7 +21,6 @@ import {
   type Team,
 } from "../domain/match";
 import { deriveReadinessState } from "../readiness";
-import { probeValidatedStorage } from "../storage/validated-storage-probe";
 import type {
   AppShellCacheState,
   NetworkState,
@@ -235,7 +234,7 @@ export function createApplication(
       status: "checking",
       detail: "Running a write and removal safety check.",
     });
-    const result = await probeValidatedStorage();
+    const result = await dependencies.storageProbe();
     setStorageValidation({
       status: result.status,
       detail:

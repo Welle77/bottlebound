@@ -2,6 +2,8 @@ export type ValidatedStorageProbeResult =
   | { readonly status: "ready" }
   | { readonly status: "failed"; readonly reason: string };
 
+export type ValidatedStorageProbe = () => Promise<ValidatedStorageProbeResult>;
+
 const PROBE_DATABASE = "bottlebound-validated-storage-probe";
 const PROBE_STORE = "probe";
 
@@ -84,7 +86,7 @@ async function performValidatedStorageProbe(
 }
 
 export async function probeValidatedStorage(
-  factory: IDBFactory = globalThis.indexedDB,
+  factory: IDBFactory | undefined = globalThis.indexedDB,
 ): Promise<ValidatedStorageProbeResult> {
   try {
     await performValidatedStorageProbe(factory);
@@ -96,4 +98,10 @@ export async function probeValidatedStorage(
         "IndexedDB could not complete the validated write and removal check.",
     };
   }
+}
+
+export function createIndexedDbStorageProbe(
+  factory: IDBFactory | undefined = globalThis.indexedDB,
+): ValidatedStorageProbe {
+  return () => probeValidatedStorage(factory);
 }

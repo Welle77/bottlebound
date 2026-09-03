@@ -10,6 +10,7 @@ Committed pipeline configuration. Coding and content rules live in the adjacent
 - Format: `pnpm run format:check`
 - Focused test: `pnpm run test:focused`
 - Full suite: `pnpm run test`
+- Canonical gate: `pnpm run check`
 
 ## Contract surfaces
 

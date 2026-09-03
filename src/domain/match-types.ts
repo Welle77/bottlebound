@@ -1,6 +1,6 @@
 import * as z from "zod";
 
-export const MATCH_SCHEMA_VERSION = 5;
+export const MATCH_SCHEMA_VERSION = 6;
 
 export const SAFE_INTEGER = z.number().int();
 
@@ -626,6 +626,8 @@ export type ProtectiveReactionChoice = {
 export type ActionResolvedEvent = {
   readonly type: "ActionResolved";
   readonly actionType: ActionKind;
+  /** Exact number of actions this resolution consumed when it was recorded. */
+  readonly actionCost: 1 | 2;
   readonly sourceCharacterId: CharacterId;
   readonly attackId: AttackId;
   readonly attackType: AttackKind;

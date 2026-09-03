@@ -3,11 +3,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   createSetup,
+  finishTurn,
   generateInitiative,
+  resolveAbility,
   resolveBasicAttack,
   restoreStateFromEvents,
   startMatch,
   undoLastEvent,
+  type MatchEvent,
 } from "../../src/domain/match";
 import { createIndexedDbMatchStore } from "../../src/storage/match-store";
 import {
@@ -89,6 +92,58 @@ describe("IndexedDbMatchStore", () => {
       state: undone.state,
       events: [...history, undone.event],
       summary: null,
+    });
+  });
+
+  it("restores and undoes a Powerful Ability with its two-action cost", async () => {
+    const store = createIndexedDbMatchStore(
+      new IDBFactory(),
+      "restore-powerful-action-cost",
+    );
+    const setup = createSetup(
+      "match-powerful-action-cost",
+      "2026-09-03T09:00:00.000Z",
+    );
+    const generated = generateInitiative(
+      setup.state,
+      randomQueue([10, 19, 11, 8, 7, 14, 11, 12, 10, 9, 6, 5]),
+      "2026-09-03T09:01:00.000Z",
+    );
+    const started = startMatch(generated.state, "2026-09-03T09:02:00.000Z");
+    let current = started.state;
+    const events: MatchEvent[] = [setup.event, generated.event, started.event];
+    while (
+      current.initiative[current.activeSlot - 1]?.characterId !== "drow-rogue"
+    ) {
+      const finished = finishTurn(current, "2026-09-03T09:03:00.000Z");
+      events.push(finished.event);
+      current = finished.state;
+    }
+    const vanished = resolveAbility(
+      current,
+      { abilityId: "drow-rogue-vanish" },
+      "2026-09-03T09:04:00.000Z",
+    );
+    const history = [...events, vanished.event];
+
+    expect(vanished.event.actionCost).toBe(2);
+    for (const [index, event] of history.entries()) {
+      await store.commit(
+        event,
+        restoreStateFromEvents(history.slice(0, index + 1)),
+      );
+    }
+    const restored = await store.restore();
+    if (!restored) throw new Error("The Powerful Ability Match must restore.");
+    expect(restored.state.actionsUsed).toBe(2);
+
+    const undone = undoLastEvent(restored.state, restored.events, {
+      occurredAt: "2026-09-03T09:05:00.000Z",
+      confirmed: true,
+    });
+    await store.commit(undone.event, undone.state);
+    await expect(store.restore()).resolves.toMatchObject({
+      state: { actionsUsed: 0 },
     });
   });
 

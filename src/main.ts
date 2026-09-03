@@ -4,6 +4,7 @@ import { mount } from "svelte";
 
 import { cryptoRandomSource } from "./domain/match";
 import { createIndexedDbMatchStore } from "./storage/match-store";
+import { createIndexedDbStorageProbe } from "./storage/validated-storage-probe";
 import App from "./ui/App.svelte";
 import { createUiState } from "./ui/ui-state.svelte";
 import { createApplication } from "./app/application";
@@ -16,6 +17,7 @@ const application = createApplication({
   matchStore,
   clock: { now: (): string => new Date().toISOString() },
   randomSource: cryptoRandomSource,
+  storageProbe: createIndexedDbStorageProbe(),
 });
 const uiState = createUiState();
 

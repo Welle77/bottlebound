@@ -735,6 +735,7 @@ export function resolveBasicAttack(
     configurationVersion: state.configurationVersion,
     occurredAt,
     actionType: "Basic Attack",
+    actionCost: 1,
     sourceCharacterId: input.sourceCharacterId,
     attackId: attack.id,
     attackType: attack.attackType,

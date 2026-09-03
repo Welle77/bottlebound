@@ -233,6 +233,7 @@ const reactionResolutionSchema = z.object({
 const actionResolvedSchema = eventBaseSchema.extend({
   type: z.literal("ActionResolved"),
   actionType: actionKindSchema,
+  actionCost: z.union([z.literal(1), z.literal(2)]),
   sourceCharacterId: characterIdSchema,
   attackId: attackIdSchema,
   attackType: attackKindSchema,

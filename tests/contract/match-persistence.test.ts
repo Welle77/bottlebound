@@ -46,7 +46,7 @@ describe("Match command persistence contract", () => {
     expect(setup.event).toMatchObject({
       configurationVersion: MATCH_CONFIGURATION_VERSION,
     });
-    expect(MATCH_SCHEMA_VERSION).toBe(5);
+    expect(MATCH_SCHEMA_VERSION).toBe(6);
   });
 
   it("commits one matching event and snapshot for every Match command", async () => {
@@ -112,7 +112,7 @@ describe("Match command persistence contract", () => {
       summary: null,
     });
     expect(undone.state.schemaVersion).toBe(MATCH_SCHEMA_VERSION);
-    expect(MATCH_SCHEMA_VERSION).toBe(5);
+    expect(MATCH_SCHEMA_VERSION).toBe(6);
     expect(generated.event.type).toBe("InitiativeGenerated");
     expect(rerolled.event.type).toBe("InitiativeRerolled");
   });

@@ -1,8 +1,16 @@
 import { MATCH_CONFIGURATION } from "../domain/match";
 import type { ActiveEffect, CharacterId } from "../domain/match";
-import shieldCheckIcon from "@phosphor-icons/core/bold/shield-check-bold.svg?url";
-import skullIcon from "@phosphor-icons/core/bold/skull-bold.svg?url";
-import warningOctagonIcon from "@phosphor-icons/core/bold/warning-octagon-bold.svg?url";
+import shieldCheckIconSvg from "@phosphor-icons/core/bold/shield-check-bold.svg?raw";
+import skullIconSvg from "@phosphor-icons/core/bold/skull-bold.svg?raw";
+import warningOctagonIconSvg from "@phosphor-icons/core/bold/warning-octagon-bold.svg?raw";
+
+function inlineSvg(svg: string): string {
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+const shieldCheckIcon = inlineSvg(shieldCheckIconSvg);
+const skullIcon = inlineSvg(skullIconSvg);
+const warningOctagonIcon = inlineSvg(warningOctagonIconSvg);
 
 export type ActiveEffectStatus = {
   readonly effectId: string;

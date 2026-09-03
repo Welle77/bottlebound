@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   createSetup,
+  finishTurn,
   generateInitiative,
   resolveAbility,
+  resolveBasicAttack,
   restoreStateFromEvents,
   startMatch,
+  type ActionResolvedEvent,
+  type MatchEvent,
 } from "../../src/domain/match";
 import { queuedRandom } from "./match-test-support";
 
@@ -138,5 +142,52 @@ describe("Ability resolution", () => {
         ({ characterId }) => characterId === "drow-druid",
       ),
     ).toMatchObject({ currentMaxHp: 4, hp: 4 });
+  });
+
+  it("replays a historical Powerful Ability as two actions and blocks a following action", () => {
+    const { setup, generated, started } = startedMatchWithActiveDruid();
+    let rogueTurn = started.state;
+    const events: MatchEvent[] = [setup.event, generated.event, started.event];
+    while (
+      rogueTurn.initiative[rogueTurn.activeSlot - 1]?.characterId !==
+      "drow-rogue"
+    ) {
+      const finished = finishTurn(rogueTurn, "2026-08-22T14:03:00.000Z");
+      events.push(finished.event);
+      rogueTurn = finished.state;
+    }
+    const vanished = resolveAbility(
+      rogueTurn,
+      { abilityId: "drow-rogue-vanish" },
+      "2026-08-22T14:04:00.000Z",
+    );
+    expect(vanished.event).toMatchObject({ actionCost: 2 });
+    const historicalVanish = Object.fromEntries(
+      Object.entries(vanished.event).filter(([key]) => key !== "abilityId"),
+    ) as ActionResolvedEvent;
+
+    const replayed = restoreStateFromEvents([...events, historicalVanish]);
+
+    expect(replayed.actionsUsed).toBe(2);
+    if (replayed.phase !== "active") {
+      throw new Error("The replayed Match must remain active.");
+    }
+    expect(() =>
+      resolveBasicAttack(
+        replayed,
+        {
+          sourceCharacterId: "drow-rogue",
+          affectedCharacterIds: ["duergar-ranger"],
+          physicalConfirmations: {
+            range: true,
+            lineOfSight: true,
+            legalBottleContact: true,
+            terrainContact: true,
+          },
+          majorActionOverride: null,
+        },
+        "2026-08-22T14:05:00.000Z",
+      ),
+    ).toThrow("Basic Attack needs an unused action");
   });
 });

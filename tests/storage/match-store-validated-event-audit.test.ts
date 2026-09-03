@@ -14,7 +14,12 @@ import {
   initiativeCharacterId,
   queuedRandom,
 } from "../domain/match-test-support";
+import {
+  advanceTo,
+  startedAuditMatch,
+} from "../domain/match-rules-audit-fixtures";
 import type { MatchEvent } from "../../src/domain/match";
+import { assertCommit } from "../../src/storage/match-store-validated-commit";
 import { assertValidatedEvent } from "../../src/storage/match-store-validated-event";
 import { assertValidatedState } from "../../src/storage/match-store-validated-state";
 
@@ -113,6 +118,16 @@ function markedResolution(): {
   return resolved;
 }
 
+function powerfulResolution() {
+  const run = startedAuditMatch("audit-powerful-action-cost");
+  const rogueTurn = advanceTo(run, "drow-rogue");
+  return resolveAbility(
+    rogueTurn,
+    { abilityId: "drow-rogue-vanish" },
+    "2026-09-03T09:00:00.000Z",
+  );
+}
+
 function redirectedResolution(): ActionResolvedEvent {
   const setup = createSetup(
     "audit-retired-reaction",
@@ -195,6 +210,32 @@ describe("validated Event configuration versions", () => {
 });
 
 describe("validated Action Resolution recorded Ability Override", () => {
+  it("rejects a two-action resolution whose committed snapshot spent one action", () => {
+    const resolution = powerfulResolution();
+
+    expect(() => {
+      assertCommit(resolution.event, { ...resolution.state, actionsUsed: 1 });
+    }).toThrow("Action Resolution Event and snapshot do not match");
+  });
+
+  it("rejects an Action Resolution without its exact action cost", () => {
+    const legacy = Object.fromEntries(
+      Object.entries(overriddenResolution()).filter(
+        ([key]) => key !== "actionCost",
+      ),
+    ) as MatchEvent;
+
+    expect(() => {
+      assertValidatedEvent(legacy);
+    }).toThrow("The validated Action Resolution Event is invalid.");
+  });
+
+  it("rejects an Action Resolution whose recorded cost disagrees with its action", () => {
+    expect(() => {
+      assertValidatedEvent({ ...overriddenResolution(), actionCost: 2 });
+    }).toThrow("The validated Action Resolution Event is invalid.");
+  });
+
   it("admits an Ability resolution whose recorded Override sentence is persisted", () => {
     const event = overriddenResolution();
     expect(event).toMatchObject({

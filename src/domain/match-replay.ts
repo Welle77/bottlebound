@@ -3,7 +3,7 @@ import {
   isAbilityId,
   isActionKind,
   isTeam,
-  nextActionCount,
+  consumeActionCount,
 } from "./match-types";
 import { resolveAbility } from "./match-abilities";
 import { resolveBasicAttack } from "./match-combat";
@@ -63,7 +63,11 @@ function applyHistoricalActionResolution(
   return {
     ...state,
     sequence: event.sequence,
-    actionsUsed: nextActionCount(state.actionsUsed, state.majorActionUsed),
+    actionsUsed: consumeActionCount(
+      state.actionsUsed,
+      state.majorActionUsed,
+      event.actionCost,
+    ),
     majorActionUsed: true,
     spentReactionIds: [
       ...new Set([

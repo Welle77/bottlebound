@@ -31,6 +31,16 @@ function createTestCell<T>(initialValue: T) {
 }
 
 describe("service worker navigation responses", () => {
+  it("uses a new shell cache generation for bundled effect icons", () => {
+    const source = readFileSync(
+      new URL("../public/sw.js", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toContain('const CACHE_VERSION = "bottlebound-shell-v5";');
+    expect(source).toContain('  "/assets/app.js",');
+  });
+
   it("does not use a redirected cached response for a navigation", async () => {
     const listeners = createTestCell<
       readonly (readonly [string, (event: WorkerEvent) => void])[]

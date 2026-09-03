@@ -121,10 +121,8 @@ function assertActionResolvedCommit(
   event: ActionResolvedEvent,
   state: MatchState,
 ): void {
-  if (
-    state.phase !== "active" ||
-    (state.actionsUsed ?? (state.majorActionUsed ? 1 : 0)) < 1
-  ) {
+  const actionsUsed = state.actionsUsed ?? (state.majorActionUsed ? 1 : 0);
+  if (state.phase !== "active" || actionsUsed < event.actionCost) {
     throw new Error("The Action Resolution Event and snapshot do not match.");
   }
   const activeSource = state.initiative[state.activeSlot - 1]?.characterId;

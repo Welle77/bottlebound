@@ -712,6 +712,7 @@ export function resolveAbility(
     configurationVersion: state.configurationVersion,
     occurredAt,
     actionType: "Ability",
+    actionCost: ability.actionType === "powerful" ? 2 : 1,
     sourceCharacterId: ability.ownerCharacterId,
     attackId: ability.id,
     attackType: "ability",

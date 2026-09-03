@@ -1,6 +1,7 @@
-const CACHE_VERSION = "bottlebound-shell-v4";
+const CACHE_VERSION = "bottlebound-shell-v5";
 const APP_SHELL = [
   "/index.html",
+  // Effect-status SVGs are bundled inline in the app entry.
   "/assets/app.js",
   "/assets/style.css",
   "/manifest.webmanifest",

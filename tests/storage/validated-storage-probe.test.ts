@@ -1,7 +1,10 @@
 import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it } from "vitest";
 
-import { probeValidatedStorage } from "../../src/storage/validated-storage-probe";
+import {
+  createIndexedDbStorageProbe,
+  probeValidatedStorage,
+} from "../../src/storage/validated-storage-probe";
 
 describe("validated storage probe", () => {
   it("reports ready only after IndexedDB writes and removes the probe record", async () => {
@@ -10,6 +13,12 @@ describe("validated storage probe", () => {
     await expect(probeValidatedStorage(indexedDB)).resolves.toEqual({
       status: "ready",
     });
+  });
+
+  it("creates an application probe adapter from an explicit IndexedDB factory", async () => {
+    const storageProbe = createIndexedDbStorageProbe(new IDBFactory());
+
+    await expect(storageProbe()).resolves.toEqual({ status: "ready" });
   });
 
   it("returns a safe blocking result when IndexedDB cannot open", async () => {

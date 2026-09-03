@@ -63,10 +63,26 @@ function assertAbilityMetadata(value: Record<string, unknown>): void {
   if (!hasCurrentAbilityMetadata(value)) throw invalidActionResolution();
 }
 
+function hasExactActionCost(value: Record<string, unknown>): boolean {
+  if (value.actionType === "Basic Attack") return value.actionCost === 1;
+  const ability = MATCH_CONFIGURATION.abilities.find(
+    ({ id }) => id === value.attackId,
+  );
+  return (
+    ability !== undefined &&
+    value.actionCost === (ability.actionType === "powerful" ? 2 : 1)
+  );
+}
+
 export function assertActionResolutionMetadata(
   value: Record<string, unknown>,
 ): void {
-  if (typeof value.actionType !== "string" || !isActionKind(value.actionType)) {
+  if (
+    typeof value.actionType !== "string" ||
+    !isActionKind(value.actionType) ||
+    (value.actionCost !== 1 && value.actionCost !== 2) ||
+    !hasExactActionCost(value)
+  ) {
     throw invalidActionResolution();
   }
   assertBasicAttackMetadata(value);

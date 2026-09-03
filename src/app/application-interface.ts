@@ -18,6 +18,7 @@ import type {
   ReadinessState,
 } from "../readiness";
 import type { MatchStore } from "../storage/match-store";
+import type { ValidatedStorageProbe } from "../storage/validated-storage-probe";
 import type { AbilityDraftInput } from "./ability-input";
 
 export type { AbilityDraftInput } from "./ability-input";
@@ -30,6 +31,7 @@ export type ApplicationDependencies = {
   readonly matchStore: MatchStore;
   readonly clock: ApplicationClock;
   readonly randomSource: RandomSource;
+  readonly storageProbe: ValidatedStorageProbe;
 };
 
 export type MatchValidationState = "unknown" | "valid" | "invalid";

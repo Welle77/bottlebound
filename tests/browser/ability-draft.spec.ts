@@ -104,7 +104,8 @@ test("self ability confirms in one step, spends, persists, and undoes exactly", 
   ).toBeVisible();
 });
 
-test("active effect icons open spell details over the initiative list", async ({
+test("active effect icons open spell details and load after an offline reload", async ({
+  context,
   page,
 }) => {
   await startMatch(page);
@@ -154,6 +155,28 @@ test("active effect icons open spell details over the initiative list", async ({
     before.height,
   );
   await expect(page.locator(".active-order tbody tr")).toHaveCount(before.rows);
+
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "Active Match" }),
+  ).toBeVisible();
+  await context.setOffline(true);
+  await page.reload();
+
+  const offlineIcon = page
+    .locator("[data-active-order-row]", { hasText: "Fighter" })
+    .getByRole("button", { name: "Buff: Hold the Line" })
+    .locator(".effect-status-glyph");
+  await expect(offlineIcon).toBeVisible();
+  await expect(offlineIcon).toHaveAttribute("src", /^data:image\/svg\+xml,/u);
+  await expect
+    .poll(() =>
+      offlineIcon.evaluate((element) =>
+        element instanceof HTMLImageElement ? element.naturalWidth : 0,
+      ),
+    )
+    .toBeGreaterThan(0);
 });
 
 test("debuff effect icons identify the active spell", async ({ page }) => {
