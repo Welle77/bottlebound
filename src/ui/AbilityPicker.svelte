@@ -29,6 +29,13 @@
   const actionsUsed = $derived(
     match.actionsUsed ?? (match.majorActionUsed ? 1 : 0),
   );
+  const powerfulAbilityBlocked = $derived(
+    match.activeEffects.some(
+      (effect) =>
+        effect.kind === "prohibit-powerful" &&
+        effect.affectedCharacterId === activeRules.id,
+    ),
+  );
 
   function abilityMeta(ability: MatchConfigurationAbility): string {
     const label = ability.actionType === "powerful"
@@ -153,7 +160,8 @@
               type="button"
               data-open-ability={ability.id}
               disabled={application.state.saving ||
-                (ability.actionType === "powerful" && actionsUsed > 0)}
+                (ability.actionType === "powerful" &&
+                  (actionsUsed > 0 || powerfulAbilityBlocked))}
               onclick={() => void openAbilityDraft(ability.id)}
             >
               {application.state.saving ? "Saving…" : `Use ${ability.name}`}

@@ -575,3 +575,19 @@ test("a Powerful Ability cannot be selected after a Basic Attack", async ({
   await page.getByRole("button", { name: "Use Ability" }).click();
   await expect(page.getByRole("button", { name: "Use Vanish" })).toBeDisabled();
 });
+
+test("Stunning Strike blocks the Bard's Battle Hymn", async ({ page }) => {
+  await startMatch(page);
+  await activateCharacter(page, "Monk");
+  await page.getByRole("button", { name: "Use Ability" }).click();
+  await page.getByRole("button", { name: "Use Stunning Strike" }).click();
+  await page.getByLabel(/Bard · Drow/).check();
+  await completePhysicalChecks(page);
+  await page.getByRole("button", { name: "Record Action Resolution" }).click();
+
+  await activateCharacter(page, "Bard");
+  await page.getByRole("button", { name: "Use Ability" }).click();
+  await expect(
+    page.getByRole("button", { name: "Use Battle Hymn" }),
+  ).toBeDisabled();
+});
