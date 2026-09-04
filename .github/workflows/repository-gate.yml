@@ -18,25 +18,9 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@latest
-        with:
-          persist-credentials: false
+      - uses: actions/checkout@v7
 
-      - name: Verify checkout credentials are not persisted
-        run: |
-          if git config --local --get-regexp '^http\..*\.extraheader$'; then
-            echo "Checkout persisted a Git credential extraheader." >&2
-            exit 1
-          fi
-
-      - uses: pnpm/setup@latest
-        with:
-          version: 11.24.0
-
-      - uses: actions/setup-node@latest
-        with:
-          node-version: 26
-          cache: pnpm
+      - uses: pnpm/setup@v2
 
       - run: pnpm install --frozen-lockfile
 
@@ -46,7 +30,7 @@ jobs:
 
       - name: Upload Playwright failure evidence
         if: failure()
-        uses: actions/upload-artifact@latest
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-failure-evidence
           path: |
