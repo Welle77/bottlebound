@@ -29,7 +29,7 @@
     <dd class:critical-hp={hp === 1}>{hp}/{maxHp}</dd>
   </div>
   <div>
-    <dt>Movement</dt>
+    <dt>Move</dt>
     <dd>{movementPaces} paces</dd>
   </div>
   <div>
@@ -37,6 +37,7 @@
     <dd data-character-attack-range>
       <img
         src={attackType === "melee" ? swordIcon : targetIcon}
+        data-range-icon={attackType}
         alt=""
         aria-hidden="true"
       />

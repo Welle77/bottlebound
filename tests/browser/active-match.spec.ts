@@ -48,7 +48,7 @@ test("the referee starts, advances, wraps, and restores an Active Match", async 
   ).toHaveCount(1);
   await expect(
     page.locator("[data-character-attack-range]").first().locator("img"),
-  ).toHaveAttribute("src", /sword/);
+  ).toHaveAttribute("data-range-icon", "melee");
   await expect(
     page.locator("[data-next-character] [data-character-attack-range]"),
   ).toHaveCount(1);
