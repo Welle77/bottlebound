@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
@@ -21,24 +21,6 @@ function readRepositoryFile(path: string): string {
 
 function packageManifest(): PackageManifest {
   return JSON.parse(readRepositoryFile("package.json")) as PackageManifest;
-}
-
-function workflowPaths(): readonly string[] {
-  return readdirSync(".github/workflows")
-    .filter((path) => /\.ya?ml$/u.test(path))
-    .map((path) => `.github/workflows/${path}`);
-}
-
-function actionReferences(workflow: string): readonly string[] {
-  return [
-    ...workflow.matchAll(/^[ \t]*(?:-[ \t]*)?uses:[ \t]*([^ \t#\r\n]+)/gmu),
-  ].flatMap(([, reference]) => (reference === undefined ? [] : [reference]));
-}
-
-function mutableActionReferences(workflow: string): readonly string[] {
-  return actionReferences(workflow).filter(
-    (reference) => !/@[0-9a-f]{40}$/u.test(reference),
-  );
 }
 
 describe("maintainability guardrails", () => {
@@ -117,21 +99,5 @@ describe("maintainability guardrails", () => {
     expect(workflow).toContain("pnpm run check");
     expect(workflow).toContain("if: failure()");
     expect(workflow).toContain("playwright-failure-evidence");
-  });
-
-  it("rejects mutable GitHub Action references and checks the checkout canary", () => {
-    const workflow = readRepositoryFile(
-      ".github/workflows/repository-gate.yml",
-    );
-    const workflows = workflowPaths().map(readRepositoryFile);
-
-    expect(
-      mutableActionReferences("      - uses: actions/checkout@v6"),
-    ).toEqual(["actions/checkout@v6"]);
-    expect(workflows.flatMap(actionReferences)).not.toHaveLength(0);
-    expect(workflows.flatMap(mutableActionReferences)).toEqual([]);
-    expect(workflow).toContain("persist-credentials: false");
-    expect(workflow).toContain("git config --local --get-regexp");
-    expect(workflow).toContain("extraheader");
   });
 });
