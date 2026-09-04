@@ -11,6 +11,7 @@
   import { MATCH_CONFIGURATION } from "../domain/match";
   import CharacterName from "./CharacterName.svelte";
   import ActiveMatchBoardFooter from "./ActiveMatchBoardFooter.svelte";
+  import CharacterCombatStats from "./CharacterCombatStats.svelte";
   import { outcomeLabel } from "./format";
   import {
     activeEffectStatuses,
@@ -25,13 +26,7 @@
 
   const { application, uiState } = useConsoleContext();
 
-  // Converted active-match board (T06): turn cards, complete initiative
-  // order, turn/round commands, Team Elimination prompts, End Game control,
-  // prior summary, and the undo confirmation react directly to the runes
-  // store instead of being swapped as legacy template HTML. While the Action
-  // Draft flow or the ability picker holds the surface (both component-owned
-  // since T07), this component does not render; the App shell owns that
-  // branching.
+  // The App shell owns the Active Match, Action Draft, and ability-picker surfaces.
   type BoardRow = {
     readonly key: CharacterId;
     readonly slot: number;
@@ -100,6 +95,14 @@
       throw new Error("The Active Match references an unknown character.");
     }
     return character;
+  }
+
+  function basicAttackOf(characterId: CharacterId) {
+    const attack = MATCH_CONFIGURATION.basicAttacks.find(
+      ({ characterId: id }) => id === characterId,
+    );
+    if (!attack) throw new Error("Character Basic Attack is missing.");
+    return attack;
   }
 
   function requireHp(
@@ -236,6 +239,8 @@
     const activeHp = requireHp(hpByCharacter, activeEntry.characterId);
     const nextHp = requireHp(hpByCharacter, nextEntry.characterId);
     const actionsUsed = match.actionsUsed ?? (match.majorActionUsed ? 1 : 0);
+    const activeAttack = basicAttackOf(activeEntry.characterId);
+    const nextAttack = basicAttackOf(nextEntry.characterId);
     const abilitiesAvailable = unspentAbilities(match).length > 0;
     return {
       match,
@@ -246,6 +251,9 @@
       activeHp,
       activeMaxHp: requireHp(maxHpByCharacter, activeEntry.characterId),
       movementPaces: normalMovementPaces(match, activeEntry.characterId),
+      attackType: activeAttack.attackType,
+      nextMovementPaces: normalMovementPaces(match, nextEntry.characterId),
+      nextAttackType: nextAttack.attackType,
       nextHp,
       nextMaxHp: requireHp(maxHpByCharacter, nextEntry.characterId),
       activeDowned,
@@ -446,22 +454,13 @@
             displayNames={view.match.displayNames}
           />
         </h3>
-        <dl>
-          <div>
-            <dt>Team</dt>
-            <dd>{view.activeCharacter.team}</dd>
-          </div>
-          <div>
-            <dt>HP</dt>
-            <dd class:critical-hp={view.activeHp === 1}>
-              {view.activeHp}/{view.activeMaxHp}
-            </dd>
-          </div>
-          <div>
-            <dt>Movement</dt>
-            <dd>{view.movementPaces} paces</dd>
-          </div>
-        </dl>
+        <CharacterCombatStats
+          team={view.activeCharacter.team}
+          hp={view.activeHp}
+          maxHp={view.activeMaxHp}
+          movementPaces={view.movementPaces}
+          attackType={view.attackType}
+        />
         <div
           class="action-usage"
           aria-label={`${view.actionsUsed} of 2 actions used`}
@@ -552,22 +551,13 @@
             displayNames={view.match.displayNames}
           />
         </h3>
-        <dl>
-          <div>
-            <dt>Team</dt>
-            <dd>{view.nextCharacter.team}</dd>
-          </div>
-          <div>
-            <dt>HP</dt>
-            <dd class:critical-hp={view.nextHp === 1}>
-              {view.nextHp}/{view.nextMaxHp}
-            </dd>
-          </div>
-          <div>
-            <dt>Slot</dt>
-            <dd>{view.nextSlot}</dd>
-          </div>
-        </dl>
+        <CharacterCombatStats
+          team={view.nextCharacter.team}
+          hp={view.nextHp}
+          maxHp={view.nextMaxHp}
+          movementPaces={view.nextMovementPaces}
+          attackType={view.nextAttackType}
+        />
       </article>
     </div>
     {#if view.showCommands}

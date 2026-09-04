@@ -320,7 +320,7 @@ dd {
 
 .turn-card dl {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-2);
 }
 
@@ -334,6 +334,24 @@ dd {
 .turn-card dd {
   margin-top: 0.2rem;
   font-weight: 900;
+}
+
+.character-combat-stats dd {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.character-combat-stats > div:last-child dd {
+  justify-content: center;
+}
+
+.character-combat-stats img {
+  width: 1rem;
+  height: 1rem;
+  filter: invert(78%) sepia(80%) saturate(735%) hue-rotate(356deg)
+    brightness(101%) contrast(93%);
 }
 
 .critical-hp {
@@ -1406,7 +1424,7 @@ dd {
   }
 
   .turn-card.active-character dl {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 

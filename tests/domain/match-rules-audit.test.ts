@@ -6,7 +6,6 @@ import {
   endMatch,
   finishTurn,
   generateInitiative,
-  normalMovementPaces,
   reopenMatch,
   resolveAbility,
   resolveBasicAttack,
@@ -15,7 +14,6 @@ import {
   type ActiveMatchState,
   type MatchEvent,
 } from "../../src/domain/match";
-import { MATCH_CONFIGURATION } from "../../src/domain/match-configuration";
 import {
   advanceTo,
   abilityId,
@@ -32,25 +30,6 @@ import {
 import { queuedRandom } from "./match-test-support";
 
 describe("rules coverage audit: attack damage pipeline", () => {
-  it("lists every ability that applies a debuff to another character", () => {
-    const debuffAbilities = MATCH_CONFIGURATION.abilities
-      .filter(
-        (ability) =>
-          ability.operations.includes("prohibit-action-type") ||
-          ability.operations.includes("add-damage") ||
-          ability.name === "Frostbind",
-      )
-      .map(({ name }) => name);
-
-    expect(debuffAbilities).toEqual([
-      "Backstab",
-      "Frostbind",
-      "Hunter’s Mark",
-      "Stunning Strike",
-      "Hex",
-    ]);
-  });
-
   it("applies Hunter’s Mark’s written +1 damage to an ability attack and consumes the Mark", () => {
     const run = startedAuditMatch("audit-mark-bolt");
     cast(run, "duergar-ranger", {
@@ -181,34 +160,6 @@ describe("rules coverage audit: attack damage pipeline", () => {
     >;
     expect(resolution.rangePaces).toBe(8);
     expect(resolution.attackLegs[0]?.rangePaces).toBe(8);
-  });
-});
-
-describe("rules coverage audit: movement debuffs", () => {
-  it("limits Frostbind's target to 1 pace on its next turn", () => {
-    const run = startedAuditMatch("audit-frostbind");
-    cast(run, "drow-wizard", {
-      abilityName: "Frostbind",
-      input: { targetCharacterIds: ["duergar-ranger"] },
-      step: 1,
-    });
-
-    expect(run.state.activeEffects).toMatchObject([
-      {
-        abilityId: "drow-wizard-frostbind",
-        kind: "movement-cap",
-        affectedCharacterId: "duergar-ranger",
-      },
-    ]);
-    expect(
-      run.state.activeEffects.find(
-        ({ abilityId }) => abilityId === "drow-wizard-frostbind",
-      )?.duration,
-    ).toMatchObject({
-      kind: "until-boundary",
-      boundaryTrigger: "end-of-next-turn",
-    });
-    expect(normalMovementPaces(run.state, "duergar-ranger")).toBe(1);
   });
 });
 

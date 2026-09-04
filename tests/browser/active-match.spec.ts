@@ -40,6 +40,18 @@ test("the referee starts, advances, wraps, and restores an Active Match", async 
   await expect(page.locator("[data-active-character]")).toContainText(
     "2 paces",
   );
+  await expect(
+    page.locator("[data-character-attack-range]").first(),
+  ).toHaveText("");
+  await expect(
+    page.locator("[data-character-attack-range]").first().locator("img"),
+  ).toHaveCount(1);
+  await expect(
+    page.locator("[data-character-attack-range]").first().locator("img"),
+  ).toHaveAttribute("src", /sword/);
+  await expect(
+    page.locator("[data-next-character] [data-character-attack-range]"),
+  ).toHaveCount(1);
   await expect(page.locator(".active-order thead th")).toHaveText([
     "Character",
     "Team",
